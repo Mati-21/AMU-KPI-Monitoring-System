@@ -181,3 +181,17 @@ export const vicePresidents = [
   { id: 'administrative', label: 'Administrative Vice President' },
   { id: 'research', label: 'Research Vice President' },
 ];
+
+export const higherInstitutions = [
+  { id: 'college-engineering', label: 'College of Engineering' },
+  { id: 'college-business', label: 'College of Business' },
+  { id: 'college-medicine', label: 'College of Medicine' },
+  { id: 'institute-research', label: 'Institute of Research' },
+];
+
+export const faculties = [
+  { id: 'faculty-science', label: 'Faculty of Science' },
+  { id: 'faculty-arts', label: 'Faculty of Arts' },
+  { id: 'faculty-engineering', label: 'Faculty of Engineering' },
+  { id: 'faculty-business', label: 'Faculty of Business' },
+];

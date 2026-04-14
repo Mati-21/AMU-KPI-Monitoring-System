@@ -4,6 +4,7 @@ import { Mail, Lock, ArrowRight } from 'lucide-react';
 import kpiImage from '../../assets/images/kpi.jpeg';
 import Navbar from '../../Components/UI/Navbar';
 import { useLogin } from '../../Hooks/Auth/useLogin';
+import { getDefaultRouteByRole } from '../../lib/authRouting';
 
 const SignIn = () => {
   const [email, setEmail] = useState('');
@@ -12,17 +13,18 @@ const SignIn = () => {
   const navigate = useNavigate();
 
   // Use the custom hook
-  const { mutate: loginMutate, isLoading, error } = useLogin();
+  const { mutate: loginMutate, isPending, error } = useLogin();
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
     // Call the custom hook's mutate function
     loginMutate(
-      { UserName:email, password },
+      { UserName: email, password },
       {
         onSuccess: (data) => {
-          console.log(data);
+          const role = data?.role?.RoleName || data?.user?.role || data?.user?.RoleName || data?.user?.Role || '';
+          navigate(getDefaultRouteByRole(role));
         },
       }
     );
@@ -45,13 +47,13 @@ const SignIn = () => {
               {/* Email Input */}
               <div className="space-y-2">
                 <label htmlFor="email" className="text-sm font-medium">
-                  Email
+                  Username or Email
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
                     id="email"
-                    type="email"
+                    type="text"
                     placeholder="you@amu.edu.et"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -106,10 +108,10 @@ const SignIn = () => {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isPending}
                 className="w-full h-11 gap-2 text-sm font-medium rounded-md bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center justify-center hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                {isPending ? 'Signing In...' : 'Sign In'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>

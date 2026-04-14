@@ -10,6 +10,7 @@ const errorHandler = require('./middleware/errorMiddleware');
 dotenv.config();
 
 const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
 const roleCategoryRoutes = require('./routes/roleCategoryRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const userRoleRoutes = require('./routes/userRoleRoutes');
@@ -22,10 +23,24 @@ const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
 
 const app = express();
 
+const defaultAllowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+const envOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
+
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
@@ -38,6 +53,7 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/role-categories', roleCategoryRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/user-roles', userRoleRoutes);

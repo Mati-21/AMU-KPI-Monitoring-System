@@ -1,6 +1,36 @@
 const { User, UserRole, Role } = require('../models');
 const generateToken = require('../utils/generateToken');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize');
+
+const activeRoleInclude = {
+  model: UserRole,
+  where: {
+    IsArchived: false,
+    [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+  },
+  required: false,
+  include: [
+    {
+      model: Role,
+      where: { IsArchived: false },
+      required: false,
+    },
+  ],
+};
+
+const buildAuthPayload = (userWithRole) => {
+  const role = userWithRole?.UserRoles?.[0]?.Role || null;
+
+  return {
+    user: {
+      ...userWithRole.getPublicProfile(),
+      roleName: role?.RoleName || null,
+      role: role?.RoleName || null,
+    },
+    role,
+  };
+};
 
 const registerUser = async (req, res) => {
   try {
@@ -11,9 +41,9 @@ const registerUser = async (req, res) => {
 
     const { FirstName, FatherName, GrandFatherName, Email, UserName, Phone, password } = req.body;
 
-    const userExists = await User.findOne({ where: { Email } });
+    const userExists = await User.findOne({ where: { [Op.or]: [{ Email }, { UserName }] } });
     if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({ message: 'User with the same email or username already exists' });
     }
 
     const user = await User.create({
@@ -26,9 +56,16 @@ const registerUser = async (req, res) => {
       password,
     });
 
+    const userWithRole = await User.findByPk(user.Id, {
+      include: [activeRoleInclude],
+    });
+
+    const payload = buildAuthPayload(userWithRole || user);
+
     res.status(201).json({
       success: true,
-      user: user.getPublicProfile(),
+      user: payload.user,
+      role: payload.role,
       token: generateToken(user.Id),
     });
   } catch (error) {
@@ -40,12 +77,12 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { UserName, password } = req.body;
-    console.log(UserName, password);
 
     const user = await User.findOne({
       where: {
-        [require('sequelize').Op.or]: [{ UserName }, { Email: UserName }],
+        [Op.or]: [{ UserName }, { Email: UserName }],
       },
+      include: [activeRoleInclude],
     });
 
     if (!user || !(await user.comparePassword(password))) {
@@ -56,9 +93,12 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Account is deactivated' });
     }
 
+    const payload = buildAuthPayload(user);
+
     res.json({
       success: true,
-      user: user.getPublicProfile(),
+      user: payload.user,
+      role: payload.role,
       token: generateToken(user.Id),
     });
   } catch (error) {
@@ -70,26 +110,19 @@ const loginUser = async (req, res) => {
 const getCurrentUser = async (req, res) => {
   try {
     const userWithRole = await User.findByPk(req.user.Id, {
-      include: [
-        {
-          model: UserRole,
-          where: { IsArchived: false },
-          required: false,
-          include: [
-            {
-              model: Role,
-              where: { IsArchived: false },
-              required: false,
-            },
-          ],
-        },
-      ],
+      include: [activeRoleInclude],
     });
+
+    if (!userWithRole) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const payload = buildAuthPayload(userWithRole);
 
     res.json({
       success: true,
-      user: userWithRole.getPublicProfile(),
-      role: userWithRole.UserRoles?.[0]?.Role,
+      user: payload.user,
+      role: payload.role,
     });
   } catch (error) {
     console.error('Get user error:', error);

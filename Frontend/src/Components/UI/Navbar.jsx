@@ -14,9 +14,22 @@ const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
-  const isAuthenticated = true;
+  const isAuthenticated = Boolean(user);
   const location = useLocation();
-  
+
+  const layoutBasePath = [
+    '/admin',
+    '/staff',
+    '/department-chair',
+    '/faculty-admin',
+    '/higher-institution',
+    '/vice-president',
+    '/strategic-office',
+  ].find((basePath) => location.pathname.startsWith(basePath));
+
+  const profilePath = layoutBasePath ? `${layoutBasePath}/profile` : '/admin/profile';
+  const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
+  const displayRole = user?.role || user?.roleName || 'User';
 
   const handleLogout = () => {
     dispatch(logout());
@@ -46,11 +59,11 @@ const Navbar = () => {
           trigger={
             <button className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted">
               <div className="text-right">
-                <p className="text-sm font-semibold">{user?.name || 'Signed In'}</p>
-                <p className="text-xs text-muted-foreground">{user?.role || 'User'}</p>
+                <p className="text-sm font-semibold">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{displayRole}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                {user?.name
+                {displayName
                   ?.split(' ')
                   .map((segment) => segment[0])
                   .join('') || 'U'}
@@ -59,7 +72,7 @@ const Navbar = () => {
           }
         >
           <DropdownMenuItem>
-            <Link to="profile" className="flex items-center w-full">
+            <Link to={profilePath} className="flex items-center w-full">
               <User className="w-4 h-4 mr-2" />
               My Profile
             </Link>

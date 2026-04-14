@@ -13,10 +13,8 @@ import {
   CheckCircle,
   TrendingUp,
   PieChart,
-  GitBranch,
   Briefcase,
   Award,
-  Activity,
   Shield,
   Lock,
   Settings,
@@ -94,6 +92,8 @@ export const roleNavigation = {
       label: 'FACULTY MANAGEMENT',
       items: [
         { icon: Target, label: 'Faculty KPIs', path: 'faculty-kpis' },
+        { icon: ClipboardList, label: 'Assign KPI', path: 'assign-kpi' },
+        { icon: FileText, label: 'Reports', path: 'reports' },
         { icon: Building2, label: 'Departments', path: 'departments' },
         { icon: Star, label: 'Evaluations', path: 'evaluations' },
       ],
@@ -110,6 +110,7 @@ export const roleNavigation = {
       label: 'INSTITUTION',
       items: [
         { icon: Award, label: 'Institution KPIs', path: 'institution-kpis' },
+        { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
         { icon: Eye, label: 'Oversight', path: 'oversight' },
         { icon: FileText, label: 'Reports', path: 'reports' },
       ],
@@ -126,6 +127,7 @@ export const roleNavigation = {
       label: 'SECTOR MANAGEMENT',
       items: [
         { icon: TrendingUp, label: 'Sector KPIs', path: 'sector-kpis' },
+        { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
         { icon: CheckCircle, label: 'Approvals', path: 'approvals' },
         { icon: FileText, label: 'Reports', path: 'reports' },
       ],
@@ -142,16 +144,8 @@ export const roleNavigation = {
       label: 'STRATEGIC PLANNING',
       items: [
         { icon: Target, label: 'University KPIs', path: 'university-kpis' },
-        { icon: GitBranch, label: 'Strategic Plans', path: 'strategic-plans' },
         { icon: FileText, label: 'Reports', path: 'reports' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
-      ],
-    },
-    {
-      label: 'OVERSIGHT',
-      items: [
-        { icon: Building2, label: 'Institution Overview', path: 'institution-overview' },
-        { icon: Activity, label: 'Performance Trends', path: 'performance-trends' },
       ],
     },
   ],

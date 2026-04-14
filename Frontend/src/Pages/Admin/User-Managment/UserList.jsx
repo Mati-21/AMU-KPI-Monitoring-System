@@ -1,164 +1,202 @@
-import { Search, UserPlus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Edit, Eye, Trash2, UserPlus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TablePagination } from '../../../Components/UI/Table';
-
 import SearchInput from '../../../Components/UI/SearchInput';
-import CustomSelect from '../../../Components/UI/CustomSelect';
+import { api } from '../../../api/axios';
 
-// Custom Select component
-// const CustomSelect = ({ options, value, onChange, placeholder, width = 'w-full' }) => {
-//   const [open, setOpen] = useState(false);
-
-//   return (
-//     <div className={`relative ${width} `}>
-//       <button
-//         type="button"
-//         onClick={() => setOpen(!open)}
-//         className="w-full px-3 h-full text-sm text-left bg-[theme(colors.card)] border border-[theme(colors.border)] rounded-xl flex justify-between items-center focus:outline-none focus:ring-1 focus:ring-ring"
-//       >
-//         {value || placeholder}
-//         <svg
-//           className={`w-4 h-4 mr-2 transition-transform ${open ? 'rotate-180' : ''}`}
-//           fill="none"
-//           stroke="currentColor"
-//           strokeWidth="2"
-//           viewBox="0 0 24 24"
-//         >
-//           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-//         </svg>
-//       </button>
-
-//       {open && (
-//         <ul className="absolute z-10 w-full mt-1 bg-[theme(colors.card)] border border-[theme(colors.border)] rounded-lg shadow-md max-h-60 overflow-auto">
-//           {options.map((opt) => (
-//             <li
-//               key={opt}
-//               onClick={() => {
-//                 onChange(opt);
-//                 setOpen(false);
-//               }}
-//               className="cursor-pointer px-3 py-1 text-sm hover:bg-blue-100 flex justify-between items-center"
-//             >
-//               {opt}
-//               {value === opt && (
-//                 <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-//                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-//                 </svg>
-//               )}
-//             </li>
-//           ))}
-//         </ul>
-//       )}
-//     </div>
-//   );
-// };
-
-const mockUsers = Array.from({ length: 50 }, (_, i) => ({
-  id: i + 1,
-  firstName: ['Abebe', 'Kebede', 'Tadesse', 'Mengistu', 'Haile', 'Solomon', 'Dawit', 'Yohannes'][i % 8],
-  middleName: ['Kebede', 'Tadesse', 'Mengistu', 'Haile', 'Solomon', 'Dawit', 'Yohannes', 'Abebe'][i % 8],
-  lastName: ['Tadesse', 'Mengistu', 'Haile', 'Solomon', 'Dawit', 'Yohannes', 'Abebe', 'Kebede'][i % 8],
-  email: `user${i + 1}@amu.edu.et`,
-  role: ['Lecturer', 'Professor', 'Assistant', 'Dean', 'Chair'][i % 5],
-  roleCategory: ['Academic', 'Administrative', 'Support'][i % 3],
-  joinedDate: '2024-09-15',
-}));
-
-function UserList({ searchQuery, setActiveTab }) {
-  const [selectedRole, setSelectedRole] = useState('');
-  const [selectedRoleCategory, setSelectedRoleCategory] = useState('');
+function UserList({ setActiveTab }) {
+  const navigate = useNavigate();
+  const authUser = useSelector((state) => state.auth.user);
   const [currentPage, setCurrentPage] = useState(1);
+  const [internalSearch, setInternalSearch] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [usersRaw, setUsersRaw] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const itemsPerPage = 10;
 
-  const uniqueRoles = ['All Roles', ...new Set(mockUsers.map((u) => u.role))];
-  const uniqueCategories = ['All Categories', ...new Set(mockUsers.map((u) => u.roleCategory))];
+  useEffect(() => {
+    let mounted = true;
 
-  const filteredUsers = mockUsers.filter((u) => {
-    const matchesSearch = `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = selectedRole === '' || u.role === selectedRole;
-    const matchesCategory = selectedRoleCategory === '' || u.roleCategory === selectedRoleCategory;
-    return matchesSearch && matchesRole && matchesCategory;
+    const loadUsers = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const usersRes = await api.get('/users', { params: { t: Date.now() } });
+        if (!mounted) return;
+        setUsersRaw(usersRes.data?.data || []);
+      } catch (loadErr) {
+        if (!mounted) return;
+        setError(loadErr?.response?.data?.message || 'Failed to load users from database.');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    loadUsers();
+    return () => {
+      mounted = false;
+    };
+  }, [refreshKey]);
+
+  const users = useMemo(
+    () =>
+      usersRaw.map((u) => {
+        const activeRole = u?.UserRoles?.[0]?.Role;
+        const firstName = u.FirstName || '';
+        const fatherName = u.FatherName || '';
+        const grandFatherName = u.GrandFatherName || '';
+        const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(' ').trim();
+
+        return {
+          id: u.Id,
+          fullName: fullName || u.UserName || 'Unknown User',
+          initials: `${firstName?.[0] || ''}${fatherName?.[0] || ''}`.toUpperCase() || 'U',
+          email: u.Email || '-',
+          userName: u.UserName || '-',
+          phone: u.Phone || '-',
+          role: activeRole?.RoleName || 'Unassigned',
+          roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
+          officeLevel: activeRole?.RoleName || '-',
+          joinedDate: u.CreatedAt ? new Date(u.CreatedAt).toISOString().slice(0, 10) : '-',
+        };
+      }),
+    [usersRaw]
+  );
+
+  const effectiveSearch = internalSearch.toLowerCase();
+
+  const handleDeleteUser = async (user) => {
+    const authId = String(authUser?.id || authUser?.Id || '');
+    if (authId && String(user.id) === authId) {
+      window.alert('You cannot delete your own account from this table.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete user "${user.fullName}"?`);
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/users/${user.id}`);
+      setRefreshKey((prev) => prev + 1);
+    } catch (deleteErr) {
+      window.alert(deleteErr?.response?.data?.message || 'Failed to delete user.');
+    }
+  };
+
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch = `${u.fullName} ${u.email} ${u.userName}`.toLowerCase().includes(effectiveSearch);
+    return matchesSearch;
   });
 
-  // Pagination logic
   const totalItems = filteredUsers.length;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
   return (
     <>
-      <div className="flex justify-between mb-4">
-        <h2 className="text-lg font-semibold">All users ({mockUsers.length})</h2>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h2 className="text-base font-semibold text-foreground">Registered Users</h2>
+        {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="text-xs text-muted-foreground">Total registered users: {users.length}</p>
 
-        <div className="flex gap-3 items-stretch h-10 ">
-          {/* Input */}
-          <SearchInput />
+          <div className="flex flex-wrap items-stretch gap-3 md:justify-end">
+            <SearchInput value={internalSearch} onChange={setInternalSearch} placeholder="Search users..." className="min-w-64" />
 
-          <CustomSelect
-            options={uniqueRoles}
-            value={selectedRole === '' ? 'All Roles' : selectedRole}
-            onChange={(val) => setSelectedRole(val === 'All Roles' ? '' : val)}
-            placeholder="All Roles"
-            width="w-40 h-full"
-          />
-
-          <CustomSelect
-            options={uniqueCategories}
-            value={selectedRoleCategory === '' ? 'All Categories' : selectedRoleCategory}
-            onChange={(val) => setSelectedRoleCategory(val === 'All Categories' ? '' : val)}
-            placeholder="All Categories"
-            width="w-80"
-          />
-
-          <button
-            onClick={() => setActiveTab('add')}
-            className="flex min-w-36  items-center gap-2 px-3  bg-blue-600 text-white rounded text-xs justify-center"
-          >
-            <UserPlus className="w-4 h-4" />
-            Add User
-          </button>
+            <button
+              onClick={() => setActiveTab('add')}
+              className="flex min-w-36 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add User
+            </button>
+          </div>
         </div>
+
+        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Full Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Role Category</TableHead>
+                <TableHead>Office Level</TableHead>
+                <TableHead>Joined Date</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7}>Loading users...</TableCell>
+                </TableRow>
+              ) : paginatedUsers.length ? (
+                paginatedUsers.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {user.initials}
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{user.fullName}</p>
+                          <p className="text-xs text-muted-foreground">{user.phone || 'No phone yet'}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.role}</TableCell>
+                    <TableCell>{user.roleCategory}</TableCell>
+                    <TableCell>{user.officeLevel}</TableCell>
+                    <TableCell>{user.joinedDate}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate(`/admin/profile/${user.id}`, { state: { startEditing: true } })}
+                          className="rounded p-1 text-foreground hover:bg-muted"
+                          title="Edit user"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteUser(user)}
+                          className="rounded p-1 text-destructive hover:bg-destructive/10"
+                          title="Delete user"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          onClick={() => navigate(`/admin/profile/${user.id}`)}
+                          className="rounded p-1 text-primary hover:bg-primary/10"
+                          title="View profile"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7}>No users found in the database.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        <TablePagination currentPage={currentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
       </div>
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>First Name</TableHead>
-            <TableHead>Middle Name</TableHead>
-            <TableHead>Last Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Role Category</TableHead>
-            <TableHead>Joined Date</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-
-        <TableBody>
-          {paginatedUsers.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>{user.firstName}</TableCell>
-              <TableCell>{user.middleName}</TableCell>
-              <TableCell>{user.lastName}</TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>{user.role}</TableCell>
-              <TableCell>{user.roleCategory}</TableCell>
-              <TableCell>{user.joinedDate}</TableCell>
-              <TableCell>
-                <button className="text-sm text-blue-600">View</button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-
-      <TablePagination currentPage={currentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={handlePageChange} />
     </>
   );
 }
