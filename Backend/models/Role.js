@@ -1,46 +1,50 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const Role = sequelize.define('Role', {
-  Id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true
+const Role = sequelize.define(
+  'Role',
+  {
+    Id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    RoleCategoryId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    RoleName: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    ParentRoleId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    Description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    HasExtraMeasures: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    CreatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+    CreatedBy: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    IsArchived: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
   },
-  RoleCategoryId: {
-    type: DataTypes.UUID,
-    allowNull: false
-  },
-  RoleName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  ParentRoleId: {
-    type: DataTypes.UUID,
-    allowNull: true
-  },
-  Description: {
-    type: DataTypes.TEXT,
-    allowNull: true
-  },
-  HasExtraMeasures: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
-  },
-  CreatedAt: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
-  },
-  CreatedBy: {
-    type: DataTypes.UUID,
-    allowNull: true
-  },
-  IsArchived: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
+  {
+    timestamps: false,
   }
-}, {
-  timestamps: false
-});
+);
 
 module.exports = Role;
