@@ -1,8 +1,43 @@
-const { UserKPI, User, KPI } = require('../models');
+const { UserKPI, User, KPI, UserKPIResult, UserRole } = require('../models');
+const { Op } = require('sequelize');
+const { getCurrentCycleYear, getPreviousCycleYear } = require('../utils/kpiCycle');
+
+const parseNumericValue = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const computeBaselineFromPreviousCycle = async ({ KPIId, UserId, cycleYear, fallbackBaseline }) => {
+  const previousCycleYear = getPreviousCycleYear(cycleYear);
+  if (!previousCycleYear) {
+    return parseNumericValue(fallbackBaseline);
+  }
+
+  const previousResults = await UserKPIResult.findAll({
+    where: {
+      KPIId,
+      UserId,
+      CycleYear: previousCycleYear,
+      IsArchived: false,
+    },
+    attributes: ['KPIResult'],
+  });
+
+  const numericResults = previousResults.map((result) => parseNumericValue(result.KPIResult)).filter((value) => value !== null);
+
+  if (numericResults.length === 0) {
+    return parseNumericValue(fallbackBaseline);
+  }
+
+  const average = numericResults.reduce((sum, value) => sum + value, 0) / numericResults.length;
+  return Number(average.toFixed(2));
+};
 
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark } = req.body;
+    const { KPIId, UserId, Remark, CycleYear, Baseline } = req.body;
+    const cycleYear = CycleYear || getCurrentCycleYear();
 
     const user = await User.findByPk(UserId);
     if (!user) {
@@ -14,11 +49,35 @@ const createUserKPI = async (req, res) => {
       return res.status(404).json({ message: 'KPI not found' });
     }
 
+    const existingAssignment = await UserKPI.findOne({
+      where: {
+        KPIId,
+        UserId,
+        CycleYear: cycleYear,
+        IsArchived: false,
+      },
+    });
+
+    if (existingAssignment) {
+      return res.status(409).json({ message: 'This KPI is already assigned to the user for the selected cycle year.' });
+    }
+
+    const computedBaseline =
+      parseNumericValue(Baseline) ??
+      (await computeBaselineFromPreviousCycle({
+        KPIId,
+        UserId,
+        cycleYear,
+        fallbackBaseline: kpi.Baseline,
+      }));
+
     const userKPI = await UserKPI.create({
       KPIId,
+      CycleYear: cycleYear,
       UserId,
+      Baseline: computedBaseline,
       Remark,
-      CreatedBy: req.user?.Id
+      CreatedBy: req.user?.Id,
     });
 
     res.status(201).json({ success: true, data: userKPI });
@@ -30,13 +89,49 @@ const createUserKPI = async (req, res) => {
 
 const getUserKPIs = async (req, res) => {
   try {
+    const { year, scope, fromParent } = req.query;
+    const where = { IsArchived: false };
+
+    if (year) {
+      where.CycleYear = year;
+    }
+
+    if (scope === 'mine') {
+      where.UserId = req.user?.Id;
+    }
+
+    if (String(fromParent).toLowerCase() === 'true') {
+      const parentRoleId = req.user?.currentRole?.ParentRoleId;
+
+      if (!parentRoleId) {
+        return res.json({ success: true, data: [] });
+      }
+
+      const parentRoleUserAssignments = await UserRole.findAll({
+        where: {
+          RoleId: parentRoleId,
+          IsArchived: false,
+          [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+        },
+        attributes: ['UserId'],
+      });
+
+      const parentUserIds = [...new Set(parentRoleUserAssignments.map((assignment) => assignment.UserId).filter(Boolean))];
+
+      if (!parentUserIds.length) {
+        return res.json({ success: true, data: [] });
+      }
+
+      where.CreatedBy = { [Op.in]: parentUserIds };
+    }
+
     const userKpis = await UserKPI.findAll({
-      where: { IsArchived: false },
+      where,
       include: [
         { model: User, attributes: ['Id', 'FirstName', 'UserName', 'Email'] },
-        { model: KPI, attributes: ['Id', 'Target', 'Description'] }
+        { model: KPI, attributes: ['Id', 'Baseline', 'Target', 'Description'] },
       ],
-      order: [['CreatedAt', 'DESC']]
+      order: [['CreatedAt', 'DESC']],
     });
 
     res.json({ success: true, data: userKpis });
@@ -52,8 +147,8 @@ const getUserKPIById = async (req, res) => {
     const userKPI = await UserKPI.findByPk(id, {
       include: [
         { model: User, attributes: ['Id', 'FirstName', 'UserName', 'Email'] },
-        { model: KPI, attributes: ['Id', 'Target', 'Description'] }
-      ]
+        { model: KPI, attributes: ['Id', 'Baseline', 'Target', 'Description'] },
+      ],
     });
 
     if (!userKPI) {
@@ -70,7 +165,7 @@ const getUserKPIById = async (req, res) => {
 const updateUserKPI = async (req, res) => {
   try {
     const { id } = req.params;
-    const { KPIId, UserId, Remark } = req.body;
+    const { KPIId, UserId, Remark, CycleYear, Baseline } = req.body;
 
     const userKPI = await UserKPI.findByPk(id);
     if (!userKPI) {
@@ -91,7 +186,13 @@ const updateUserKPI = async (req, res) => {
       }
     }
 
-    await userKPI.update({ KPIId, UserId, Remark });
+    await userKPI.update({
+      KPIId,
+      UserId,
+      Remark,
+      Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : userKPI.Baseline,
+      CycleYear: CycleYear || userKPI.CycleYear,
+    });
 
     res.json({ success: true, data: userKPI });
   } catch (error) {
@@ -123,5 +224,5 @@ module.exports = {
   getUserKPIs,
   getUserKPIById,
   updateUserKPI,
-  deleteUserKPI
+  deleteUserKPI,
 };

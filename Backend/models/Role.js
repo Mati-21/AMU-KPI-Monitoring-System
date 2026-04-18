@@ -29,6 +29,11 @@ const Role = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    Permissions: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

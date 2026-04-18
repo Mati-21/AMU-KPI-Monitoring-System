@@ -11,7 +11,7 @@ const permissionHeaders = [
   { label: 'Approve', icon: Check },
 ];
 
-function PermissionTable({ permissions, setPermissions , search }) {
+function PermissionTable({ permissions, setPermissions, search }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -19,8 +19,10 @@ function PermissionTable({ permissions, setPermissions , search }) {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedPermissions = filteredPermissions.slice(startIndex, startIndex + itemsPerPage);
 
-  const togglePermission = (index, field) => {
-    setPermissions((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: !p[field] } : p)));
+  const togglePermission = (moduleName, field) => {
+    setPermissions((prev) =>
+      prev.map((permission) => (permission.module === moduleName ? { ...permission, [field]: !permission[field] } : permission))
+    );
   };
 
   return (
@@ -28,7 +30,7 @@ function PermissionTable({ permissions, setPermissions , search }) {
       <Table>
         <TableHeader>
           <TableRow className="bg-primary/10">
-            <TableHead className="font-semibold text-foreground w-[250px]">Module</TableHead>
+            <TableHead className="font-semibold text-foreground w-62.5">Module</TableHead>
 
             {permissionHeaders.map(({ label, icon: Icon }) => (
               <TableHead key={label} className="font-semibold text-foreground text-center">
@@ -42,7 +44,7 @@ function PermissionTable({ permissions, setPermissions , search }) {
         </TableHeader>
 
         <TableBody>
-          {paginatedPermissions.map((perm, idx) => (
+          {paginatedPermissions.map((perm) => (
             <TableRow key={perm.module}>
               <TableCell className="font-medium">{perm.module}</TableCell>
 
@@ -51,7 +53,7 @@ function PermissionTable({ permissions, setPermissions , search }) {
                   {/* ✅ Proper Radix Switch */}
                   <Switch.Root
                     checked={perm[field]}
-                    onCheckedChange={() => togglePermission(idx, field)}
+                    onCheckedChange={() => togglePermission(perm.module, field)}
                     className="w-10 h-5 bg-gray-300 rounded-full relative data-[state=checked]:bg-primary transition"
                   >
                     <Switch.Thumb className="block w-4 h-4 bg-white rounded-full shadow transform translate-x-0.5 data-[state=checked]:translate-x-5 transition" />

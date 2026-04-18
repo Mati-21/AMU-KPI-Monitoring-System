@@ -66,7 +66,7 @@ const MultiSelect = ({ options, value = [], onChange, placeholder = 'Select opti
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full bottom-full mb-1 bg-card border border-border rounded-md shadow-lg max-h-96 overflow-auto">
+        <div className="absolute z-50 w-full top-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-96 overflow-auto">
           {/* Select All Option */}
           <div className="sticky top-0 bg-card border-b border-border">
             <label className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted">

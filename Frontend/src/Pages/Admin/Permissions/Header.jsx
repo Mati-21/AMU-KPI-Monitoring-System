@@ -1,7 +1,7 @@
 import { Plus, Shield } from 'lucide-react';
 import Button from '../../../Components/UI/Button';
 
-function Header() {
+function Header({ onSave, saving }) {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -12,9 +12,9 @@ function Header() {
         <p className="text-sm text-muted-foreground mt-1">Control access rights across modules</p>
       </div>
 
-      <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+      <Button onClick={onSave} disabled={saving} className="bg-primary hover:bg-primary/90 flex items-center gap-2">
         <Plus className="w-4 h-4" />
-        Save Changes
+        {saving ? 'Saving...' : 'Save Changes'}
       </Button>
     </div>
   );

@@ -1,25 +1,21 @@
-"use client";
+import { Check } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
-import { useState } from "react";
-
-export default function SimpleCheckbox() {
-  const [checked, setChecked] = useState(false);
-
+const Checkbox = ({ checked = false, onCheckedChange, className }) => {
   return (
-    <div className="flex items-center gap-8">
-      {/* Empty Checkbox */}
-      <div
-        onClick={() => setChecked(!checked)}
-        className="w-7 h-7 border-2 border-gray-400 rounded-md cursor-pointer hover:border-gray-500 transition-colors"
-      />
-
-      {/* Checked Checkbox */}
-      <div
-        onClick={() => setChecked(!checked)}
-        className="w-7 h-7 bg-green-500 rounded-md flex items-center justify-center cursor-pointer"
+    <span className={cn('inline-flex items-center justify-center', className)}>
+      <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange?.(event.target.checked)} className="peer sr-only" />
+      <span
+        aria-hidden="true"
+        className={cn(
+          'inline-flex h-5 w-5 items-center justify-center rounded border border-input bg-background text-primary transition-colors peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
+          checked && 'border-primary bg-primary text-primary-foreground'
+        )}
       >
-        <span className="text-white text-2xl leading-none">✓</span>
-      </div>
-    </div>
+        {checked ? <Check className="h-3.5 w-3.5" /> : null}
+      </span>
+    </span>
   );
-}
+};
+
+export default Checkbox;

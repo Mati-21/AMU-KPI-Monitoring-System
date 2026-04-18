@@ -4,9 +4,9 @@ import Sidebar from '../../Components/Dashboard/Sidebar';
 
 function VicePresident() {
   return (
-    <div className="flex min-h-screen bg-background w-full ">
+    <div className="flex min-h-screen bg-background w-full">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <Navbar />
         <Outlet />
       </div>

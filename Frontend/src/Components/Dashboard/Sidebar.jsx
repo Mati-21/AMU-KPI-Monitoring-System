@@ -1,21 +1,58 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
-import { roleNavigation } from '../../Config/roleNavigation';
+import { useSelector } from 'react-redux';
+import { ClipboardList, FileText, GraduationCap, LayoutDashboard, Settings2, Target, User, Users } from 'lucide-react';
+
+const unifiedNavigation = [
+  {
+    label: 'OVERVIEW',
+    items: [{ icon: LayoutDashboard, label: 'Dashboard', path: '.' }],
+  },
+  {
+    label: 'WORKSPACE',
+    items: [
+      { icon: Target, label: 'Performance', path: 'assigned-kpis', moduleName: 'Performance', action: 'view' },
+      { icon: ClipboardList, label: 'Assigned KPI', path: 'assign-kpi', moduleName: 'Assigned KPI', action: 'view' },
+      { icon: Users, label: 'Sub Unit', path: 'sub-unit', moduleName: 'Sub Unit', action: 'view' },
+      { icon: Settings2, label: 'Registered KPIs', path: 'registered-kpis', moduleName: 'Registered KPIs', action: 'view' },
+      { icon: FileText, label: 'Reports', path: 'reports', moduleName: 'KPI Reporting', action: 'view' },
+      { icon: Target, label: 'KPI Management', path: 'kpi', moduleName: 'KPI Management', action: 'create' },
+    ],
+  },
+  {
+    label: 'ACCOUNT',
+    items: [{ icon: User, label: 'Profile', path: 'profile', moduleName: 'Personal Profile', action: 'view' }],
+  },
+];
 
 const Sidebar = () => {
   const location = useLocation();
+  const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
 
-  // Temporary role detection based on URL path
-  let role = 'staff'; // default
-  if (location.pathname.startsWith('/department-chair')) role = 'departmentChair';
-  else if (location.pathname.startsWith('/faculty-admin')) role = 'facultyAdmin';
-  else if (location.pathname.startsWith('/higher-institution')) role = 'higherInstitution';
-  else if (location.pathname.startsWith('/vice-president')) role = 'vicePresident';
-  else if (location.pathname.startsWith('/admin')) role = 'systemAdmin';
-  else if (location.pathname.startsWith('/strategic-office')) role = 'strategicOffice';
-  else role = 'staff';
+  const hasModulePermission = (moduleName, action = 'view') => {
+    if (!moduleName) return true;
+    if (!Array.isArray(userPermissions) || userPermissions.length === 0) return false;
 
-  const navSections = roleNavigation[role];
+    const permissionEntry = userPermissions.find(
+      (permission) =>
+        String(permission?.module || '')
+          .trim()
+          .toLowerCase() === String(moduleName).trim().toLowerCase()
+    );
+
+    if (!permissionEntry) return false;
+    return Boolean(permissionEntry[action]);
+  };
+
+  const navSections = unifiedNavigation
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        const moduleName = item.moduleName;
+        const action = item.action || 'view';
+        return hasModulePermission(moduleName, action);
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <div className="w-64 min-h-screen bg-card border-r border-border flex flex-col">

@@ -1,15 +1,18 @@
 import { useState } from 'react';
 
-function CustomSelect({ options, value, onChange, placeholder }) {
+function CustomSelect({ options, value, onChange, placeholder, compact = false }) {
   const [open, setOpen] = useState(false);
-  
+  const buttonClassName = compact
+    ? 'w-full h-full px-3 py-1.5 text-left text-[11px] min-w-40 bg-card border border-border rounded-md flex justify-between items-center'
+    : 'w-full h-full px-4 py-2 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center';
+
+  const optionClassName = compact
+    ? 'cursor-pointer px-3 py-1.5 text-[11px] hover:bg-muted flex justify-between items-center'
+    : 'cursor-pointer px-4 py-2 hover:bg-muted flex justify-between items-center';
+
   return (
     <div className="relative w-full">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full h-full px-4 py-2 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center"
-      >
+      <button type="button" onClick={() => setOpen(!open)} className={buttonClassName}>
         {value || placeholder}
         <svg
           className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -31,11 +34,11 @@ function CustomSelect({ options, value, onChange, placeholder }) {
                 onChange(opt);
                 setOpen(false);
               }}
-              className="cursor-pointer px-4 py-2 hover:bg-muted flex justify-between items-center"
+              className={optionClassName}
             >
               {opt}
               {value === opt && (
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               )}

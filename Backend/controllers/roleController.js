@@ -1,8 +1,24 @@
+const { Op, col, fn, where: sequelizeWhere } = require('sequelize');
 const { Role, RoleCategory } = require('../models');
 
 const createRole = async (req, res) => {
   try {
-    const { RoleCategoryId, RoleName, ParentRoleId, Description, HasExtraMeasures } = req.body;
+    const { RoleCategoryId, RoleName, ParentRoleId, Description, HasExtraMeasures, Permissions } = req.body;
+    const normalizedRoleName = (RoleName || '').trim();
+
+    if (!normalizedRoleName) {
+      return res.status(400).json({ message: 'Role name is required' });
+    }
+
+    const duplicate = await Role.findOne({
+      where: {
+        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('RoleName'))), normalizedRoleName.toLowerCase())],
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'Role already exists' });
+    }
 
     if (RoleCategoryId) {
       const category = await RoleCategory.findByPk(RoleCategoryId);
@@ -20,10 +36,11 @@ const createRole = async (req, res) => {
 
     const role = await Role.create({
       RoleCategoryId: RoleCategoryId || null,
-      RoleName,
+      RoleName: normalizedRoleName,
       ParentRoleId,
       Description,
       HasExtraMeasures: HasExtraMeasures || false,
+      Permissions: Array.isArray(Permissions) ? Permissions : null,
       CreatedBy: req.user?.Id,
     });
 
@@ -105,7 +122,8 @@ const getRoleById = async (req, res) => {
 const updateRole = async (req, res) => {
   try {
     const { id } = req.params;
-    const { RoleCategoryId, RoleName, ParentRoleId, Description, HasExtraMeasures } = req.body;
+    const { RoleCategoryId, RoleName, ParentRoleId, Description, HasExtraMeasures, Permissions } = req.body;
+    const normalizedRoleName = (RoleName || '').trim();
 
     const role = await Role.findByPk(id);
 
@@ -113,8 +131,23 @@ const updateRole = async (req, res) => {
       return res.status(404).json({ message: 'Role not found' });
     }
 
+    if (!normalizedRoleName) {
+      return res.status(400).json({ message: 'Role name is required' });
+    }
+
     if (ParentRoleId === id) {
       return res.status(400).json({ message: 'Role cannot be its own parent' });
+    }
+
+    const duplicate = await Role.findOne({
+      where: {
+        Id: { [Op.ne]: id },
+        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('RoleName'))), normalizedRoleName.toLowerCase())],
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'Role already exists' });
     }
 
     if (RoleCategoryId) {
@@ -126,10 +159,11 @@ const updateRole = async (req, res) => {
 
     await role.update({
       RoleCategoryId: RoleCategoryId || null,
-      RoleName,
+      RoleName: normalizedRoleName,
       ParentRoleId,
       Description,
       HasExtraMeasures,
+      ...(Array.isArray(Permissions) ? { Permissions } : {}),
     });
 
     res.json({

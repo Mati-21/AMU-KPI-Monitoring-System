@@ -1,13 +1,24 @@
 # Sample Users by Role
 
-Development and testing accounts for authentication and role-based flows.
+admin
 
-## Default Admin (existing seed)
+Mule@gmail.com
+Mule@123
 
-| Role                 | Full Name                  | Username | Email            | Password    |
-| -------------------- | -------------------------- | -------- | ---------------- | ----------- |
-| System Administrator | System Administrator Admin | admin    | admin@amu.edu.et | Admin@12345 |
 
-## Core Hierarchy Roles
+Strategic
 
+Mati@gmail.com
+Mati@123
+
+
+Academic Vice President
+
+Adam@gmail.com
+Adam@123
+
+AmiT Higher Institution
+
+Kidus@gmail.com
+Kidus@123
 

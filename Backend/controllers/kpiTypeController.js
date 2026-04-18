@@ -1,8 +1,26 @@
+const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const { KPIType } = require('../models');
 
 const createKPIType = async (req, res) => {
   try {
     const { KPIName, ParentKPIID, Description } = req.body;
+
+    const normalizedName = (KPIName || '').trim();
+
+    if (!normalizedName) {
+      return res.status(400).json({ message: 'KPI category name is required' });
+    }
+
+    const duplicate = await KPIType.findOne({
+      where: {
+        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('KPIName'))), normalizedName.toLowerCase())],
+        ParentKPIID: ParentKPIID || null,
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'KPI category already exists under this parent' });
+    }
 
     if (ParentKPIID) {
       const parent = await KPIType.findByPk(ParentKPIID);
@@ -12,10 +30,10 @@ const createKPIType = async (req, res) => {
     }
 
     const type = await KPIType.create({
-      KPIName,
+      KPIName: normalizedName,
       ParentKPIID,
       Description,
-      CreatedBy: req.user?.Id
+      CreatedBy: req.user?.Id,
     });
 
     res.status(201).json({ success: true, data: type });
@@ -29,7 +47,7 @@ const getKPITypes = async (req, res) => {
   try {
     const types = await KPIType.findAll({
       where: { IsArchived: false },
-      order: [['CreatedAt', 'DESC']]
+      order: [['CreatedAt', 'ASC']],
     });
 
     res.json({ success: true, data: types });
@@ -59,6 +77,11 @@ const updateKPIType = async (req, res) => {
   try {
     const { id } = req.params;
     const { KPIName, ParentKPIID, Description } = req.body;
+    const normalizedName = (KPIName || '').trim();
+
+    if (!normalizedName) {
+      return res.status(400).json({ message: 'KPI category name is required' });
+    }
 
     const type = await KPIType.findByPk(id);
     if (!type) {
@@ -72,7 +95,19 @@ const updateKPIType = async (req, res) => {
       }
     }
 
-    await type.update({ KPIName, ParentKPIID, Description });
+    const duplicate = await KPIType.findOne({
+      where: {
+        Id: { [Op.ne]: id },
+        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('KPIName'))), normalizedName.toLowerCase())],
+        ParentKPIID: ParentKPIID || null,
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'KPI category already exists under this parent' });
+    }
+
+    await type.update({ KPIName: normalizedName, ParentKPIID, Description });
 
     res.json({ success: true, data: type });
   } catch (error) {
@@ -103,5 +138,5 @@ module.exports = {
   getKPITypes,
   getKPITypeById,
   updateKPIType,
-  deleteKPIType
+  deleteKPIType,
 };

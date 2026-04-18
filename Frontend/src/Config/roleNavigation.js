@@ -10,8 +10,6 @@ import {
   Star,
   UserCheck,
   Eye,
-  CheckCircle,
-  TrendingUp,
   PieChart,
   Briefcase,
   Award,
@@ -59,6 +57,7 @@ export const roleNavigation = {
     {
       label: 'MY WORK',
       items: [
+        { icon: Target, label: 'Assigned KPIs', path: 'assigned-kpis' },
         { icon: Target, label: 'My KPIs', path: 'my-kpis' },
         { icon: ClipboardList, label: 'Self Evaluation', path: 'self-evaluation' },
         { icon: FileText, label: 'Reports', path: 'reports' },
@@ -75,6 +74,8 @@ export const roleNavigation = {
     {
       label: 'DEPARTMENT',
       items: [
+        { icon: Target, label: 'Assigned KPIs', path: 'assigned-kpis' },
+        { icon: ClipboardList, label: 'KPI Allocation', path: 'assign-kpi' },
         { icon: BarChart3, label: 'Dept. KPIs', path: 'dept-kpis' },
         { icon: Users, label: 'Staff Performance', path: 'staff-performance' },
         { icon: UserCheck, label: 'KPI Assignment', path: 'kpi-assignment' },
@@ -91,8 +92,10 @@ export const roleNavigation = {
     {
       label: 'FACULTY MANAGEMENT',
       items: [
+        { icon: Target, label: 'Assigned KPIs', path: 'assigned-kpis' },
         { icon: Target, label: 'Faculty KPIs', path: 'faculty-kpis' },
-        { icon: ClipboardList, label: 'Assign KPI', path: 'assign-kpi' },
+        { icon: ClipboardList, label: 'KPI Allocation', path: 'assign-kpi' },
+        { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: FileText, label: 'Reports', path: 'reports' },
         { icon: Building2, label: 'Departments', path: 'departments' },
         { icon: Star, label: 'Evaluations', path: 'evaluations' },
@@ -109,6 +112,8 @@ export const roleNavigation = {
     {
       label: 'INSTITUTION',
       items: [
+        { icon: Target, label: 'Assigned KPIs', path: 'assigned-kpis' },
+        { icon: ClipboardList, label: 'KPI Allocation', path: 'assign-kpi' },
         { icon: Award, label: 'Institution KPIs', path: 'institution-kpis' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
         { icon: Eye, label: 'Oversight', path: 'oversight' },
@@ -126,9 +131,10 @@ export const roleNavigation = {
     {
       label: 'SECTOR MANAGEMENT',
       items: [
-        { icon: TrendingUp, label: 'Sector KPIs', path: 'sector-kpis' },
+        { icon: Target, label: 'Performance', path: 'assigned-kpis' },
+        { icon: ClipboardList, label: 'KPI Allocation', path: 'assign-kpi' },
+        { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
-        { icon: CheckCircle, label: 'Approvals', path: 'approvals' },
         { icon: FileText, label: 'Reports', path: 'reports' },
       ],
     },
@@ -143,7 +149,9 @@ export const roleNavigation = {
     {
       label: 'STRATEGIC PLANNING',
       items: [
-        { icon: Target, label: 'University KPIs', path: 'university-kpis' },
+        { icon: Target, label: 'Assigned KPIs', path: 'assigned-kpis' },
+        { icon: ClipboardList, label: 'KPI Allocation', path: 'assign-kpi' },
+        { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: FileText, label: 'Reports', path: 'reports' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
       ],

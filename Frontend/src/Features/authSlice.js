@@ -1,11 +1,39 @@
 import { createSlice } from '@reduxjs/toolkit';
 
+const hasValidToken = (token) => typeof token === 'string' && token.trim().length > 0;
+
+const sanitizeAuthState = (rawAuth) => {
+  if (!rawAuth || typeof rawAuth !== 'object') {
+    return null;
+  }
+
+  const token = hasValidToken(rawAuth.token) ? rawAuth.token : null;
+
+  return {
+    user: token ? rawAuth.user || null : null,
+    token,
+    status: rawAuth.status || 'idle',
+    error: null,
+    isAuthenticated: Boolean(token),
+  };
+};
+
 const getAuthFromStorage = () => {
   if (typeof window === 'undefined') return null;
 
   try {
     const stored = localStorage.getItem('auth');
-    return stored ? JSON.parse(stored) : null;
+    if (!stored) {
+      return null;
+    }
+
+    const sanitized = sanitizeAuthState(JSON.parse(stored));
+
+    if (!sanitized?.token) {
+      localStorage.removeItem('auth');
+    }
+
+    return sanitized;
   } catch {
     return null;
   }
@@ -24,14 +52,16 @@ const initialState = persistedAuth || {
 const persistAuth = (state) => {
   if (typeof window === 'undefined') return;
 
+  const token = hasValidToken(state.token) ? state.token : null;
+
   localStorage.setItem(
     'auth',
     JSON.stringify({
-      user: state.user,
-      token: state.token,
+      user: token ? state.user : null,
+      token,
       status: state.status,
       error: state.error,
-      isAuthenticated: Boolean(state.user || state.token),
+      isAuthenticated: Boolean(token),
     })
   );
 };
@@ -47,11 +77,12 @@ const authSlice = createSlice({
     },
     setCredentials(state, action) {
       const { user, token } = action.payload;
-      state.user = user;
-      state.token = token;
+      const sanitizedToken = hasValidToken(token) ? token : null;
+      state.user = sanitizedToken ? user : null;
+      state.token = sanitizedToken;
       state.status = 'succeeded';
       state.error = null;
-      state.isAuthenticated = Boolean(user || token);
+      state.isAuthenticated = Boolean(sanitizedToken);
       persistAuth(state);
     },
     logout(state) {
@@ -65,14 +96,21 @@ const authSlice = createSlice({
       }
     },
     setUser(state, action) {
+      if (!hasValidToken(state.token)) {
+        state.user = null;
+        state.isAuthenticated = false;
+        persistAuth(state);
+        return;
+      }
+
       state.user = action.payload;
-      state.isAuthenticated = Boolean(state.user || state.token);
+      state.isAuthenticated = true;
       persistAuth(state);
     },
     setAuthError(state, action) {
       state.error = action.payload;
       state.status = 'failed';
-      state.isAuthenticated = Boolean(state.user || state.token);
+      state.isAuthenticated = hasValidToken(state.token);
       persistAuth(state);
     },
   },

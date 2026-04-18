@@ -11,9 +11,17 @@ export const normalizeAuthUser = (user, role) => {
   return {
     ...user,
     id: user.id || user.Id,
+    roleId: role?.Id || role?.id || user.roleId || user.RoleId || null,
     name: fullName,
     fullName,
     role: roleName,
     roleName,
+    permissions: Array.isArray(role?.Permissions)
+      ? role.Permissions
+      : Array.isArray(user.permissions)
+        ? user.permissions
+        : Array.isArray(user.Permissions)
+          ? user.Permissions
+          : [],
   };
 };

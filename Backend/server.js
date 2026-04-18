@@ -22,6 +22,7 @@ const userKpiResultRoutes = require('./routes/userKpiResultRoutes');
 const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
 
 const app = express();
+const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
 
 const defaultAllowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
 const envOrigins = (process.env.CLIENT_URL || '')
@@ -48,8 +49,18 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (httpLogMode !== 'off') {
+  if (httpLogMode === 'dev') {
+    app.use(morgan('dev'));
+  } else if (httpLogMode === 'tiny') {
+    app.use(morgan('tiny'));
+  } else {
+    app.use(
+      morgan('tiny', {
+        skip: (req, res) => res.statusCode < 400,
+      })
+    );
+  }
 }
 
 app.use('/api/auth', authRoutes);
@@ -86,9 +97,7 @@ const startServer = async () => {
     await connectDB();
 
     app.listen(PORT, () => {
-      console.log(`🚀 KPI Monitoring System API running on port ${PORT}`);
-      console.log(`📍 Environment: ${process.env.NODE_ENV}`);
-      console.log(`🔗 API URL: http://localhost:${PORT}`);
+      console.log(`API running on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

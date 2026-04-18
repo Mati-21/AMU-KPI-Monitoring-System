@@ -31,6 +31,8 @@ import { Input } from '../../Components/UI/Input';
 import Button from '../../Components/UI/Button';
 import { setUser } from '../../Features/authSlice';
 import { getUserById, normalizeProfileUser, updateUser } from '../../data/userDirectory';
+import { api } from '../../api/axios';
+import { useNotification } from '../../Context/NotificationContext';
 
 const DEFAULT_SELF_ID = 'amu-admin-001';
 
@@ -39,20 +41,73 @@ const UserProfile = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const authUser = useSelector((state) => state.auth.user);
+  const { notify } = useNotification();
 
   const isAdmin = (authUser?.role || '').toLowerCase().includes('admin');
   const isSelf = !userId || String(userId) === String(authUser?.id || authUser?.Id || DEFAULT_SELF_ID);
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  const profile = useMemo(() => {
-    const targetId = userId || authUser?.id || authUser?.Id || DEFAULT_SELF_ID;
-    return normalizeProfileUser(getUserById(targetId) || authUser || getUserById(DEFAULT_SELF_ID));
-  }, [authUser, userId]);
+  useEffect(() => {
+    let mounted = true;
+
+    const fallbackProfile = normalizeProfileUser(getUserById(DEFAULT_SELF_ID) || authUser || getUserById(DEFAULT_SELF_ID));
+
+    const loadProfile = async () => {
+      if (!userId) {
+        if (mounted) {
+          setProfile(normalizeProfileUser(authUser || getUserById(DEFAULT_SELF_ID) || fallbackProfile));
+          setProfileLoading(false);
+        }
+        return;
+      }
+
+      setProfileLoading(true);
+      try {
+        const response = await api.get(`/users/${userId}`, { params: { t: Date.now() } });
+        if (!mounted) return;
+
+        const record = response.data?.data;
+        const activeRole = record?.UserRoles?.[0]?.Role;
+        const normalized = normalizeProfileUser({
+          id: record?.Id,
+          firstName: record?.FirstName || '',
+          fatherName: record?.FatherName || '',
+          grandFatherName: record?.GrandFatherName || '',
+          fullName: [record?.FirstName, record?.FatherName, record?.GrandFatherName].filter(Boolean).join(' '),
+          email: record?.Email || '',
+          userName: record?.UserName || '',
+          phone: record?.Phone || '',
+          role: activeRole?.RoleName || 'Unassigned',
+          roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
+          officeLevel: activeRole?.RoleName || '-',
+          joinedDate: record?.CreatedAt ? new Date(record.CreatedAt).toISOString().slice(0, 10) : '',
+          status: 'Active',
+        });
+
+        setProfile(normalized);
+      } catch (loadErr) {
+        if (!mounted) return;
+        notify(loadErr?.response?.data?.message || 'Failed to load user profile.', 'error');
+        setProfile(normalizeProfileUser(authUser || getUserById(DEFAULT_SELF_ID) || fallbackProfile));
+      } finally {
+        if (mounted) setProfileLoading(false);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [userId, authUser, notify]);
 
   const canViewPersonal = isSelf || isAdmin;
   const canEdit = isSelf || isAdmin;
   const [draft, setDraft] = useState(profile);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(profile);
@@ -61,7 +116,7 @@ const UserProfile = () => {
     setNotice('');
   }, [profile, location.state, canEdit]);
 
-  if (!profile) {
+  if (profileLoading || !profile) {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Profile not available.</div>;
   }
 
@@ -69,32 +124,67 @@ const UserProfile = () => {
     setDraft((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    const updated = updateUser(profile.id, {
-      firstName: draft.firstName,
-      fatherName: draft.fatherName,
-      grandFatherName: draft.grandFatherName,
-      fullName: [draft.firstName, draft.fatherName, draft.grandFatherName].filter(Boolean).join(' '),
-      email: draft.email,
-      phone: draft.phone,
-      department: draft.department,
-      location: draft.location,
-      bio: draft.bio,
-      personalEmail: draft.personalEmail,
-      emergencyContact: draft.emergencyContact,
-      address: draft.address,
-      bankAccount: draft.bankAccount,
-      dateOfBirth: draft.dateOfBirth,
-      nationalId: draft.nationalId,
-    });
+  const handleSave = async () => {
+    const activeDraft = draft || profile;
+    const targetUserId = userId || profile.id;
+    const resetPassword = String(activeDraft?.resetPassword || '').trim();
+    const confirmResetPassword = String(activeDraft?.confirmResetPassword || '').trim();
 
-    if (updated && String(updated.id) === String(authUser?.id || authUser?.Id)) {
-      dispatch(setUser(updated));
+    if (isAdmin && !isSelf && (resetPassword || confirmResetPassword)) {
+      if (resetPassword.length < 6) {
+        notify('New password must be at least 6 characters.', 'warning');
+        return;
+      }
+
+      if (resetPassword !== confirmResetPassword) {
+        notify('New password and confirm password do not match.', 'warning');
+        return;
+      }
     }
 
-    setDraft(normalizeProfileUser(updated));
-    setEditing(false);
-    setNotice('Profile saved successfully.');
+    setSaving(true);
+    try {
+      const updated = updateUser(profile.id, {
+        firstName: activeDraft.firstName,
+        fatherName: activeDraft.fatherName,
+        grandFatherName: activeDraft.grandFatherName,
+        fullName: [activeDraft.firstName, activeDraft.fatherName, activeDraft.grandFatherName].filter(Boolean).join(' '),
+        email: activeDraft.email,
+        phone: activeDraft.phone,
+        department: activeDraft.department,
+        location: activeDraft.location,
+        bio: activeDraft.bio,
+        personalEmail: activeDraft.personalEmail,
+        emergencyContact: activeDraft.emergencyContact,
+        address: activeDraft.address,
+        bankAccount: activeDraft.bankAccount,
+        dateOfBirth: activeDraft.dateOfBirth,
+        nationalId: activeDraft.nationalId,
+      });
+
+      if (isAdmin && !isSelf && resetPassword) {
+        await api.put(`/users/${targetUserId}/reset-password`, { password: resetPassword });
+        notify('Password reset successfully.', 'success');
+      }
+
+      if (updated && String(updated.id) === String(authUser?.id || authUser?.Id)) {
+        dispatch(setUser(updated));
+      }
+
+      setDraft(
+        normalizeProfileUser({
+          ...(updated || profile),
+          resetPassword: '',
+          confirmResetPassword: '',
+        })
+      );
+      setEditing(false);
+      setNotice('Profile saved successfully.');
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to save changes.', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -103,7 +193,12 @@ const UserProfile = () => {
     setNotice('Changes discarded.');
   };
 
-  const display = editing ? draft : profile;
+  const display = editing ? draft || profile : profile;
+  const editingDraft = draft || profile;
+
+  if (!display) {
+    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Profile not available.</div>;
+  }
 
   return (
     <div className="flex flex-1 overflow-y-auto bg-background">
@@ -181,9 +276,9 @@ const UserProfile = () => {
                             <X className="h-4 w-4" />
                             Cancel
                           </Button>
-                          <Button size="sm" onClick={handleSave} className="gap-2">
+                          <Button size="sm" onClick={handleSave} className="gap-2" disabled={saving}>
                             <Save className="h-4 w-4" />
-                            Save
+                            {saving ? 'Saving...' : 'Save'}
                           </Button>
                         </div>
                       ) : (
@@ -197,18 +292,36 @@ const UserProfile = () => {
                   <CardContent>
                     {editing ? (
                       <div className="space-y-4">
-                        <Input value={draft.bio || ''} onChange={(e) => handleChange('bio', e.target.value)} placeholder="Short bio" />
+                        <Input value={editingDraft.bio || ''} onChange={(e) => handleChange('bio', e.target.value)} placeholder="Short bio" />
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <EditableInfo icon={Mail} label="Email" value={draft.email} onChange={(val) => handleChange('email', val)} />
-                          <EditableInfo icon={Phone} label="Phone" value={draft.phone} onChange={(val) => handleChange('phone', val)} />
-                          <EditableInfo icon={Shield} label="Role" value={draft.role} onChange={(val) => handleChange('role', val)} disabled />
+                          <EditableInfo icon={Mail} label="Email" value={editingDraft.email} onChange={(val) => handleChange('email', val)} />
+                          <EditableInfo icon={Phone} label="Phone" value={editingDraft.phone} onChange={(val) => handleChange('phone', val)} />
+                          <EditableInfo icon={Shield} label="Role" value={editingDraft.role} onChange={(val) => handleChange('role', val)} disabled />
                           <EditableInfo
                             icon={Building2}
                             label="Department"
-                            value={draft.department}
+                            value={editingDraft.department}
                             onChange={(val) => handleChange('department', val)}
                           />
                         </div>
+                        {isAdmin && !isSelf ? (
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 rounded-lg border border-border p-4">
+                            <EditableInfo
+                              icon={Lock}
+                              label="Reset Password"
+                              value={editingDraft.resetPassword || ''}
+                              onChange={(val) => handleChange('resetPassword', val)}
+                              type="password"
+                            />
+                            <EditableInfo
+                              icon={Lock}
+                              label="Confirm Password"
+                              value={editingDraft.confirmResetPassword || ''}
+                              onChange={(val) => handleChange('confirmResetPassword', val)}
+                              type="password"
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <>
@@ -358,14 +471,14 @@ const InfoRow = ({ icon: Icon, label, value }) => (
   </div>
 );
 
-const EditableInfo = ({ icon: Icon, label, value, onChange, disabled = false }) => (
+const EditableInfo = ({ icon: Icon, label, value, onChange, disabled = false, type = 'text' }) => (
   <div className="flex items-start gap-3 rounded-lg border border-border p-3">
     <div className="rounded-lg bg-muted p-2">
       <Icon className="h-4 w-4 text-primary" />
     </div>
     <div className="flex-1 space-y-1">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <Input value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
+      <Input type={type} value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} />
     </div>
   </div>
 );

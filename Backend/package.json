@@ -8,6 +8,7 @@
     "seed": "node scripts/seedData.js",
     "seed:core-hierarchy": "node scripts/seedCoreHierarchy.js",
     "db:create": "node scripts/createDatabase.js",
+    "db:fix:kpi-baseline": "node scripts/fixKpiBaseline.js",
     "db:fix:role-category-nullable": "node scripts/fixRoleCategoryNullable.js",
     "db:reset:system-admin": "node scripts/resetToSystemAdmin.js",
     "test": "echo \"Error: no test specified\" && exit 1",

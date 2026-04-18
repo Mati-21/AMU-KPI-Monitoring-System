@@ -1,6 +1,7 @@
 // services/api.js
 import axios from 'axios';
 import { store } from '../app/store';
+import { queryClient } from '../app/queryClient';
 import { logout } from '../Features/authSlice';
 
 export const api = axios.create({
@@ -22,6 +23,7 @@ api.interceptors.response.use(
   (error) => {
     if (error?.response?.status === 401) {
       store.dispatch(logout());
+      queryClient.clear();
     }
 
     return Promise.reject(error);

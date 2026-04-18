@@ -1,14 +1,35 @@
+const { Op, fn, col, where: sequelizeWhere } = require('sequelize');
 const { Unit } = require('../models');
 
 const createUnit = async (req, res) => {
   try {
     const { Name, Code, Description } = req.body;
 
+    const normalizedName = (Name || '').trim();
+    const normalizedCode = (Code || '').trim();
+
+    if (!normalizedName || !normalizedCode) {
+      return res.status(400).json({ message: 'Unit name and code are required' });
+    }
+
+    const duplicate = await Unit.findOne({
+      where: {
+        [Op.or]: [
+          sequelizeWhere(fn('lower', fn('trim', col('Name'))), normalizedName.toLowerCase()),
+          sequelizeWhere(fn('lower', fn('trim', col('Code'))), normalizedCode.toLowerCase()),
+        ],
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'Unit already exists' });
+    }
+
     const unit = await Unit.create({
-      Name,
-      Code,
+      Name: normalizedName,
+      Code: normalizedCode,
       Description,
-      CreatedBy: req.user?.Id
+      CreatedBy: req.user?.Id,
     });
 
     res.status(201).json({ success: true, data: unit });
@@ -22,7 +43,7 @@ const getUnits = async (req, res) => {
   try {
     const units = await Unit.findAll({
       where: { IsArchived: false },
-      order: [['CreatedAt', 'DESC']]
+      order: [['CreatedAt', 'DESC']],
     });
 
     res.json({ success: true, data: units });
@@ -52,13 +73,33 @@ const updateUnit = async (req, res) => {
   try {
     const { id } = req.params;
     const { Name, Code, Description } = req.body;
+    const normalizedName = (Name || '').trim();
+    const normalizedCode = (Code || '').trim();
 
     const unit = await Unit.findByPk(id);
     if (!unit) {
       return res.status(404).json({ message: 'Unit not found' });
     }
 
-    await unit.update({ Name, Code, Description });
+    if (!normalizedName || !normalizedCode) {
+      return res.status(400).json({ message: 'Unit name and code are required' });
+    }
+
+    const duplicate = await Unit.findOne({
+      where: {
+        Id: { [Op.ne]: id },
+        [Op.or]: [
+          sequelizeWhere(fn('lower', fn('trim', col('Name'))), normalizedName.toLowerCase()),
+          sequelizeWhere(fn('lower', fn('trim', col('Code'))), normalizedCode.toLowerCase()),
+        ],
+      },
+    });
+
+    if (duplicate && !duplicate.IsArchived) {
+      return res.status(409).json({ message: 'Unit already exists' });
+    }
+
+    await unit.update({ Name: normalizedName, Code: normalizedCode, Description });
 
     res.json({ success: true, data: unit });
   } catch (error) {
@@ -89,5 +130,5 @@ module.exports = {
   getUnits,
   getUnitById,
   updateUnit,
-  deleteUnit
+  deleteUnit,
 };

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import kpiImage from '../../assets/images/kpi.jpeg';
 import Navbar from '../../Components/UI/Navbar';
+import { Input } from '../../Components/UI/Input';
 import { useLogin } from '../../Hooks/Auth/useLogin';
 import { getDefaultRouteByRole } from '../../lib/authRouting';
 
@@ -24,7 +25,8 @@ const SignIn = () => {
       {
         onSuccess: (data) => {
           const role = data?.role?.RoleName || data?.user?.role || data?.user?.RoleName || data?.user?.Role || '';
-          navigate(getDefaultRouteByRole(role));
+          const permissions = data?.role?.Permissions || data?.user?.permissions || data?.user?.Permissions || [];
+          navigate(getDefaultRouteByRole(role, permissions));
         },
       }
     );
@@ -69,14 +71,14 @@ const SignIn = () => {
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
                     id="password"
                     type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 h-11 w-full rounded-md border border-input bg-background text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="pl-10 h-11 w-full text-base"
                     required
                   />
                 </div>

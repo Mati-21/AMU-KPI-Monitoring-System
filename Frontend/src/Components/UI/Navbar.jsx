@@ -14,7 +14,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
-  const isAuthenticated = Boolean(user);
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
   const location = useLocation();
 
   const layoutBasePath = [
@@ -27,7 +27,7 @@ const Navbar = () => {
     '/strategic-office',
   ].find((basePath) => location.pathname.startsWith(basePath));
 
-  const profilePath = layoutBasePath ? `${layoutBasePath}/profile` : '/admin/profile';
+  const profilePath = layoutBasePath ? `${layoutBasePath}/profile` : '/profile';
   const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
   const displayRole = user?.role || user?.roleName || 'User';
 
@@ -109,10 +109,18 @@ const Navbar = () => {
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <button className="border px-3 py-2 rounded cursor-pointer">Learn More</button>
+        <div className="flex items-center gap-2">
+          <button
+            className="h-10 w-10 rounded border border-border hover:bg-secondary flex items-center justify-center"
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Light mode' : 'Dark mode'}
+          >
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button className="h-10 border px-3 rounded cursor-pointer">Learn More</button>
           {location.pathname !== '/signin' && (
-            <button className="bg-primary text-white px-3 py-2 rounded cursor-pointer" onClick={() => navigate('/signin')}>
+            <button className="h-10 bg-primary text-white px-3 rounded cursor-pointer" onClick={() => navigate('/signin')}>
               Sign In
             </button>
           )}

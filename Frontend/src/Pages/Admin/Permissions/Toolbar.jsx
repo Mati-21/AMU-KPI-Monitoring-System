@@ -3,13 +3,19 @@ import CustomSelect from '../../../Components/UI/CustomSelect';
 import SearchInput from '../../../Components/UI/SearchInput';
 import Button from '../../../Components/UI/Button';
 
-function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch }) {
+function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch, loadingRoles }) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-Stretch gap-3 ">
         {/* Custom Select */}
         <div className="w-48 h-9">
-          <CustomSelect options={roles} value={selectedRole} onChange={handleRoleChange} placeholder="Select Role" />
+          <CustomSelect
+            options={roles}
+            value={selectedRole}
+            onChange={handleRoleChange}
+            compact
+            placeholder={loadingRoles ? 'Loading roles...' : roles.length ? 'Select Role' : 'No registered roles'}
+          />
         </div>
 
         {/* Search */}
@@ -23,7 +29,7 @@ function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch }) {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Showing: <span className="font-semibold">{selectedRole}</span>
+        Showing: <span className="font-semibold">{selectedRole || 'None'}</span>
       </p>
     </div>
   );

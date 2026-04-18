@@ -10,7 +10,7 @@ const getThemeBadgeColor = (theme) => {
   return 'bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20';
 };
 
-const AssignedKpiList = ({ kpis }) => {
+const AssignedKpiList = ({ kpis, emptyMessage = 'No KPIs found matching your criteria.' }) => {
   return (
     <Card>
       <CardContent className="p-0">
@@ -51,7 +51,7 @@ const AssignedKpiList = ({ kpis }) => {
                 {kpis.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                      No KPIs found matching your criteria.
+                      {emptyMessage}
                     </TableCell>
                   </TableRow>
                 )}

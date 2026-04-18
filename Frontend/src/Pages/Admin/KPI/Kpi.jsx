@@ -7,11 +7,12 @@ import RegisterCategory from './RegisterCategory';
 
 const KpiManagement = () => {
   const [activeTab, setActiveTab] = useState('list');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const tabs = [
     { key: 'list', label: 'Lists' },
     { key: 'addKpi', label: 'Register KPI' },
-    { key: 'addKpiCategory', label: 'Register KPI Category' },
+    { key: 'addKpiCategory', label: 'Register Theme / Sub-Theme' },
     { key: 'addKpiUnit', label: 'Register Unit' },
   ];
 
@@ -28,10 +29,10 @@ const KpiManagement = () => {
             ))}
           </div>
 
-          {activeTab === 'list' && <KpiList />}
-          {activeTab === 'addKpi' && <RegisterKpi setActiveTab={setActiveTab} />}
-          {activeTab === 'addKpiCategory' && <RegisterCategory setActiveTab={setActiveTab} />}
-          {activeTab === 'addKpiUnit' && <RegisterUnit setActiveTab={setActiveTab} />}
+          {activeTab === 'list' && <KpiList refreshKey={refreshKey} />}
+          {activeTab === 'addKpi' && <RegisterKpi setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addKpiCategory' && <RegisterCategory setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addKpiUnit' && <RegisterUnit setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
         </main>
       </div>
     </div>

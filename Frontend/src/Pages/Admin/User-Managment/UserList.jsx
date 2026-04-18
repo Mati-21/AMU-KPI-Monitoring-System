@@ -3,9 +3,12 @@ import { Edit, Eye, Trash2, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 
+import Button from '../../../Components/UI/Button';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TablePagination } from '../../../Components/UI/Table';
 import SearchInput from '../../../Components/UI/SearchInput';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../Components/UI/dialog';
 import { api } from '../../../api/axios';
+import { useNotification } from '../../../Context/NotificationContext';
 
 function UserList({ setActiveTab }) {
   const navigate = useNavigate();
@@ -16,7 +19,10 @@ function UserList({ setActiveTab }) {
   const [usersRaw, setUsersRaw] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [deletingUser, setDeletingUser] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const itemsPerPage = 10;
+  const { notify } = useNotification();
 
   useEffect(() => {
     let mounted = true;
@@ -73,18 +79,26 @@ function UserList({ setActiveTab }) {
   const handleDeleteUser = async (user) => {
     const authId = String(authUser?.id || authUser?.Id || '');
     if (authId && String(user.id) === authId) {
-      window.alert('You cannot delete your own account from this table.');
+      notify('You cannot delete your own account from this table.', 'warning');
       return;
     }
 
-    const confirmed = window.confirm(`Delete user "${user.fullName}"?`);
-    if (!confirmed) return;
+    setDeletingUser(user);
+  };
 
+  const confirmDeleteUser = async () => {
+    if (!deletingUser?.id) return;
+
+    setDeleting(true);
     try {
-      await api.delete(`/users/${user.id}`);
+      await api.delete(`/users/${deletingUser.id}`);
+      notify(`User "${deletingUser.fullName}" archived successfully.`, 'success');
+      setDeletingUser(null);
       setRefreshKey((prev) => prev + 1);
     } catch (deleteErr) {
-      window.alert(deleteErr?.response?.data?.message || 'Failed to delete user.');
+      notify(deleteErr?.response?.data?.message || 'Failed to delete user.', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -197,6 +211,26 @@ function UserList({ setActiveTab }) {
 
         <TablePagination currentPage={currentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
       </div>
+
+      <Dialog open={Boolean(deletingUser)} onOpenChange={(open) => !open && !deleting && setDeletingUser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-semibold">{deletingUser?.fullName}</span>? This action will archive the account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingUser(null)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteUser} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
