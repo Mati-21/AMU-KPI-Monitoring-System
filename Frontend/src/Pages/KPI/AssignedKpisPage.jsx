@@ -5,6 +5,7 @@ import { api } from '../../api/axios';
 import { useNotification } from '../../Context/NotificationContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
+import PerformanceHistoryModal from '../../Components/KPI/PerformanceHistoryModal';
 import permissionUtils from '../../lib/permissionUtils';
 
 const formatValue = (value) => {
@@ -25,6 +26,8 @@ function AssignedKpisPage() {
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [savingSubmission, setSavingSubmission] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [activePerformanceTab, setActivePerformanceTab] = useState('original');
   const [showPerformanceTabs, setShowPerformanceTabs] = useState(false);
@@ -188,6 +191,7 @@ function AssignedKpisPage() {
             q2: quarterValues.q2,
             q3: quarterValues.q3,
             q4: quarterValues.q4,
+            quarterlyResults: quarterlyResults,
           });
         });
 
@@ -350,19 +354,50 @@ function AssignedKpisPage() {
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   type="button"
+                                  onClick={() => {
+                                    setActiveKpi(kpi);
+                                    setHistoryModalOpen(true);
+                                  }}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-purple-300 text-purple-600 hover:bg-purple-50"
-                                  aria-label={`View ${kpi.name}`}
+                                  title="View Performance History"
+                                  aria-label={`View ${kpi.name} history`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveKpi(kpi);
+                                    setSubmissionInitialValues({
+                                      quarter: '',
+                                      result: '',
+                                      remark: '',
+                                    });
+                                    setSubmissionModalOpen(true);
+                                  }}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50"
+                                  title="Add Performance"
+                                  aria-label={`Add ${kpi.name} performance`}
                                 >
                                   <Plus className="h-4 w-4" />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    const latest = Array.isArray(kpi.quarterlyResults) && kpi.quarterlyResults.length > 0
+                                      ? [...kpi.quarterlyResults].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0]
+                                      : null;
                                     setActiveKpi(kpi);
+                                    setSubmissionInitialValues({
+                                      quarter: latest?.quarter || '',
+                                      result: latest?.result || '',
+                                      remark: latest?.remark || '',
+                                    });
                                     setSubmissionModalOpen(true);
                                   }}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-green-300 text-green-600 hover:bg-green-50"
-                                  aria-label={`Edit ${kpi.name}`}
+                                  title="Edit Latest Performance"
+                                  aria-label={`Edit ${kpi.name} performance`}
                                 >
                                   <PencilLine className="h-4 w-4" />
                                 </button>
@@ -448,26 +483,57 @@ function AssignedKpisPage() {
                                       {kpi.q4}
                                     </td>
                                     <td className="border-l border-border px-4 py-4">
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button
-                                          type="button"
-                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-purple-300 text-purple-600 hover:bg-purple-50"
-                                          aria-label={`View ${kpi.name}`}
-                                        >
-                                          <Plus className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setActiveKpi(kpi);
-                                            setSubmissionModalOpen(true);
-                                          }}
-                                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-green-300 text-green-600 hover:bg-green-50"
-                                          aria-label={`Edit ${kpi.name}`}
-                                        >
-                                          <PencilLine className="h-4 w-4" />
-                                        </button>
-                                      </div>
+                                     <div className="flex items-center justify-end gap-2">
+                                       <button
+                                         type="button"
+                                         onClick={() => {
+                                           setActiveKpi(kpi);
+                                           setHistoryModalOpen(true);
+                                         }}
+                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-purple-300 text-purple-600 hover:bg-purple-50"
+                                         title="View Performance History"
+                                         aria-label={`View ${kpi.name} history`}
+                                       >
+                                         <Eye className="h-4 w-4" />
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={() => {
+                                           setActiveKpi(kpi);
+                                           setSubmissionInitialValues({
+                                             quarter: '',
+                                             result: '',
+                                             remark: '',
+                                           });
+                                           setSubmissionModalOpen(true);
+                                         }}
+                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50"
+                                         title="Add Performance"
+                                         aria-label={`Add ${kpi.name} performance`}
+                                       >
+                                         <Plus className="h-4 w-4" />
+                                       </button>
+                                       <button
+                                         type="button"
+                                         onClick={() => {
+                                           const latest = Array.isArray(kpi.quarterlyResults) && kpi.quarterlyResults.length > 0
+                                             ? [...kpi.quarterlyResults].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0]
+                                             : null;
+                                           setActiveKpi(kpi);
+                                           setSubmissionInitialValues({
+                                             quarter: latest?.quarter || '',
+                                             result: latest?.result || '',
+                                             remark: latest?.remark || '',
+                                           });
+                                           setSubmissionModalOpen(true);
+                                         }}
+                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-green-300 text-green-600 hover:bg-green-50"
+                                         title="Edit Latest Performance"
+                                         aria-label={`Edit ${kpi.name} performance`}
+                                       >
+                                         <PencilLine className="h-4 w-4" />
+                                       </button>
+                                     </div>
                                     </td>
                                   </tr>
                                 ))}
@@ -492,7 +558,7 @@ function AssignedKpisPage() {
           }
         }}
         kpi={activeKpi}
-        initialValues={{
+        initialValues={submissionInitialValues || {
           title: activeKpi?.name || '',
           quarter: '',
           result: '',
@@ -528,6 +594,16 @@ function AssignedKpisPage() {
             setSavingSubmission(false);
           }
         }}
+      />
+      <PerformanceHistoryModal
+        open={historyModalOpen}
+        onOpenChange={(open) => {
+          setHistoryModalOpen(open);
+          if (!open) {
+            setActiveKpi(null);
+          }
+        }}
+        kpi={activeKpi}
       />
     </div>
   );

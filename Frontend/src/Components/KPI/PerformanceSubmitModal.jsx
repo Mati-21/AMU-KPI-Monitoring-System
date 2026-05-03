@@ -40,13 +40,28 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
   useEffect(() => {
     if (!open) return;
     setForm(
-      createInitialForm(getCurrentQuarter(), {
+      createInitialForm(initialValues?.quarter || getCurrentQuarter(), {
         quarter: initialValues?.quarter,
         result: initialValues?.result || '',
         remark: initialValues?.remark || '',
       })
     );
   }, [open, initialValues, kpi]);
+
+  // Reactive prefilling when quarter changes
+  useEffect(() => {
+    if (!open || !kpi?.quarterlyResults) return;
+    
+    const existing = kpi.quarterlyResults.find(
+      (r) => String(r.quarter || '').toUpperCase() === String(form.quarter || '').toUpperCase()
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      result: existing?.result || '',
+      remark: existing?.remark || '',
+    }));
+  }, [form.quarter, kpi, open]);
 
   const evidenceRequired = Boolean(kpi?.evidenceRequired);
   const isDerivedKpi = Boolean(kpi?.isDerived);

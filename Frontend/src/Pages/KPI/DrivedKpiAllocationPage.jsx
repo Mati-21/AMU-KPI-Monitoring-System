@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNotification } from '../../Context/NotificationContext';
-import { Eye, Plus, Minus, Pencil, Trash2, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Plus, Minus, Pencil, Trash2, UserMinus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { read, utils, writeFile } from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
@@ -851,19 +851,19 @@ const DrivedKpiAllocationPage = () => {
                                 </button>
                               ) : null}
 
-                              <button
-                                type="button"
-                                className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                title="Delete Drived KPI"
-                                onClick={() =>
-                                  handleRequestDelete({
-                                    id: row.id,
-                                    title: Array.isArray(row.drived) ? row.drived.join(' | ') : row.drived,
-                                  })
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                                <button
+                                  type="button"
+                                  className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                  title="Unassign Drived KPI"
+                                  onClick={() =>
+                                    handleRequestDelete({
+                                      id: row.id,
+                                      title: Array.isArray(row.drived) ? row.drived.join(' | ') : row.drived,
+                                    })
+                                  }
+                                >
+                                  <UserMinus className="h-4 w-4" />
+                                </button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1262,10 +1262,10 @@ const DrivedKpiAllocationPage = () => {
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
-                              <button
-                                type="button"
-                                className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                title="Unallocate Sent KPI"
+                                <button
+                                  type="button"
+                                  className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                  title="Unassign Sent KPI"
                                 onClick={() =>
                                   handleRequestDelete({
                                     id: item.id,
@@ -1273,7 +1273,7 @@ const DrivedKpiAllocationPage = () => {
                                   })
                                 }
                               >
-                                <Trash2 className="h-4 w-4" />
+                                  <UserMinus className="h-4 w-4" />
                               </button>
                             </div>
                           </TableCell>
@@ -1372,9 +1372,9 @@ const DrivedKpiAllocationPage = () => {
       <Dialog open={Boolean(deletingDrivedKpi)} onOpenChange={(open) => !open && !deleting && setDeletingDrivedKpi(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Drived KPI</DialogTitle>
+            <DialogTitle>Unassign Drived KPI</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>? This action
+              Are you sure you want to unassign <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>? This action
               cannot be undone.
             </DialogDescription>
           </DialogHeader>
@@ -1384,7 +1384,7 @@ const DrivedKpiAllocationPage = () => {
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDeleteDrivedKpi} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+              {deleting ? 'Unassigning...' : 'Unassign'}
             </Button>
           </DialogFooter>
         </DialogContent>
