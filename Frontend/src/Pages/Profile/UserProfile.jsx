@@ -25,12 +25,12 @@ import {
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/ProfileButtonTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { Badge } from '../../Components/UI/Badge';
 import { Input } from '../../Components/UI/Input';
 import Button from '../../Components/UI/Button';
 import { setUser } from '../../Features/authSlice';
-import { getUserById, normalizeProfileUser, updateUser } from '../../data/userDirectory';
+import { getUserById, normalizeProfileUser } from '../../data/userDirectory';
 import { api } from '../../api/axios';
 import { useNotification } from '../../Context/NotificationContext';
 
@@ -144,13 +144,31 @@ const UserProfile = () => {
 
     setSaving(true);
     try {
-      const updated = updateUser(profile.id, {
-        firstName: activeDraft.firstName,
-        fatherName: activeDraft.fatherName,
-        grandFatherName: activeDraft.grandFatherName,
-        fullName: [activeDraft.firstName, activeDraft.fatherName, activeDraft.grandFatherName].filter(Boolean).join(' '),
-        email: activeDraft.email,
-        phone: activeDraft.phone,
+      const saveResponse = await api.put(`/users/${targetUserId}`, {
+        FirstName: activeDraft.firstName,
+        FatherName: activeDraft.fatherName,
+        GrandFatherName: activeDraft.grandFatherName,
+        Email: activeDraft.email,
+        Phone: activeDraft.phone,
+        UserName: activeDraft.userName,
+      });
+
+      const savedRecord = saveResponse.data?.data;
+      const activeRole = savedRecord?.UserRoles?.[0]?.Role;
+      const updated = normalizeProfileUser({
+        id: savedRecord?.Id,
+        firstName: savedRecord?.FirstName || '',
+        fatherName: savedRecord?.FatherName || '',
+        grandFatherName: savedRecord?.GrandFatherName || '',
+        fullName: [savedRecord?.FirstName, savedRecord?.FatherName, savedRecord?.GrandFatherName].filter(Boolean).join(' '),
+        email: savedRecord?.Email || '',
+        userName: savedRecord?.UserName || '',
+        phone: savedRecord?.Phone || '',
+        role: activeRole?.RoleName || profile?.role || 'Unassigned',
+        roleCategory: activeRole?.RoleCategory?.CategoryName || profile?.roleCategory || 'No Category',
+        officeLevel: activeRole?.RoleName || profile?.officeLevel || '-',
+        joinedDate: savedRecord?.CreatedAt ? new Date(savedRecord.CreatedAt).toISOString().slice(0, 10) : profile?.joinedDate,
+        status: 'Active',
         department: activeDraft.department,
         location: activeDraft.location,
         bio: activeDraft.bio,
@@ -167,17 +185,30 @@ const UserProfile = () => {
         notify('Password reset successfully.', 'success');
       }
 
-      if (updated && String(updated.id) === String(authUser?.id || authUser?.Id)) {
-        dispatch(setUser(updated));
+      if (String(updated?.id || '') === String(authUser?.id || authUser?.Id || '')) {
+        dispatch(
+          setUser({
+            ...authUser,
+            FirstName: savedRecord?.FirstName,
+            FatherName: savedRecord?.FatherName,
+            GrandFatherName: savedRecord?.GrandFatherName,
+            Email: savedRecord?.Email,
+            UserName: savedRecord?.UserName,
+            Phone: savedRecord?.Phone,
+            fullName: updated?.fullName,
+            name: updated?.fullName,
+          })
+        );
       }
 
-      setDraft(
-        normalizeProfileUser({
-          ...(updated || profile),
-          resetPassword: '',
-          confirmResetPassword: '',
-        })
-      );
+      const normalizedSaved = normalizeProfileUser({
+        ...(updated || profile),
+        resetPassword: '',
+        confirmResetPassword: '',
+      });
+
+      setProfile(normalizedSaved);
+      setDraft(normalizedSaved);
       setEditing(false);
       setNotice('Profile saved successfully.');
     } catch (error) {

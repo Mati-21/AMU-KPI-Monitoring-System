@@ -27,6 +27,24 @@ const UserKPI = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
     },
+    AssignedTarget: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    IsTargetIndividual: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    IncludeCurrentOffice: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    AssignmentBatchId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     Remark: {
       type: DataTypes.TEXT,
       allowNull: true,

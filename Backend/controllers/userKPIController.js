@@ -1,11 +1,21 @@
 const { UserKPI, User, KPI, UserKPIResult, UserRole } = require('../models');
 const { Op } = require('sequelize');
 const { getCurrentCycleYear, getPreviousCycleYear } = require('../utils/kpiCycle');
+const { hasModulePermission } = require('../middleware/authMiddleware');
 
 const parseNumericValue = (value) => {
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseUuidValue = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(trimmed) ? trimmed : null;
 };
 
 const computeBaselineFromPreviousCycle = async ({ KPIId, UserId, cycleYear, fallbackBaseline }) => {
@@ -34,10 +44,47 @@ const computeBaselineFromPreviousCycle = async ({ KPIId, UserId, cycleYear, fall
   return Number(average.toFixed(2));
 };
 
+const hasActiveRoleMembership = async (userId, roleId) => {
+  if (!userId || !roleId) return false;
+
+  const membership = await UserRole.findOne({
+    where: {
+      UserId: userId,
+      RoleId: roleId,
+      IsArchived: false,
+      [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+    },
+    attributes: ['Id'],
+  });
+
+  return Boolean(membership);
+};
+
+const getActiveRoleUserIds = async (roleId) => {
+  if (!roleId) return [];
+
+  const assignments = await UserRole.findAll({
+    where: {
+      RoleId: roleId,
+      IsArchived: false,
+      [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+    },
+    attributes: ['UserId'],
+  });
+
+  return [...new Set(assignments.map((assignment) => assignment.UserId).filter(Boolean))];
+};
+
+const hasExtraMeasuresAccess = (req) =>
+  Boolean(
+    req.user?.currentRole?.HasExtraMeasures || req.user?.currentRole?.hasExtraMeasures || req.user?.hasExtraMeasures || req.user?.HasExtraMeasures
+  );
+
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark, CycleYear, Baseline } = req.body;
+    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
     const cycleYear = CycleYear || getCurrentCycleYear();
+    const assignmentBatchId = parseUuidValue(AssignmentBatchId);
 
     const user = await User.findByPk(UserId);
     if (!user) {
@@ -55,11 +102,50 @@ const createUserKPI = async (req, res) => {
         UserId,
         CycleYear: cycleYear,
         IsArchived: false,
+        Remark: Remark || null, // Check for exact same remark
       },
     });
 
     if (existingAssignment) {
-      return res.status(409).json({ message: 'This KPI is already assigned to the user for the selected cycle year.' });
+      const canEditAny =
+        hasModulePermission(req, 'KPI Allocation', 'edit') ||
+        hasModulePermission(req, 'Drived KPI', 'edit') ||
+        hasModulePermission(req, 'Drived KPI Allocation', 'edit');
+      const canAssignAny =
+        hasModulePermission(req, 'KPI Allocation', 'assign') ||
+        hasModulePermission(req, 'Drived KPI', 'assign') ||
+        hasModulePermission(req, 'Drived KPI Allocation', 'assign');
+      const canCreateKpiAllocation =
+        hasModulePermission(req, 'KPI Allocation', 'create') ||
+        hasModulePermission(req, 'Drived KPI', 'create') ||
+        hasModulePermission(req, 'Drived KPI Allocation', 'create');
+      const canUseExtraMeasures = hasExtraMeasuresAccess(req);
+      const isCreator = String(existingAssignment.CreatedBy || '') === String(req.user?.Id || '');
+      const includeCurrentOffice = Boolean(IncludeCurrentOffice);
+      const requesterRoleId = req.user?.currentRole?.Id || null;
+      const targetUserIsInRequesterRole = includeCurrentOffice ? await hasActiveRoleMembership(existingAssignment.UserId, requesterRoleId) : false;
+
+      const canActivateForCurrentOffice =
+        includeCurrentOffice && (canCreateKpiAllocation || canAssignAny || canUseExtraMeasures) && targetUserIsInRequesterRole;
+
+      if (!canEditAny && !canAssignAny && !canCreateKpiAllocation && !canUseExtraMeasures && !isCreator && !canActivateForCurrentOffice) {
+        return res.status(409).json({ message: 'This specific KPI assignment already exists.' });
+      }
+
+      await existingAssignment.update({
+        Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : existingAssignment.Baseline,
+        AssignedTarget: AssignedTarget !== undefined ? parseNumericValue(AssignedTarget) : existingAssignment.AssignedTarget,
+        IsTargetIndividual: IsTargetIndividual !== undefined ? Boolean(IsTargetIndividual) : existingAssignment.IsTargetIndividual,
+        IncludeCurrentOffice: IncludeCurrentOffice !== undefined ? Boolean(IncludeCurrentOffice) : existingAssignment.IncludeCurrentOffice,
+        AssignmentBatchId: AssignmentBatchId !== undefined ? assignmentBatchId : existingAssignment.AssignmentBatchId,
+        Remark: Remark !== undefined ? Remark : existingAssignment.Remark,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: existingAssignment,
+        message: 'KPI assignment updated.',
+      });
     }
 
     const computedBaseline =
@@ -76,6 +162,10 @@ const createUserKPI = async (req, res) => {
       CycleYear: cycleYear,
       UserId,
       Baseline: computedBaseline,
+      AssignedTarget: parseNumericValue(AssignedTarget),
+      IsTargetIndividual: Boolean(IsTargetIndividual),
+      IncludeCurrentOffice: Boolean(IncludeCurrentOffice),
+      AssignmentBatchId: assignmentBatchId,
       Remark,
       CreatedBy: req.user?.Id,
     });
@@ -98,6 +188,19 @@ const getUserKPIs = async (req, res) => {
 
     if (scope === 'mine') {
       where.UserId = req.user?.Id;
+    } else if (scope === 'sent') {
+      where.CreatedBy = req.user?.Id;
+      // Optionally filter out self-assignments if you only want to see what was sent to others
+      where.UserId = { [Op.ne]: req.user?.Id };
+    }
+
+    const { isDerived } = req.query;
+    if (isDerived !== undefined) {
+      if (String(isDerived).toLowerCase() === 'true') {
+        where.Remark = { [Op.not]: null };
+      } else if (String(isDerived).toLowerCase() === 'false') {
+        where.Remark = null;
+      }
     }
 
     if (String(fromParent).toLowerCase() === 'true') {
@@ -134,7 +237,67 @@ const getUserKPIs = async (req, res) => {
       order: [['CreatedAt', 'DESC']],
     });
 
-    res.json({ success: true, data: userKpis });
+    const assignmentUserIds = [...new Set(userKpis.map((assignment) => String(assignment.UserId || '')).filter(Boolean))];
+    const assignmentKpiIds = [...new Set(userKpis.map((assignment) => String(assignment.KPIId || '')).filter(Boolean))];
+
+    const quarterlyResults =
+      assignmentUserIds.length && assignmentKpiIds.length
+        ? await UserKPIResult.findAll({
+            where: {
+              IsArchived: false,
+              CycleYear: year || getCurrentCycleYear(),
+              UserId: { [Op.in]: assignmentUserIds },
+              KPIId: { [Op.in]: assignmentKpiIds },
+            },
+            attributes: ['Id', 'UserId', 'KPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
+            order: [['CreatedAt', 'DESC']],
+          })
+        : [];
+
+    const quarterlyResultsByAssignment = new Map();
+
+    quarterlyResults.forEach((result) => {
+      const assignmentKey = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
+      if (!quarterlyResultsByAssignment.has(assignmentKey)) {
+        quarterlyResultsByAssignment.set(assignmentKey, {
+          q1: '-',
+          q2: '-',
+          q3: '-',
+          q4: '-',
+          quarterlyResults: [],
+        });
+      }
+
+      const bucket = quarterlyResultsByAssignment.get(assignmentKey);
+      bucket.quarterlyResults.push({
+        id: result.Id,
+        quarter: result.Quarter,
+        result: result.KPIResult,
+        createdAt: result.CreatedAt,
+      });
+
+      const normalizedQuarter = String(result.Quarter || '').toUpperCase();
+      if (normalizedQuarter === 'Q1' && bucket.q1 === '-') bucket.q1 = result.KPIResult;
+      if (normalizedQuarter === 'Q2' && bucket.q2 === '-') bucket.q2 = result.KPIResult;
+      if (normalizedQuarter === 'Q3' && bucket.q3 === '-') bucket.q3 = result.KPIResult;
+      if (normalizedQuarter === 'Q4' && bucket.q4 === '-') bucket.q4 = result.KPIResult;
+    });
+
+    const userKpisWithQuarterlyResults = userKpis.map((assignment) => {
+      const assignmentKey = `${String(assignment.UserId || '')}::${String(assignment.KPIId || '')}`;
+      const bucket = quarterlyResultsByAssignment.get(assignmentKey);
+
+      return {
+        ...assignment.toJSON(),
+        quarterlyResults: bucket?.quarterlyResults || [],
+        q1: bucket?.q1 || '-',
+        q2: bucket?.q2 || '-',
+        q3: bucket?.q3 || '-',
+        q4: bucket?.q4 || '-',
+      };
+    });
+
+    res.json({ success: true, data: userKpisWithQuarterlyResults });
   } catch (error) {
     console.error('Get user KPIs error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -165,11 +328,32 @@ const getUserKPIById = async (req, res) => {
 const updateUserKPI = async (req, res) => {
   try {
     const { id } = req.params;
-    const { KPIId, UserId, Remark, CycleYear, Baseline } = req.body;
+    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
 
     const userKPI = await UserKPI.findByPk(id);
     if (!userKPI) {
       return res.status(404).json({ message: 'User KPI not found' });
+    }
+
+    const canEditAny =
+      hasModulePermission(req, 'KPI Allocation', 'edit') ||
+      hasModulePermission(req, 'Drived KPI', 'edit') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'edit');
+    const canCreateKpiAllocation =
+      hasModulePermission(req, 'KPI Allocation', 'create') ||
+      hasModulePermission(req, 'Drived KPI', 'create') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+    const canUseExtraMeasures = hasExtraMeasuresAccess(req);
+    const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
+
+    const requesterRoleId = req.user?.currentRole?.Id || null;
+    const canToggleHomeOfficeActivation =
+      (canCreateKpiAllocation || canUseExtraMeasures) &&
+      IncludeCurrentOffice !== undefined &&
+      (await hasActiveRoleMembership(userKPI.UserId, requesterRoleId));
+
+    if (!canEditAny && !canUseExtraMeasures && !(canCreateKpiAllocation && isCreator) && !canToggleHomeOfficeActivation) {
+      return res.status(403).json({ message: 'Not authorized to edit this KPI allocation item' });
     }
 
     if (KPIId) {
@@ -186,12 +370,31 @@ const updateUserKPI = async (req, res) => {
       }
     }
 
+    const includeCurrentOfficeBoolean = IncludeCurrentOffice !== undefined ? Boolean(IncludeCurrentOffice) : userKPI.IncludeCurrentOffice;
+    let nextCreatedBy = userKPI.CreatedBy;
+
+    // When unallocating from home office, restore parent ownership so it becomes visible in Assigned KPI.
+    if (IncludeCurrentOffice !== undefined && includeCurrentOfficeBoolean === false && userKPI.IncludeCurrentOffice === true) {
+      const parentRoleId = req.user?.currentRole?.ParentRoleId || null;
+      const parentUserIds = await getActiveRoleUserIds(parentRoleId);
+      const requesterId = String(req.user?.Id || '');
+
+      if (parentUserIds.length && String(userKPI.CreatedBy || '') === requesterId) {
+        nextCreatedBy = parentUserIds[0];
+      }
+    }
+
     await userKPI.update({
       KPIId,
       UserId,
       Remark,
       Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : userKPI.Baseline,
+      AssignedTarget: AssignedTarget !== undefined ? parseNumericValue(AssignedTarget) : userKPI.AssignedTarget,
+      IsTargetIndividual: IsTargetIndividual !== undefined ? Boolean(IsTargetIndividual) : userKPI.IsTargetIndividual,
+      IncludeCurrentOffice: includeCurrentOfficeBoolean,
+      AssignmentBatchId: AssignmentBatchId !== undefined ? AssignmentBatchId || null : userKPI.AssignmentBatchId,
       CycleYear: CycleYear || userKPI.CycleYear,
+      CreatedBy: nextCreatedBy,
     });
 
     res.json({ success: true, data: userKPI });
@@ -208,6 +411,21 @@ const deleteUserKPI = async (req, res) => {
 
     if (!userKPI) {
       return res.status(404).json({ message: 'User KPI not found' });
+    }
+
+    const canDeleteAny =
+      hasModulePermission(req, 'KPI Allocation', 'delete') ||
+      hasModulePermission(req, 'Drived KPI', 'delete') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'delete');
+    const canCreateKpiAllocation =
+      hasModulePermission(req, 'KPI Allocation', 'create') ||
+      hasModulePermission(req, 'Drived KPI', 'create') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+    const canUseExtraMeasures = hasExtraMeasuresAccess(req);
+    const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
+
+    if (!canDeleteAny && !canUseExtraMeasures && !(canCreateKpiAllocation && isCreator)) {
+      return res.status(403).json({ message: 'Not authorized to delete this KPI allocation item' });
     }
 
     await userKPI.update({ IsArchived: true });

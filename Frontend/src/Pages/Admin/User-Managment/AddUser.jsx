@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Building2, Mail, Shield, User, UserPlus } from 'lucide-react';
+import { useSelector } from 'react-redux';
 
 import { Input } from '../../../Components/UI/Input';
 import CustomSelect from '../../../Components/UI/CustomSelect';
 import Button from '../../../Components/UI/Button';
 import { api } from '../../../api/axios';
+import permissionUtils from '../../../lib/permissionUtils';
+import { useNotification } from '../../../Context/NotificationContext';
 
-const officeLevels = ['Strategic Office', 'Vice President', 'Higher Institution', 'Faculty', 'Chair Office', 'Staff'];
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
 const emptyForm = {
   roleCategory: '',
   role: '',
-  officeLevel: 'Staff',
   firstName: '',
   fatherName: '',
   grandFatherName: '',
@@ -27,14 +28,27 @@ const emptyForm = {
 };
 
 function AddUser({ setActiveTab }) {
+  const authUser = useSelector((state) => state.auth?.user);
+  const userPermissions = authUser?.permissions || [];
+  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
+  const canManageUsers =
+    permissionUtils.hasPermission(userPermissions, [
+      permissionUtils.permissionKey('create', 'User Management'),
+      permissionUtils.permissionKey('edit', 'User Management'),
+      permissionUtils.permissionKey('delete', 'User Management'),
+      permissionUtils.permissionKey('manage', 'Users'),
+    ]) || isSystemAdmin;
+  const canCreateChildAccounts =
+    permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'Child Office Accounts')) || isSystemAdmin;
+  const delegatedOnlyMode = !isSystemAdmin && canCreateChildAccounts && !canManageUsers;
   const [formData, setFormData] = useState(emptyForm);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState('');
-  const [categories, setCategories] = useState([]);
   const [roles, setRoles] = useState([]);
+  const { notify } = useNotification();
 
   useEffect(() => {
     let mounted = true;
@@ -44,13 +58,9 @@ function AddUser({ setActiveTab }) {
       setCatalogError('');
 
       try {
-        const [categoriesRes, rolesRes] = await Promise.all([
-          api.get('/role-categories', { params: { t: Date.now() } }),
-          api.get('/roles', { params: { t: Date.now() } }),
-        ]);
+        const rolesRes = await api.get('/roles', { params: { t: Date.now() } });
 
         if (!mounted) return;
-        setCategories(categoriesRes.data?.data || []);
         setRoles(rolesRes.data?.data || []);
       } catch (catalogErr) {
         if (!mounted) return;
@@ -66,29 +76,80 @@ function AddUser({ setActiveTab }) {
     };
   }, []);
 
+  const creatableRoles = useMemo(() => {
+    if (!delegatedOnlyMode) {
+      return roles;
+    }
+
+    const requesterRoleId = String(authUser?.roleId || '');
+    return roles.filter((role) => String(role?.ParentRoleId || '') === requesterRoleId);
+  }, [authUser?.roleId, delegatedOnlyMode, roles]);
+
   const roleCategories = useMemo(() => {
-    const categoryNames = categories.map((category) => category.CategoryName).filter(Boolean);
-    const hasUncategorizedRoles = roles.some((role) => !role?.RoleCategory?.CategoryName);
+    const categoryNames = [...new Set(creatableRoles.map((role) => role?.RoleCategory?.CategoryName).filter(Boolean))];
+    const hasUncategorizedRoles = creatableRoles.some((role) => !role?.RoleCategory?.CategoryName);
     return hasUncategorizedRoles ? [...categoryNames, NO_CATEGORY_OPTION] : categoryNames;
-  }, [categories, roles]);
+  }, [creatableRoles]);
 
   const availableRoles = useMemo(() => {
     if (!formData.roleCategory) return [];
-    return roles
+    return creatableRoles
       .filter((role) => {
         const categoryName = role?.RoleCategory?.CategoryName || NO_CATEGORY_OPTION;
         return categoryName === formData.roleCategory;
       })
       .map((role) => role.RoleName);
-  }, [formData.roleCategory, roles]);
+  }, [creatableRoles, formData.roleCategory]);
+
+  useEffect(() => {
+    if (!delegatedOnlyMode) {
+      return;
+    }
+
+    if (!creatableRoles.length) {
+      return;
+    }
+
+    const firstRole = creatableRoles[0];
+    const firstCategory = firstRole?.RoleCategory?.CategoryName || NO_CATEGORY_OPTION;
+    const firstRoleName = firstRole?.RoleName || '';
+
+    setFormData((prev) => {
+      const nextCategory = prev.roleCategory || firstCategory;
+      let nextRole = prev.role;
+
+      if (!nextRole) {
+        nextRole = firstRoleName;
+      } else {
+        const stillValid = creatableRoles.some((role) => {
+          const categoryName = role?.RoleCategory?.CategoryName || NO_CATEGORY_OPTION;
+          return categoryName === nextCategory && role.RoleName === nextRole;
+        });
+
+        if (!stillValid) {
+          nextRole = firstRoleName;
+        }
+      }
+
+      if (prev.roleCategory === nextCategory && prev.role === nextRole) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        roleCategory: nextCategory,
+        role: nextRole,
+      };
+    });
+  }, [creatableRoles, delegatedOnlyMode]);
 
   const selectedRoleRecord = useMemo(
     () =>
-      roles.find((role) => {
+      creatableRoles.find((role) => {
         const categoryName = role?.RoleCategory?.CategoryName || NO_CATEGORY_OPTION;
         return role.RoleName === formData.role && categoryName === formData.roleCategory;
       }),
-    [roles, formData.role, formData.roleCategory]
+    [creatableRoles, formData.role, formData.roleCategory]
   );
 
   const handleFormChange = (field, value) => {
@@ -97,7 +158,6 @@ function AddUser({ setActiveTab }) {
 
   const handleSave = async () => {
     setError('');
-    setMessage('');
 
     if (
       !formData.firstName ||
@@ -119,7 +179,11 @@ function AddUser({ setActiveTab }) {
     }
 
     if (!selectedRoleRecord?.Id) {
-      setError('Selected role is not available in the database. Please refresh and try again.');
+      setError(
+        delegatedOnlyMode
+          ? 'You can only create accounts for your direct child offices. Please select a valid child-office role.'
+          : 'Selected role is not available in the database. Please refresh and try again.'
+      );
       return;
     }
 
@@ -129,7 +193,7 @@ function AddUser({ setActiveTab }) {
       const registerPayload = {
         FirstName: formData.firstName,
         FatherName: formData.fatherName,
-        GrandFatherName: formData.grandFatherName || '-',
+        GrandFatherName: formData.grandFatherName || '',
         Email: formData.email,
         UserName: formData.username,
         Phone: formData.phone,
@@ -144,12 +208,18 @@ function AddUser({ setActiveTab }) {
         RoleId: selectedRoleRecord.Id,
       });
 
-      const fullName = [createdDbUser?.FirstName, createdDbUser?.FatherName, createdDbUser?.GrandFatherName].filter(Boolean).join(' ');
-      setMessage(`User ${fullName || formData.firstName} has been created in the database.`);
       setFormData(emptyForm);
+      notify(`User ${formData.firstName} has been created successfully.`, 'success');
       setActiveTab('list');
     } catch (saveErr) {
-      setError(saveErr?.response?.data?.message || 'Failed to create user in the database.');
+      const validationErrors = saveErr?.response?.data?.errors;
+      const validationMessage = Array.isArray(validationErrors)
+        ? validationErrors
+            .map((item) => item?.msg)
+            .filter(Boolean)
+            .join(' ')
+        : '';
+      setError(validationMessage || saveErr?.response?.data?.message || 'Failed to create user in the database.');
     } finally {
       setSaving(false);
     }
@@ -158,7 +228,6 @@ function AddUser({ setActiveTab }) {
   const handleCancel = () => {
     setFormData(emptyForm);
     setError('');
-    setMessage('');
     setActiveTab('list');
   };
 
@@ -167,13 +236,18 @@ function AddUser({ setActiveTab }) {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Register New User</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Create a user profile with the role and office hierarchy needed for KPI distribution.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {delegatedOnlyMode
+              ? 'Create accounts for direct child offices assigned under your role.'
+              : 'Create a user profile with the role and office hierarchy needed for KPI distribution.'}
+          </p>
         </div>
-        <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Admin only</div>
+        <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+          {delegatedOnlyMode ? 'Delegated Access' : 'System / Admin Access'}
+        </div>
       </div>
 
       {error ? <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
-      {message ? <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{message}</div> : null}
       {catalogError ? <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{catalogError}</div> : null}
 
       <div className="space-y-8">
@@ -197,14 +271,6 @@ function AddUser({ setActiveTab }) {
                 value={formData.role}
                 onChange={(val) => handleFormChange('role', val)}
                 placeholder={formData.roleCategory ? 'Select role' : 'Select category first'}
-              />
-            </Field>
-            <Field label="Office Level">
-              <CustomSelect
-                options={officeLevels}
-                value={formData.officeLevel}
-                onChange={(val) => handleFormChange('officeLevel', val)}
-                placeholder="Select level"
               />
             </Field>
           </div>

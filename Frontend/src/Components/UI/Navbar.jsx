@@ -1,6 +1,7 @@
 import { Home, Bell, Moon, Sun, Layers, User, Settings, LogOut } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { useMemo, useState } from 'react';
 import useTheme from '../../Hooks/useTheme';
 
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../UI/DropDown';
@@ -16,20 +17,22 @@ const Navbar = () => {
   const user = useSelector((state) => state.auth.user);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
   const location = useLocation();
-
-  const layoutBasePath = [
-    '/admin',
-    '/staff',
-    '/department-chair',
-    '/faculty-admin',
-    '/higher-institution',
-    '/vice-president',
-    '/strategic-office',
-  ].find((basePath) => location.pathname.startsWith(basePath));
-
-  const profilePath = layoutBasePath ? `${layoutBasePath}/profile` : '/profile';
+  const profilePath = '/profile';
   const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
-  const displayRole = user?.role || user?.roleName || 'User';
+  const displayRole = String(user?.role || user?.roleName || 'User').trim();
+  const [showFullRole, setShowFullRole] = useState(false);
+
+  const rolePreview = useMemo(() => {
+    const words = displayRole.split(/\s+/).filter(Boolean);
+    if (words.length <= 3) {
+      return { text: displayRole, hasHiddenPart: false };
+    }
+
+    return {
+      text: `${words.slice(0, 3).join(' ')}`,
+      hasHiddenPart: true,
+    };
+  }, [displayRole]);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -57,10 +60,26 @@ const Navbar = () => {
 
         <DropdownMenu
           trigger={
-            <button className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted">
+            <div role="button" tabIndex={0} className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted">
               <div className="text-right">
                 <p className="text-sm font-semibold">{displayName}</p>
-                <p className="text-xs text-muted-foreground">{displayRole}</p>
+                <p className="text-xs text-muted-foreground">
+                  {showFullRole || !rolePreview.hasHiddenPart ? displayRole : rolePreview.text}
+                  {rolePreview.hasHiddenPart ? (
+                    <button
+                      type="button"
+                      className="ml-1 font-semibold text-primary hover:underline"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setShowFullRole((previous) => !previous);
+                      }}
+                      aria-label={showFullRole ? 'Show shortened role name' : 'Show full role name'}
+                    >
+                      {showFullRole ? 'show less' : '...'}
+                    </button>
+                  ) : null}
+                </p>
               </div>
               <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                 {displayName
@@ -68,7 +87,7 @@ const Navbar = () => {
                   .map((segment) => segment[0])
                   .join('') || 'U'}
               </div>
-            </button>
+            </div>
           }
         >
           <DropdownMenuItem>
@@ -78,7 +97,7 @@ const Navbar = () => {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem>
-            <Link to="configuration" className="flex items-center w-full">
+            <Link to="/configuration" className="flex items-center w-full">
               <Settings className="w-4 h-4 mr-2" />
               Settings
             </Link>

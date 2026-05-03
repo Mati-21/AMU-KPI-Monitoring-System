@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
 import { Badge } from '../../Components/UI/Badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/ProfileButtonTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { ListChecks, Send, Search } from 'lucide-react';
 import { Input } from '../../Components/UI/Input';
 import MultiSelect from '../../Components/UI/MultiSelect';

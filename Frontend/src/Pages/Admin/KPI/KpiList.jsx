@@ -74,7 +74,7 @@ function KpiList({ refreshKey }) {
   const [editSubThemeForm, setEditSubThemeForm] = useState(emptyEditSubTheme);
   const [editUnitForm, setEditUnitForm] = useState(emptyEditUnit);
 
-  const itemsPerPage = 8;
+  const itemsPerPage = 10;
   const { notify } = useNotification();
 
   const loadData = async () => {

@@ -11,6 +11,7 @@ const Unit = require('./Unit');
 const UserKPI = require('./UserKPI');
 const UserKPIResult = require('./UserKPIResult');
 const KPIDocument = require('./KPIDocument');
+const OfficeReportSubmission = require('./OfficeReportSubmission');
 
 // Set up associations
 RoleCategory.hasMany(Role, { foreignKey: 'RoleCategoryId' });
@@ -64,5 +65,6 @@ module.exports = {
   Unit,
   UserKPI,
   UserKPIResult,
-  KPIDocument
+  KPIDocument,
+  OfficeReportSubmission,
 };

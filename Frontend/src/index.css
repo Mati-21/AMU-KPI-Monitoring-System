@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 @theme {
   --color-bg-table: #ffffff; /* light gray (very soft background) */
 
@@ -121,6 +128,12 @@
   --sidebar-ring: #60a5fa; /* focus ring */
 
   --sidebar-muted: #94a3b8; /* muted gray */
+}
+
+/* Report sub-total row: compact height + dark mode support */
+.report-subtotal-row > td {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
 }
 
 @media (prefers-color-scheme: dark) {

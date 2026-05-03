@@ -73,6 +73,7 @@ const heatColor = (v) => {
 const PerformanceDashboard = ({ config }) => {
   const [year, setYear] = useState(config.yearOptions?.[0] || '2023-2024');
   const [quarter, setQuarter] = useState('All Quarters');
+  const comparisonTitlePrefix = config.comparisonTitlePrefix || config.subUnitLabel || 'Sub Unit';
 
   return (
     <div className="space-y-6 overflow-y-scroll p-6">
@@ -168,7 +169,9 @@ const PerformanceDashboard = ({ config }) => {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-sm text-foreground">{u.name}</p>
+                    <p className="font-semibold text-sm text-foreground">
+                      {comparisonTitlePrefix}: {u.name}
+                    </p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">Performance Health Check</p>
                   </div>
                   <MiniDonut achieved={u.achieved} inProgress={u.inProgress} delayed={u.delayed} />

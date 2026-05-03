@@ -25,9 +25,9 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   const notify = useCallback(
-    (message, type = 'info', timeout = 3500) => {
+    (message, type = 'info', timeout = 3500, options = {}) => {
       const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      setNotifications((prev) => [...prev, { id, message, type }]);
+      setNotifications((prev) => [...prev, { id, message, type, position: 'center' }]);
 
       if (timeout > 0) {
         setTimeout(() => dismissNotification(id), timeout);
@@ -49,28 +49,30 @@ export const NotificationProvider = ({ children }) => {
   return (
     <NotificationContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-full max-w-sm flex-col gap-2">
-        {notifications.map((notification) => {
-          const Icon = ICONS[notification.type] || ICONS.info;
-          const style = STYLES[notification.type] || STYLES.info;
+      <div className="pointer-events-none fixed inset-x-0 top-4 z-110 flex justify-center p-4">
+        <div className="flex w-full max-w-md flex-col gap-2">
+          {notifications.map((notification) => {
+            const Icon = ICONS[notification.type] || ICONS.info;
+            const style = STYLES[notification.type] || STYLES.info;
 
-          return (
-            <div key={notification.id} className={`pointer-events-auto rounded-lg border px-3 py-2 shadow-md ${style}`}>
-              <div className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="flex-1 text-sm">{notification.message}</p>
-                <button
-                  type="button"
-                  onClick={() => dismissNotification(notification.id)}
-                  className="rounded p-0.5 opacity-70 hover:opacity-100"
-                  aria-label="Dismiss notification"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            return (
+              <div key={notification.id} className={`pointer-events-auto rounded-lg border px-3 py-2 shadow-md ${style}`}>
+                <div className="flex items-start gap-2">
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="flex-1 text-sm">{notification.message}</p>
+                  <button
+                    type="button"
+                    onClick={() => dismissNotification(notification.id)}
+                    className="rounded p-0.5 opacity-70 hover:opacity-100"
+                    aria-label="Dismiss notification"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </NotificationContext.Provider>
   );

@@ -9,8 +9,9 @@ import { logout, setAuthLoading, setUser } from '../../Features/authSlice';
 import { normalizeAuthUser } from '../../lib/authUser';
 import { getDefaultRouteByRole } from '../../lib/authRouting';
 import { useNotification } from '../../Context/NotificationContext';
+import permissionUtils from '../../lib/permissionUtils';
 
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 const IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
 
 export const RequireAuth = () => {
@@ -38,27 +39,62 @@ export const GuestOnly = () => {
 export const RequireModulePermission = ({ moduleName, action = 'view' }) => {
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
   const user = useSelector((state) => state.auth.user);
+  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(user?.roleName || user?.role);
 
   if (!moduleName) {
     return <Outlet />;
   }
 
-  if (!Array.isArray(userPermissions) || userPermissions.length === 0) {
+  if (isSystemAdmin) {
     return <Outlet />;
   }
 
-  const permissionEntry = userPermissions.find(
-    (permission) =>
-      String(permission?.module || '')
-        .trim()
-        .toLowerCase() === String(moduleName).trim().toLowerCase()
-  );
+  if (!Array.isArray(userPermissions) || userPermissions.length === 0) {
+    return <Navigate to={getDefaultRouteByRole(user?.role, user?.permissions)} replace />;
+  }
 
-  if (!permissionEntry || !permissionEntry[action]) {
+  const requiredPermission = permissionUtils.permissionKey(action, moduleName);
+
+  if (!permissionUtils.hasPermission(userPermissions, requiredPermission)) {
     return <Navigate to={getDefaultRouteByRole(user?.role, user?.permissions)} replace />;
   }
 
   return <Outlet />;
+};
+
+export const RequirePermission = ({ permission, permissions = [], allowExtraMeasureHierarchy = false, requireExtraMeasures = false, children }) => {
+  const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
+  const user = useSelector((state) => state.auth.user);
+  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(user?.roleName || user?.role);
+  const requiredPermissions = [permission, ...permissions].filter(Boolean);
+  const hasExtraMeasureHierarchyAccess = Boolean(user?.hasExtraMeasures || user?.parentHasExtraMeasures);
+  const hasExtraMeasureRoleAccess = Boolean(user?.hasExtraMeasures);
+
+  if (requireExtraMeasures && !hasExtraMeasureRoleAccess) {
+    return <Navigate to={getDefaultRouteByRole(user?.role, user?.permissions)} replace />;
+  }
+
+  if (requiredPermissions.length === 0) {
+    return children || <Outlet />;
+  }
+
+  if (isSystemAdmin) {
+    return children || <Outlet />;
+  }
+
+  if (allowExtraMeasureHierarchy && hasExtraMeasureHierarchyAccess) {
+    return children || <Outlet />;
+  }
+
+  if (!Array.isArray(userPermissions) || userPermissions.length === 0) {
+    return <Navigate to={getDefaultRouteByRole(user?.role, user?.permissions)} replace />;
+  }
+
+  if (permissionUtils.hasPermission(userPermissions, requiredPermissions)) {
+    return children || <Outlet />;
+  }
+
+  return <Navigate to={getDefaultRouteByRole(user?.role, user?.permissions)} replace />;
 };
 
 export const AuthBootstrap = ({ children }) => {
@@ -66,8 +102,8 @@ export const AuthBootstrap = ({ children }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { notify } = useNotification();
-  const token = useSelector((state) => state.auth.token);
-  const [checking, setChecking] = useState(Boolean(token));
+  const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const [checking, setChecking] = useState(true);
   const idleTimerRef = useRef(null);
   const hasLoggedOutRef = useRef(false);
 
@@ -85,6 +121,11 @@ export const AuthBootstrap = ({ children }) => {
         localStorage.removeItem('auth');
       }
 
+      // Attempt to clear server cookie
+      try {
+        api.post('/auth/logout').catch(() => {});
+      } catch {}
+
       navigate('/signin', { replace: true });
 
       if (shouldNotify && message) {
@@ -98,11 +139,6 @@ export const AuthBootstrap = ({ children }) => {
     let mounted = true;
 
     const hydrate = async () => {
-      if (!token) {
-        if (mounted) setChecking(false);
-        return;
-      }
-
       try {
         dispatch(setAuthLoading());
         const { data } = await api.get('/auth/me');
@@ -112,7 +148,8 @@ export const AuthBootstrap = ({ children }) => {
         dispatch(setUser(normalizeAuthUser(data.user, data.role)));
       } catch {
         if (!mounted) return;
-        clearSession();
+        dispatch(logout());
+        queryClient.clear();
       } finally {
         if (mounted) setChecking(false);
       }
@@ -122,10 +159,10 @@ export const AuthBootstrap = ({ children }) => {
     return () => {
       mounted = false;
     };
-  }, [clearSession, dispatch, token]);
+  }, [dispatch, queryClient]);
 
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       hasLoggedOutRef.current = false;
 
       if (idleTimerRef.current) {
@@ -143,7 +180,7 @@ export const AuthBootstrap = ({ children }) => {
 
       idleTimerRef.current = window.setTimeout(() => {
         clearSession({
-          message: 'You were signed out after 10 minutes of inactivity.',
+          message: 'You were signed out after 1 hour of inactivity.',
           shouldNotify: true,
         });
       }, IDLE_TIMEOUT_MS);
@@ -168,7 +205,7 @@ export const AuthBootstrap = ({ children }) => {
       IDLE_EVENTS.forEach((eventName) => window.removeEventListener(eventName, handleActivity));
       window.removeEventListener('focus', handleActivity);
     };
-  }, [clearSession, token]);
+  }, [clearSession, isAuthenticated]);
 
   if (checking) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Checking session...</div>;

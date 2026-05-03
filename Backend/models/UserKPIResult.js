@@ -36,6 +36,14 @@ const UserKPIResult = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    PerformanceTitle: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    EvidenceURL: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

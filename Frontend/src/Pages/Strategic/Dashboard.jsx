@@ -1,5 +1,4 @@
-import PerformanceDashboard from "../../Components/Dashboard/PerformanceDashboard";
-
+import PerformanceDashboard from '../../Components/Dashboard/PerformanceDashboard';
 
 const config = {
   title: 'Strategic Performance Dashboard',
@@ -67,7 +66,7 @@ const config = {
   ],
 
   quarterlyData: [
-    { name: 'Academic VP', q1: 72, q2: 78, q3: 82, q4: 86 },
+    { name: 'Academic VP', q1: 0, q2: 0, q3: 0, q4: 0 },
     { name: 'Research VP', q1: 65, q2: 70, q3: 75, q4: 80 },
     { name: 'Admin VP', q1: 68, q2: 72, q3: 70, q4: 74 },
   ],
@@ -89,19 +88,19 @@ const config = {
   ],
 
   heatmap: [
-    { pillar: 'Academic VP', q1: 78, q2: 82, q3: 85, q4: 81 },
+    { pillar: 'Academic VP', q1: 0, q2: 0, q3: 0, q4: 0 },
     { pillar: 'Research VP', q1: 58, q2: 64, q3: 72, q4: 76 },
     { pillar: 'Admin VP', q1: 82, q2: 85, q3: 81, q4: 78 },
   ],
 
   topPerformers: [
-    { name: 'Academic VP', unit: 'Faculty Management', score: 85 },
+    { name: 'Academic VP', unit: 'Faculty Management', score: 0 },
     { name: 'Research VP', unit: 'Innovation & Research', score: 85 },
     { name: 'Admin VP', unit: 'Operations', score: 78 },
   ],
 
   achievementGap: [
-    { name: 'Academic VP', target: 90, actual: 82 },
+    { name: 'Academic VP', target: 90, actual: 0 },
     { name: 'Research VP', target: 85, actual: 76 },
     { name: 'Admin VP', target: 88, actual: 74 },
   ],

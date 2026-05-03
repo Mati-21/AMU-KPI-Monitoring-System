@@ -22,3 +22,12 @@ AmiT Higher Institution
 Kidus@gmail.com
 Kidus@123
 
+
+
+
+
+PCT → Percent
+CNT → Count
+RTO → Ratio
+STG → Stage
+CAT → Category

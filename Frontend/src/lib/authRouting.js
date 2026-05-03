@@ -1,39 +1,66 @@
-const hasPermission = (permissions, moduleName, action = 'view') => {
-  if (!Array.isArray(permissions) || permissions.length === 0) return false;
+import permissionUtils from './permissionUtils';
 
-  const entry = permissions.find(
-    (permission) =>
-      String(permission?.module || '')
-        .trim()
-        .toLowerCase() === String(moduleName).trim().toLowerCase()
-  );
+const permissionRoutes = [
+  {
+    permissions: [permissionUtils.permissionKey('view', 'User Management'), permissionUtils.permissionKey('manage', 'Users')],
+    route: '/user-management',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('create', 'KPI Management'), permissionUtils.permissionKey('edit', 'KPI Management')],
+    route: '/kpi',
+  },
+  {
+    permissions: [
+      permissionUtils.permissionKey('view', 'KPI Reporting'),
+      permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),
+      permissionUtils.permissionKey('view', 'Other Role Reports'),
+    ],
+    route: '/report',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Assigned KPI')],
+    route: '/assigned-kpis',
+  },
+  {
+    permissions: [
+      permissionUtils.permissionKey('view', 'Drived KPI Allocation'),
+      permissionUtils.permissionKey('create', 'Drived KPI Allocation'),
+      permissionUtils.permissionKey('assign', 'Drived KPI Allocation'),
+    ],
+    route: '/drived-kpi-allocation',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Sub Unit')],
+    route: '/sub-unit',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Registered KPIs')],
+    route: '/registered-kpis',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Role Management')],
+    route: '/role-management',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Configuration')],
+    route: '/configuration',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Alerts & Notifications')],
+    route: '/alert-notification',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Personal Profile')],
+    route: '/profile',
+  },
+];
 
-  return Boolean(entry?.[action]);
-};
+export const getDefaultRouteByRole = (_roleInput, userPermissions = []) => {
+  const permissionBasedRoute = permissionRoutes.find((entry) => permissionUtils.hasPermission(userPermissions, entry.permissions));
 
-export const getDefaultRouteByRole = (roleInput, permissions = []) => {
-  const role = (roleInput || '').toString().toLowerCase();
-
-  if (role.includes('admin')) return '/admin';
-  if (role.includes('staff')) return '/staff';
-  if (role.includes('chair')) return '/department-chair';
-  if (role.includes('faculty') || role.includes('dean')) return '/faculty-admin';
-  if (role.includes('higher')) return '/higher-institution';
-  if (role.includes('vice')) return '/vice-president';
-  if (role.includes('strategic')) return '/strategic-office';
-
-  if (hasPermission(permissions, 'Sub Unit', 'view')) {
-    return '/faculty-admin';
+  if (permissionBasedRoute) {
+    return permissionBasedRoute.route;
   }
 
-  if (
-    hasPermission(permissions, 'Performance', 'view') ||
-    hasPermission(permissions, 'Assigned KPI', 'view') ||
-    hasPermission(permissions, 'Registered KPIs', 'view') ||
-    hasPermission(permissions, 'KPI Allocation', 'view')
-  ) {
-    return '/higher-institution';
-  }
-
-  return '/staff';
+  return '/dashboard';
 };

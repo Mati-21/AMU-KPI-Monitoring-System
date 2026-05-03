@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-function CustomSelect({ options, value, onChange, placeholder, compact = false }) {
+function CustomSelect({ options, value, onChange, placeholder, compact = false, menuPlacement = 'bottom' }) {
   const [open, setOpen] = useState(false);
   const buttonClassName = compact
-    ? 'w-full h-full px-3 py-1.5 text-left text-[11px] min-w-40 bg-card border border-border rounded-md flex justify-between items-center'
+    ? 'w-full h-9 px-3 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center'
     : 'w-full h-full px-4 py-2 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center';
 
   const optionClassName = compact
-    ? 'cursor-pointer px-3 py-1.5 text-[11px] hover:bg-muted flex justify-between items-center'
+    ? 'cursor-pointer px-3 py-1.5 text-xs hover:bg-muted flex justify-between items-center'
     : 'cursor-pointer px-4 py-2 hover:bg-muted flex justify-between items-center';
+
+  const menuClassName = useMemo(() => {
+    const placementClass = menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1';
+    return `absolute z-10 w-full bg-card border border-border rounded-md shadow-md max-h-60 overflow-y-auto overflow-x-hidden ${placementClass}`;
+  }, [menuPlacement]);
 
   return (
     <div className="relative w-full">
@@ -26,7 +31,7 @@ function CustomSelect({ options, value, onChange, placeholder, compact = false }
       </button>
 
       {open && (
-        <ul className="absolute z-10 w-full mt-1 bg-card border border-border rounded-md shadow-md max-h-60 overflow-auto">
+        <ul className={menuClassName}>
           {options.map((opt) => (
             <li
               key={opt}

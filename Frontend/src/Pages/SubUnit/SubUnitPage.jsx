@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import { Badge } from '../../Components/UI/Badge';
+import Button from '../../Components/UI/Button';
 import { api } from '../../api/axios';
+import permissionUtils from '../../lib/permissionUtils';
 
 const isActiveAssignment = (assignment) => {
   if (!assignment) return false;
@@ -21,7 +24,13 @@ const fullNameFromUser = (user) => {
 };
 
 function SubUnitPage() {
+  const navigate = useNavigate();
   const authUser = useSelector((state) => state.auth?.user);
+  const userPermissions = authUser?.permissions || [];
+  const canCreateUser = permissionUtils.hasPermission(userPermissions, [
+    permissionUtils.permissionKey('create', 'Child Office Accounts'),
+    permissionUtils.permissionKey('create', 'User Management'),
+  ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [roles, setRoles] = useState([]);
@@ -94,23 +103,27 @@ function SubUnitPage() {
         <p className="text-sm text-muted-foreground">List of child offices and registered users under your role</p>
       </div>
 
+      {canCreateUser ? (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Delegated Action</h3>
+              <p className="text-xs text-muted-foreground">Create users delegated to your role.</p>
+            </div>
+            <Button onClick={() => navigate('/user-management?tab=add')}>Create User</Button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       {loading ? <p className="text-sm text-muted-foreground">Loading sub-unit data...</p> : null}
 
-      {!loading && childUnits.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-          No child office is registered under your role.
-        </div>
+      {!loading && !hasAnyMembers ? (
+        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">No sub unit registered.</div>
       ) : null}
 
-      {!loading && childUnits.length > 0 && !hasAnyMembers ? (
-        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-          Child offices exist, but no registered users were found under them.
-        </div>
-      ) : null}
-
-      {!loading && childUnits.length > 0
+      {!loading && hasAnyMembers
         ? childUnits.map((unit) => (
             <Card key={unit.roleId}>
               <CardHeader className="pb-3">

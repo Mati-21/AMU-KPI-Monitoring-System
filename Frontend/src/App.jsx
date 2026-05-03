@@ -1,13 +1,12 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import LandingPage from './Pages/Authentication/LandingPage';
 
-import FaculityAssignKpi from './Pages/Faculity/AssignKpi';
+import KpiAllocationPage from './Pages/KPI/KpiAllocationPage';
+import DrivedKpiAllocationPage from './Pages/KPI/DrivedKpiAllocationPage';
 import SignIn from './Pages/Authentication/LoginPage';
 import NotFoundPage from './Pages/PageNotFound/PageNotFound';
 import UserManagment from './Pages/Admin/User-Managment/UserManagment';
-import Admin from './Pages/Admin/Admin';
-import AdminDashboard from './Pages/Admin/AdminDashboard/AdminDashboard';
 import KpiManagement from './Pages/Admin/KPI/Kpi';
 import RoleManagement from './Pages/Admin/RoleManagement/RoleManagement';
 import Configuration from './Pages/Admin/Configuration/Configuration';
@@ -15,21 +14,15 @@ import AlertsNotifications from './Pages/Admin/Notification/AlertsNotification';
 import PermissionManagement from './Pages/Admin/Permissions/PermissonsManagement';
 import UserProfile from './Pages/Profile/UserProfile';
 
-import FaculityDashboard from './Pages/Faculity/FaculityDashboard';
-import Strategic from './Pages/Strategic/Strategic';
-import Staff from './Pages/Staff/Staff';
-import Chair from './Pages/Chairs/Chair';
-import Faculity from './Pages/Faculity/Faculity';
-import VicePresident from './Pages/Vice President/VicePresident';
-import HigherInstitutions from './Pages/Higher_Institutions/HigherInstitutions';
-import Reports from './Pages/Strategic/Reports';
+import DashboardHome from './Pages/Common/DashboardHome';
+import OfficeReport from './Pages/Strategic/OfficeReport';
 import RegisteredKpis from './Pages/Strategic/RegisteredKpis';
-import RegisteredKpisVP from './Pages/Vice President/RegisteredKpis';
-import RegisteredKpisHI from './Pages/Higher_Institutions/RegisteredKpis';
 import AssignedKpisPage from './Pages/KPI/AssignedKpisPage';
 import SubUnitPage from './Pages/SubUnit/SubUnitPage';
-import { AuthBootstrap, GuestOnly, RequireAuth, RequireModulePermission } from './Components/Auth/RouteGuards';
+import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from './Components/Auth/RouteGuards';
 import { NotificationProvider } from './Context/NotificationContext';
+import AuthenticatedShell from './Components/Layout/AuthenticatedShell';
+import permissionUtils from './lib/permissionUtils';
 
 function App() {
   return (
@@ -47,165 +40,160 @@ function App() {
 
                 {/* Protected Routes */}
                 <Route element={<RequireAuth />}>
-                  {/* Staff */}
-                  <Route path="/staff" element={<Staff />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpis />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
+                  <Route element={<AuthenticatedShell />}>
+                    <Route index element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/dashboard" element={<DashboardHome />} />
 
-                  {/* Department Chair */}
-                  <Route path="/department-chair" element={<Chair />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Assigned KPI')} />}>
+                      <Route path="/assigned-kpis" element={<AssignedKpisPage />} />
                     </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpis />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
 
-                  {/* Faculty Admin */}
-                  <Route path="/faculty-admin" element={<Faculity />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'KPI Allocation'),
+                            permissionUtils.permissionKey('create', 'KPI Allocation'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/assign-kpi" element={<KpiAllocationPage />} />
                     </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpis />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
 
-                  {/* Higher Institution */}
-                  <Route path="/higher-institution" element={<HigherInstitutions />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'Drived KPI Allocation'),
+                            permissionUtils.permissionKey('create', 'Drived KPI Allocation'),
+                            permissionUtils.permissionKey('assign', 'Drived KPI Allocation'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/drived-kpi-allocation" element={<DrivedKpiAllocationPage />} />
                     </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpisHI />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
 
-                  {/* Vice President */}
-                  <Route path="/vice-president" element={<VicePresident />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'Sub Unit'),
+                            permissionUtils.permissionKey('create', 'Sub Unit'),
+                            permissionUtils.permissionKey('create', 'Child Office Accounts'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/sub-unit" element={<SubUnitPage />} />
                     </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpisVP />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
 
-                  {/* Strategic Office */}
-                  <Route path="/strategic-office" element={<Strategic />}>
-                    <Route index element={<FaculityDashboard />} />
-                    <Route element={<RequireModulePermission moduleName="Performance" action="view" />}>
-                      <Route path="assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Registered KPIs')} />}>
+                      <Route path="/registered-kpis" element={<RegisteredKpis />} />
                     </Route>
-                    <Route element={<RequireModulePermission moduleName="Assigned KPI" action="view" />}>
-                      <Route path="assign-kpi" element={<FaculityAssignKpi />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Sub Unit" action="view" />}>
-                      <Route path="sub-unit" element={<SubUnitPage />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="Registered KPIs" action="view" />}>
-                      <Route path="registered-kpis" element={<RegisteredKpis />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Reporting" action="view" />}>
-                      <Route path="reports" element={<Reports />} />
-                    </Route>
-                    <Route element={<RequireModulePermission moduleName="KPI Management" action="view" />}>
-                      <Route path="kpi" element={<KpiManagement />} />
-                    </Route>
-                    <Route path="profile" element={<UserProfile />} />
-                  </Route>
 
-                  {/* Shared Profile Views */}
-                  <Route path="/profile" element={<UserProfile />} />
-                  <Route path="/profile/:userId" element={<UserProfile />} />
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'KPI Reporting'),
+                            permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),
+                            permissionUtils.permissionKey('view', 'Other Role Reports'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/report" element={<OfficeReport />} />
+                      <Route path="/reports" element={<Navigate to="/report" replace />} />
+                    </Route>
 
-                  {/* Admin */}
-                  <Route path="/admin" element={<Admin />}>
-                    <Route index element={<AdminDashboard />} />
-                    <Route path="user-management" element={<UserManagment />} />
-                    <Route path="role-management" element={<RoleManagement />} />
-                    <Route path="kpi" element={<KpiManagement />} />
-                    <Route path="configuration" element={<Configuration />} />
-                    <Route path="alert-notification" element={<AlertsNotifications />} />
-                    <Route path="permission" element={<PermissionManagement />} />
-                    <Route path="profile" element={<UserProfile />} />
-                    <Route path="profile/:userId" element={<UserProfile />} />
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'KPI Management'),
+                            permissionUtils.permissionKey('create', 'KPI Management'),
+                            permissionUtils.permissionKey('edit', 'KPI Management'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/kpi" element={<KpiManagement />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Personal Profile')} />}>
+                      <Route path="/profile" element={<UserProfile />} />
+                    </Route>
+
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'Personal Profile'),
+                            permissionUtils.permissionKey('view', 'User Management'),
+                            permissionUtils.permissionKey('manage', 'Users'),
+                            permissionUtils.permissionKey('edit', 'User Management'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/profile/:userId" element={<UserProfile />} />
+                    </Route>
+
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'User Management'),
+                            permissionUtils.permissionKey('manage', 'Users'),
+                            permissionUtils.permissionKey('create', 'Child Office Accounts'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/user-management" element={<UserManagment />} />
+                    </Route>
+
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'Role Management'),
+                            permissionUtils.permissionKey('create', 'Role Management'),
+                            permissionUtils.permissionKey('manage', 'Roles'),
+                            permissionUtils.permissionKey('manage', 'Permissions'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/role-management" element={<RoleManagement />} />
+                    </Route>
+
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[
+                            permissionUtils.permissionKey('view', 'Role Management'),
+                            permissionUtils.permissionKey('create', 'Role Management'),
+                            permissionUtils.permissionKey('manage', 'Permissions'),
+                            permissionUtils.permissionKey('manage', 'Roles'),
+                          ]}
+                        />
+                      }
+                    >
+                      <Route path="/permission" element={<PermissionManagement />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Configuration')} />}>
+                      <Route path="/configuration" element={<Configuration />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Alerts & Notifications')} />}>
+                      <Route path="/alert-notification" element={<AlertsNotifications />} />
+                    </Route>
+
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Route>
                 </Route>
 

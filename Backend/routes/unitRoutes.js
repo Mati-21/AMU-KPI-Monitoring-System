@@ -1,18 +1,18 @@
 const express = require('express');
-const { protect, requireModulePermission } = require('../middleware/authMiddleware');
+const { protect, requirePermission, permissionKey } = require('../middleware/authMiddleware');
 const { createUnit, getUnits, getUnitById, updateUnit, deleteUnit } = require('../controllers/unitController');
 
 const router = express.Router();
 
 router
   .route('/')
-  .post(protect, requireModulePermission('KPI Management', 'create'), createUnit)
-  .get(protect, requireModulePermission('KPI Management', 'view'), getUnits);
+  .post(protect, requirePermission([permissionKey('create', 'Sub Unit'), permissionKey('create', 'Child Office Accounts')]), createUnit)
+  .get(protect, requirePermission([permissionKey('view', 'Sub Unit')]), getUnits);
 
 router
   .route('/:id')
-  .get(protect, requireModulePermission('KPI Management', 'view'), getUnitById)
-  .put(protect, requireModulePermission('KPI Management', 'edit'), updateUnit)
-  .delete(protect, requireModulePermission('KPI Management', 'delete'), deleteUnit);
+  .get(protect, requirePermission([permissionKey('view', 'Sub Unit')]), getUnitById)
+  .put(protect, requirePermission([permissionKey('edit', 'Sub Unit')]), updateUnit)
+  .delete(protect, requirePermission([permissionKey('delete', 'Sub Unit')]), deleteUnit);
 
 module.exports = router;

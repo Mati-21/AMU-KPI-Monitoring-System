@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
 import { Badge } from '../../Components/UI/Badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/ProfileButtonTab';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/UI/Table';
 import { ScrollArea } from '../../Components/UI/scroll-area';
 import { ListChecks, Send, Search } from 'lucide-react';

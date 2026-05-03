@@ -34,6 +34,11 @@ const Role = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
+    PermissionVersion: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -45,6 +50,10 @@ const Role = sequelize.define(
     IsArchived: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    IsDistributable: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
   },
   {

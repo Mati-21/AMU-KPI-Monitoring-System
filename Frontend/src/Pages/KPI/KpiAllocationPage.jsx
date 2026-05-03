@@ -1,20 +1,47 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
 import Checkbox from '../../Components/UI/Checkbox';
 import { Input } from '../../Components/UI/Input';
 import AssignedKpiList from '../../Components/KPI/AssignedKpiList';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/ProfileButtonTab';
-import { Search } from 'lucide-react';
+import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
+import { Search, Trash2, PencilLine, Save, X, Eye } from 'lucide-react';
 import { useNotification } from '../../Context/NotificationContext';
 import { api } from '../../api/axios';
 import MultiSelect from '../../Components/UI/MultiSelect';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/UI/Table';
+import { ScrollArea } from '../../Components/UI/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../Components/UI/dialog';
+import permissionUtils from '../../lib/permissionUtils';
+
+const CompactCellText = ({ value, maxWidth = 'max-w-[220px]' }) => (
+  <p className={`truncate ${maxWidth}`} title={String(value || '')}>
+    {value || '—'}
+  </p>
+);
 
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
   return Number.isNaN(numeric) ? String(value) : numeric.toString();
+};
+
+const parseNumericValue = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const formatNumericPreview = (value) => {
+  const numeric = parseNumericValue(value);
+  if (numeric === null) return '—';
+  if (Number.isInteger(numeric)) return String(numeric);
+  return numeric
+    .toFixed(2)
+    .replace(/\.0+$/, '')
+    .replace(/(\.\d*?)0+$/, '$1');
 };
 
 const compareCodes = (leftCode, rightCode) => {
@@ -42,62 +69,87 @@ const isActiveAssignment = (assignment) => {
   return new Date(assignment.ToDate).getTime() >= Date.now();
 };
 
+const getDefaultAssignmentOption = () => ({
+  includeCurrentRole: false,
+  targetIndividual: false,
+  customTargets: {},
+});
+
+const emitReportDataChanged = () => {
+  const timestamp = String(Date.now());
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('amu:report-data-changed', { detail: { timestamp } }));
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('amu:report-data-changed', timestamp);
+  }
+};
+
 const KpiAllocationPage = () => {
   const { notify } = useNotification();
   const authUser = useSelector((state) => state.auth?.user);
+  const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [themeFilter, setThemeFilter] = useState('all');
   const [selectedOffice, setSelectedOffice] = useState([]);
   const [selectedTheme, setSelectedTheme] = useState([]);
+  const [selectedSubTheme, setSelectedSubTheme] = useState([]);
   const [selectedKpi, setSelectedKpi] = useState([]);
-  const [includeCurrentRole, setIncludeCurrentRole] = useState(false);
+  const [kpiAssignmentOptions, setKpiAssignmentOptions] = useState({});
   const [roles, setRoles] = useState([]);
   const [userRoles, setUserRoles] = useState([]);
+  const [myAssignments, setMyAssignments] = useState([]);
   const [allocatedAssignments, setAllocatedAssignments] = useState([]);
+  const [sentAssignments, setSentAssignments] = useState([]);
   const [kpis, setKpis] = useState([]);
   const [kpiTypes, setKpiTypes] = useState([]);
+  const [editingAssignmentId, setEditingAssignmentId] = useState(null);
+  const [editForm, setEditForm] = useState({ baseline: '', target: '', remark: '' });
+  const [savingAssignmentId, setSavingAssignmentId] = useState(null);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
+  const [customTargetModalState, setCustomTargetModalState] = useState({ open: false, kpiId: null });
+  const [activeTab, setActiveTab] = useState('view');
+  const [detailModal, setDetailModal] = useState({ open: false, title: '', data: null });
 
-  useEffect(() => {
-    let mounted = true;
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
 
-    const loadData = async () => {
-      setLoading(true);
-      setError('');
+    try {
+      const [rolesRes, userRolesRes, myUserKpiRes, userKpiRes, allUserKpiRes, kpiRes, kpiTypeRes] = await Promise.all([
+        api.get('/roles', { params: { t: Date.now() } }),
+        api.get('/user-roles', { params: { t: Date.now() } }),
+        api.get('/user-kpis', { params: { scope: 'mine', isDerived: 'false', t: Date.now() } }),
+        api.get('/user-kpis', { params: { scope: 'mine', fromParent: true, isDerived: 'false', t: Date.now() } }),
+        api.get('/user-kpis', { params: { isDerived: 'false', t: Date.now() } }),
+        api.get('/kpis', { params: { t: Date.now() } }),
+        api.get('/kpi-types', { params: { t: Date.now() } }),
+      ]);
 
-      try {
-        const [rolesRes, userRolesRes, userKpiRes, kpiRes, kpiTypeRes] = await Promise.all([
-          api.get('/roles', { params: { t: Date.now() } }),
-          api.get('/user-roles', { params: { t: Date.now() } }),
-          api.get('/user-kpis', { params: { scope: 'mine', fromParent: true, t: Date.now() } }),
-          api.get('/kpis', { params: { t: Date.now() } }),
-          api.get('/kpi-types', { params: { t: Date.now() } }),
-        ]);
-
-        if (!mounted) return;
-
-        setRoles(rolesRes.data?.data || []);
-        setUserRoles(userRolesRes.data?.data || []);
-        setAllocatedAssignments(userKpiRes.data?.data || []);
-        setKpis(kpiRes.data?.data || []);
-        setKpiTypes(kpiTypeRes.data?.data || []);
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load assign KPI data.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
+      setRoles(rolesRes.data?.data || []);
+      setUserRoles(userRolesRes.data?.data || []);
+      setMyAssignments(myUserKpiRes.data?.data || []);
+      setAllocatedAssignments(userKpiRes.data?.data || []);
+      setSentAssignments(allUserKpiRes.data?.data || []);
+      setKpis(kpiRes.data?.data || []);
+      setKpiTypes(kpiTypeRes.data?.data || []);
+    } catch (loadErr) {
+      setError(loadErr?.response?.data?.message || 'Failed to load assign KPI data.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
   const typeById = useMemo(() => new Map(kpiTypes.map((type) => [type.Id, type])), [kpiTypes]);
+  const currentUserId = String(authUser?.id || authUser?.Id || '');
 
   const childrenByParent = useMemo(() => {
     const map = new Map();
@@ -161,6 +213,8 @@ const KpiAllocationPage = () => {
             weight: formatValue(kpi.Weight),
             baseline: formatValue(kpi.Baseline),
             target: formatValue(kpi.Target),
+            baselineValue: parseNumericValue(kpi.Baseline),
+            targetValue: parseNumericValue(kpi.Target),
             remark: kpi.Remark || kpi.Description || '—',
           };
         })
@@ -179,6 +233,9 @@ const KpiAllocationPage = () => {
         return {
           ...row,
           baseline: formatValue(assignment.Baseline ?? row.baseline),
+          target: formatValue(assignment.AssignedTarget ?? row.target),
+          baselineValue: parseNumericValue(assignment.Baseline ?? row.baselineValue),
+          targetValue: parseNumericValue(assignment.AssignedTarget ?? row.targetValue),
           remark: assignment.Remark || row.remark,
         };
       })
@@ -189,48 +246,179 @@ const KpiAllocationPage = () => {
   const activeUserRoles = useMemo(() => userRoles.filter(isActiveAssignment), [userRoles]);
 
   const childOfficeRoles = useMemo(() => {
-    const childRoles = roles.filter((role) => String(role.ParentRoleId || '') === String(authUser?.roleId || ''));
+    const childRoles = roles.filter((role) => String(role.ParentRoleId || '') === currentRoleId);
 
     const childRoleIdsWithUsers = new Set(
       activeUserRoles.map((assignment) => String(assignment?.RoleId || assignment?.Role?.Id || '')).filter(Boolean)
     );
 
     return childRoles.filter((role) => childRoleIdsWithUsers.has(String(role.Id)));
-  }, [roles, authUser?.roleId, activeUserRoles]);
+  }, [roles, currentRoleId, activeUserRoles]);
+
+  const activeChildUserRoles = useMemo(() => {
+    const childRoleIds = new Set(childOfficeRoles.map((role) => String(role.Id)));
+    return activeUserRoles.filter((assignment) => childRoleIds.has(String(assignment?.RoleId || assignment?.Role?.Id || '')));
+  }, [activeUserRoles, childOfficeRoles]);
+
+  const activeChildRoleByUserId = useMemo(() => {
+    const map = new Map();
+    activeChildUserRoles.forEach((assignment) => {
+      const userId = String(assignment?.UserId || '');
+      if (!userId || map.has(userId)) return;
+
+      const roleId = String(assignment?.RoleId || assignment?.Role?.Id || '');
+      const role = roles.find((item) => String(item.Id) === roleId);
+      map.set(userId, {
+        roleId,
+        roleName: role?.RoleName || assignment?.Role?.RoleName || 'Unknown Role',
+      });
+    });
+    return map;
+  }, [activeChildUserRoles, roles]);
 
   const officeOptions = useMemo(() => childOfficeRoles.map((role) => ({ id: role.Id, label: role.RoleName || 'Unnamed Unit' })), [childOfficeRoles]);
 
   const currentRoleOption = useMemo(
     () => ({
-      id: authUser?.roleId,
+      id: currentRoleId,
       label: authUser?.roleName || authUser?.role || 'Current Role',
     }),
-    [authUser?.roleId, authUser?.roleName, authUser?.role]
+    [currentRoleId, authUser?.roleName, authUser?.role]
   );
 
-  const officeOptionsWithCurrent = useMemo(
-    () =>
-      includeCurrentRole && currentRoleOption.id
-        ? [currentRoleOption, ...officeOptions.filter((option) => String(option.id) !== String(currentRoleOption.id))]
-        : officeOptions,
-    [officeOptions, includeCurrentRole, currentRoleOption]
-  );
+  const currentRole = useMemo(() => {
+    const activeUserRole = activeUserRoles.find((assignment) => String(assignment?.UserId || '') === currentUserId);
+    const activeRoleId = String(activeUserRole?.RoleId || activeUserRole?.Role?.Id || currentRoleId || '');
 
-  const currentRole = useMemo(() => roles.find((role) => String(role.Id) === String(authUser?.roleId || '')) || null, [roles, authUser?.roleId]);
+    const roleById = roles.find((role) => String(role.Id) === activeRoleId);
+    if (roleById) return roleById;
+
+    const authRoleName = String(authUser?.roleName || authUser?.role || '')
+      .trim()
+      .toLowerCase();
+    if (!authRoleName) return null;
+
+    return (
+      roles.find(
+        (role) =>
+          String(role.RoleName || '')
+            .trim()
+            .toLowerCase() === authRoleName
+      ) || null
+    );
+  }, [roles, activeUserRoles, currentUserId, currentRoleId, authUser?.roleName, authUser?.role]);
 
   const hasParentRole = Boolean(currentRole?.ParentRoleId);
+
+  const canCascadeKpis = useMemo(
+    () =>
+      permissionUtils.hasPermission(authUser?.permissions || [], [
+        permissionUtils.permissionKey('create', 'KPI Allocation'),
+        permissionUtils.permissionKey('view', 'KPI Allocation'),
+      ]),
+    [authUser?.permissions]
+  );
+
+  const canViewKpiTab = useMemo(
+    () =>
+      permissionUtils.hasPermission(authUser?.permissions || [], [
+        permissionUtils.permissionKey('view', 'KPI Allocation'),
+        permissionUtils.permissionKey('view', 'Assigned KPI'),
+        permissionUtils.permissionKey('create', 'KPI Allocation'),
+      ]),
+    [authUser?.permissions]
+  );
+
+  const canAssignKpiTab = useMemo(
+    () => permissionUtils.hasPermission(authUser?.permissions || [], permissionUtils.permissionKey('create', 'KPI Allocation')),
+    [authUser?.permissions]
+  );
+
+  const canViewSentKpiTab = useMemo(
+    () =>
+      permissionUtils.hasPermission(authUser?.permissions || [], [
+        permissionUtils.permissionKey('view', 'KPI Allocation'),
+        permissionUtils.permissionKey('edit', 'KPI Allocation'),
+        permissionUtils.permissionKey('delete', 'KPI Allocation'),
+      ]),
+    [authUser?.permissions]
+  );
+
+  const canViewHomeOfficeTab = useMemo(
+    () =>
+      permissionUtils.hasPermission(authUser?.permissions || [], [
+        permissionUtils.permissionKey('view', 'KPI Allocation'),
+        permissionUtils.permissionKey('create', 'KPI Allocation'),
+      ]),
+    [authUser?.permissions]
+  );
+
+  const canManageSentAssignments = useMemo(
+    () =>
+      permissionUtils.hasPermission(authUser?.permissions || [], [
+        permissionUtils.permissionKey('edit', 'KPI Allocation'),
+        permissionUtils.permissionKey('delete', 'KPI Allocation'),
+        permissionUtils.permissionKey('create', 'KPI Allocation'),
+      ]),
+    [authUser?.permissions]
+  );
+
+  const canManageHomeOfficeAssignments = canManageSentAssignments;
+
+  const availableTabs = useMemo(
+    () =>
+      [
+        {
+          key: 'view',
+          label: hasParentRole ? 'Assigned KPI' : 'Registerd Kpis',
+          enabled: canViewKpiTab,
+        },
+        {
+          key: 'assign',
+          label: 'Assign KPI',
+          enabled: canAssignKpiTab,
+        },
+        {
+          key: 'sent',
+          label: 'Sent KPI Tracker',
+          enabled: canViewSentKpiTab,
+        },
+        {
+          key: 'home-office',
+          label: 'Home Office Kpi',
+          enabled: canViewHomeOfficeTab,
+        },
+      ].filter((tab) => tab.enabled),
+    [hasParentRole, canViewKpiTab, canAssignKpiTab, canViewSentKpiTab, canViewHomeOfficeTab]
+  );
 
   const sourceKpiRows = useMemo(() => (hasParentRole ? allocatedKpiRows : kpiRows), [hasParentRole, allocatedKpiRows, kpiRows]);
 
   const allThemes = useMemo(() => [...new Set(sourceKpiRows.map((row) => row.theme).filter((theme) => theme && theme !== '—'))], [sourceKpiRows]);
 
+  const subThemeOptions = useMemo(
+    () => [
+      ...new Set(
+        sourceKpiRows
+          .filter((row) => selectedTheme.length === 0 || selectedTheme.includes(row.theme))
+          .map((row) => row.subTheme)
+          .filter((subTheme) => subTheme && subTheme !== '—')
+      ),
+    ],
+    [sourceKpiRows, selectedTheme]
+  );
+
   const kpiOptionsByTheme = useMemo(
     () =>
       sourceKpiRows
-        .filter((row) => selectedTheme.length === 0 || selectedTheme.includes(row.theme))
+        .filter(
+          (row) =>
+            (selectedTheme.length === 0 || selectedTheme.includes(row.theme)) &&
+            (selectedSubTheme.length === 0 || selectedSubTheme.includes(row.subTheme))
+        )
         .map((row) => ({ id: row.id, label: `${row.no}: ${row.kpi} (${row.unit}, Weight: ${row.weight})` }))
         .filter((item, index, items) => items.findIndex((entry) => entry.id === item.id) === index),
-    [sourceKpiRows, selectedTheme]
+    [sourceKpiRows, selectedTheme, selectedSubTheme]
   );
 
   const filteredKpis = useMemo(
@@ -243,61 +431,490 @@ const KpiAllocationPage = () => {
     [sourceKpiRows, searchTerm, themeFilter]
   );
 
-  const handleAssign = () => {
-    if (selectedOffice.length === 0 || selectedTheme.length === 0 || selectedKpi.length === 0) {
-      notify('Please select at least one sub unit, one theme, and one KPI.', 'warning');
+  const selectedKpiRecords = useMemo(
+    () =>
+      sourceKpiRows.filter(
+        (row) =>
+          selectedKpi.includes(row.id) &&
+          (selectedTheme.length === 0 || selectedTheme.includes(row.theme)) &&
+          (selectedSubTheme.length === 0 || selectedSubTheme.includes(row.subTheme))
+      ),
+    [sourceKpiRows, selectedKpi, selectedTheme, selectedSubTheme]
+  );
+
+  const assignmentPreview = useMemo(() => {
+    return selectedKpiRecords.map((record) => {
+      const options = kpiAssignmentOptions[record.id] || getDefaultAssignmentOption();
+      const targetRoleIds = new Set(selectedOffice.map((id) => String(id)));
+
+      if (options.includeCurrentRole && currentRoleOption.id) {
+        targetRoleIds.add(String(currentRoleOption.id));
+      }
+
+      const targetRoleIdsArray = [...targetRoleIds];
+      const receiverCount = targetRoleIds.size;
+      const parentTarget = parseNumericValue(record.targetValue ?? record.target);
+      const customTargetsForReceivers = targetRoleIdsArray.reduce((accumulator, roleId) => {
+        const rawValue = options?.customTargets?.[roleId];
+        if (rawValue === '' || rawValue === null || rawValue === undefined) return accumulator;
+
+        const numeric = Number(rawValue);
+        if (!Number.isFinite(numeric) || numeric < 0) return accumulator;
+        accumulator[roleId] = numeric;
+        return accumulator;
+      }, {});
+
+      const customRoleIds = Object.keys(customTargetsForReceivers);
+      const hasCustomAllocation = customRoleIds.length > 0;
+      const customAllocatedTotal = customRoleIds.reduce((sum, roleId) => sum + Number(customTargetsForReceivers[roleId] || 0), 0);
+      const rolesWithoutCustomTargets = targetRoleIdsArray.filter((roleId) => customTargetsForReceivers[roleId] === undefined);
+      const distributedTarget =
+        parentTarget === null
+          ? null
+          : hasCustomAllocation
+            ? rolesWithoutCustomTargets.length > 0
+              ? Number((Math.max(parentTarget - customAllocatedTotal, 0) / rolesWithoutCustomTargets.length).toFixed(2))
+              : 0
+            : options.targetIndividual
+              ? parentTarget
+              : receiverCount > 0
+                ? Number((parentTarget / receiverCount).toFixed(2))
+                : null;
+
+      const roleTargets = targetRoleIdsArray.reduce((accumulator, roleId) => {
+        if (parentTarget === null) {
+          accumulator[roleId] = null;
+          return accumulator;
+        }
+
+        if (hasCustomAllocation) {
+          accumulator[roleId] = customTargetsForReceivers[roleId] !== undefined ? customTargetsForReceivers[roleId] : Number(distributedTarget || 0);
+          return accumulator;
+        }
+
+        accumulator[roleId] = distributedTarget;
+        return accumulator;
+      }, {});
+
+      return {
+        ...record,
+        includeCurrentRole: Boolean(options.includeCurrentRole),
+        isTargetIndividual: Boolean(options.targetIndividual),
+        targetRoleIds: targetRoleIdsArray,
+        receiverCount,
+        distributedTarget,
+        roleTargets,
+        hasCustomAllocation,
+        customAllocatedTotal,
+        remainingAfterCustom: parentTarget === null ? null : Number((parentTarget - customAllocatedTotal).toFixed(2)),
+      };
+    });
+  }, [selectedKpiRecords, kpiAssignmentOptions, selectedOffice, currentRoleOption]);
+
+  const roleLabelById = useMemo(() => {
+    const map = new Map();
+    officeOptions.forEach((option) => {
+      map.set(String(option.id), option.label || 'Unnamed Office');
+    });
+
+    if (currentRoleOption?.id) {
+      map.set(String(currentRoleOption.id), `${currentRoleOption.label} (Current Office)`);
+    }
+
+    return map;
+  }, [officeOptions, currentRoleOption]);
+
+  const customModalKpiRecord = useMemo(() => {
+    if (!customTargetModalState.kpiId) return null;
+    return assignmentPreview.find((record) => String(record.id) === String(customTargetModalState.kpiId)) || null;
+  }, [assignmentPreview, customTargetModalState.kpiId]);
+
+  const customModalOffices = useMemo(() => {
+    if (!customModalKpiRecord) return [];
+
+    return customModalKpiRecord.targetRoleIds.map((roleId) => ({
+      key: String(roleId),
+      label: roleLabelById.get(String(roleId)) || `Office ${roleId}`,
+    }));
+  }, [customModalKpiRecord, roleLabelById]);
+
+  const sentToChildrenRows = useMemo(() => {
+    const currentUserId = String(authUser?.id || authUser?.Id || '');
+
+    const grouped = new Map();
+
+    sentAssignments
+      .filter((assignment) => String(assignment?.CreatedBy || '') === currentUserId)
+      .forEach((assignment) => {
+        const userId = String(assignment?.UserId || assignment?.User?.Id || '');
+        const roleInfo = activeChildRoleByUserId.get(userId);
+        if (!roleInfo) return;
+
+        const kpiMeta = kpiRowById.get(assignment?.KPIId);
+        const userName =
+          assignment?.User?.UserName ||
+          [assignment?.User?.FirstName, assignment?.User?.FatherName, assignment?.User?.GrandFatherName].filter(Boolean).join(' ') ||
+          assignment?.User?.Email ||
+          'Unknown User';
+
+        const key = `${roleInfo.roleId}-${userId}`;
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            key,
+            roleName: roleInfo.roleName,
+            userName,
+            roleId: roleInfo.roleId,
+            userId,
+            kpis: [],
+          });
+        }
+
+        grouped.get(key).kpis.push({
+          assignmentId: assignment.Id,
+          kpiId: assignment.KPIId,
+          label: kpiMeta ? `${kpiMeta.no} - ${kpiMeta.kpi}` : `KPI ${assignment.KPIId}`,
+          baseline: formatValue(assignment.Baseline),
+          target: formatValue(assignment.AssignedTarget),
+          rawBaseline: assignment.Baseline ?? '',
+          rawTarget: assignment.AssignedTarget ?? '',
+          remark: assignment.Remark || '',
+        });
+      });
+
+    return Array.from(grouped.values())
+      .map((row) => ({
+        ...row,
+        kpis: row.kpis.sort((left, right) => String(left.label).localeCompare(String(right.label))),
+      }))
+      .sort((left, right) => {
+        const byRole = String(left.roleName).localeCompare(String(right.roleName));
+        if (byRole !== 0) return byRole;
+        return String(left.userName).localeCompare(String(right.userName));
+      });
+  }, [sentAssignments, authUser?.id, authUser?.Id, activeChildRoleByUserId, kpiRowById]);
+
+  const homeOfficeKpiRows = useMemo(() => {
+    const fromParentIds = new Set(allocatedAssignments.map((assignment) => assignment.Id));
+
+    const activePerformanceAssignments = myAssignments.filter((assignment) => {
+      const passedFromParent = fromParentIds.has(assignment.Id);
+      if (passedFromParent) return !canCascadeKpis || Boolean(assignment.IncludeCurrentOffice);
+      return true;
+    });
+
+    return activePerformanceAssignments
+      .map((assignment) => {
+        const kpiMeta = kpiRowById.get(assignment.KPIId);
+        if (!kpiMeta) return null;
+
+        return {
+          assignmentId: assignment.Id,
+          no: kpiMeta.no,
+          kpi: kpiMeta.kpi,
+          theme: kpiMeta.theme,
+          subTheme: kpiMeta.subTheme,
+          baseline: formatValue(assignment.Baseline ?? kpiMeta.baseline),
+          target: formatValue(assignment.AssignedTarget ?? kpiMeta.target),
+          remark: assignment.Remark || kpiMeta.remark,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => compareCodes(left.no, right.no));
+  }, [myAssignments, allocatedAssignments, canCascadeKpis, kpiRowById]);
+
+  const handleUnallocateHomeOfficeKpi = async (assignmentId) => {
+    try {
+      setDeletingAssignmentId(assignmentId);
+      await api.put(`/user-kpis/${assignmentId}`, { IncludeCurrentOffice: false });
+      notify('Home office KPI unallocated successfully and moved to Assigned KPI.', 'success');
+      emitReportDataChanged();
+      await loadData();
+    } catch (deleteErr) {
+      notify(deleteErr?.response?.data?.message || 'Failed to unallocate home office KPI.', 'error');
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  };
+
+  const startEditingAssignment = (kpiItem) => {
+    setEditingAssignmentId(kpiItem.assignmentId);
+    setEditForm({
+      baseline: kpiItem.rawBaseline === null || kpiItem.rawBaseline === undefined ? '' : String(kpiItem.rawBaseline),
+      target: kpiItem.rawTarget === null || kpiItem.rawTarget === undefined ? '' : String(kpiItem.rawTarget),
+      remark: kpiItem.remark || '',
+    });
+  };
+
+  const cancelEditingAssignment = () => {
+    setEditingAssignmentId(null);
+    setEditForm({ baseline: '', target: '', remark: '' });
+  };
+
+  const handleUpdateSentAssignment = async (assignmentId) => {
+    try {
+      setSavingAssignmentId(assignmentId);
+
+      const payload = {
+        Baseline: editForm.baseline === '' ? null : Number(editForm.baseline),
+        AssignedTarget: editForm.target === '' ? null : Number(editForm.target),
+        Remark: editForm.remark?.trim() || null,
+      };
+
+      await api.put(`/user-kpis/${assignmentId}`, payload);
+
+      setSentAssignments((previous) =>
+        previous.map((assignment) =>
+          assignment.Id === assignmentId
+            ? {
+                ...assignment,
+                Baseline: payload.Baseline,
+                AssignedTarget: payload.AssignedTarget,
+                Remark: payload.Remark,
+              }
+            : assignment
+        )
+      );
+
+      setAllocatedAssignments((previous) =>
+        previous.map((assignment) =>
+          assignment.Id === assignmentId
+            ? {
+                ...assignment,
+                Baseline: payload.Baseline,
+                AssignedTarget: payload.AssignedTarget,
+                Remark: payload.Remark,
+              }
+            : assignment
+        )
+      );
+
+      notify('KPI assignment updated successfully.', 'success');
+      emitReportDataChanged();
+      cancelEditingAssignment();
+    } catch (updateErr) {
+      notify(updateErr?.response?.data?.message || 'Failed to update KPI assignment.', 'error');
+    } finally {
+      setSavingAssignmentId(null);
+    }
+  };
+
+  const handleUnallocateSentAssignment = async (assignmentId) => {
+    try {
+      setDeletingAssignmentId(assignmentId);
+      await api.delete(`/user-kpis/${assignmentId}`);
+
+      if (editingAssignmentId === assignmentId) {
+        cancelEditingAssignment();
+      }
+
+      notify('KPI assignment unallocated successfully.', 'success');
+      emitReportDataChanged();
+      await loadData();
+    } catch (deleteErr) {
+      notify(deleteErr?.response?.data?.message || 'Failed to unallocate KPI assignment.', 'error');
+    } finally {
+      setDeletingAssignmentId(null);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (selectedKpi.length === 0) {
+      notify('Please select at least one KPI.', 'warning');
       return;
     }
-
-    const selectedOfficeIds = new Set(selectedOffice);
-    if (includeCurrentRole && currentRoleOption.id) {
-      selectedOfficeIds.add(currentRoleOption.id);
-    }
-
-    const selectedKpiRecords = sourceKpiRows.filter(
-      (row) => selectedKpi.includes(row.id) && (selectedTheme.length === 0 || selectedTheme.includes(row.theme))
-    );
 
     if (selectedKpiRecords.length === 0) {
       notify('Invalid KPI selection.', 'warning');
       return;
     }
 
-    const officeUsers = activeUserRoles
-      .filter((assignment) => selectedOfficeIds.has(String(assignment?.RoleId || assignment?.Role?.Id || '')))
-      .map((assignment) => assignment.UserId)
-      .filter(Boolean);
+    const hasAnyTargetOffice = assignmentPreview.some((record) => record.targetRoleIds.length > 0);
 
-    const uniqueUserIds = [...new Set(officeUsers)];
-
-    if (!uniqueUserIds.length) {
-      notify('No active users found under the selected sub units.', 'warning');
+    if (!hasAnyTargetOffice) {
+      notify('No target office found. Select sub unit(s) or enable Include current Office for at least one KPI.', 'warning');
       return;
     }
 
-    Promise.all(
-      selectedKpiRecords.flatMap((kpiRecord) => uniqueUserIds.map((userId) => api.post('/user-kpis', { KPIId: kpiRecord.id, UserId: userId })))
-    )
-      .then(() => {
-        notify(`Selected KPI(s) assigned to ${selectedOfficeIds.size} sub unit(s).`, 'success');
-        setSelectedOffice([]);
-        setSelectedTheme([]);
-        setSelectedKpi([]);
-        setIncludeCurrentRole(false);
-      })
-      .catch((assignErr) => {
-        notify(assignErr?.response?.data?.message || 'Failed to assign KPI.', 'error');
+    const assignmentBatchId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
+
+    const requests = assignmentPreview.flatMap((kpiRecord) => {
+      if (kpiRecord.targetRoleIds.length === 0) return [];
+
+      const usersByRole = new Map();
+      activeUserRoles.forEach((assignment) => {
+        const roleId = String(assignment?.RoleId || assignment?.Role?.Id || '');
+        if (!kpiRecord.targetRoleIds.includes(roleId)) return;
+
+        const userId = assignment?.UserId;
+        if (!userId) return;
+
+        if (!usersByRole.has(roleId)) {
+          usersByRole.set(roleId, new Set());
+        }
+
+        usersByRole.get(roleId).add(userId);
       });
+
+      if (!usersByRole.size) return [];
+
+      return [...usersByRole.entries()].flatMap(([roleId, userIds]) => {
+        const assignedTarget = kpiRecord.roleTargets?.[roleId] ?? kpiRecord.distributedTarget;
+
+        return [...userIds].map((userId) =>
+          api.post('/user-kpis', {
+            KPIId: kpiRecord.id,
+            UserId: userId,
+            AssignedTarget: assignedTarget,
+            IsTargetIndividual: kpiRecord.isTargetIndividual,
+            IncludeCurrentOffice: kpiRecord.includeCurrentRole && String(roleId) === String(currentRoleId),
+            AssignmentBatchId: assignmentBatchId,
+          })
+        );
+      });
+    });
+
+    if (!requests.length) {
+      notify('No active users found for the selected target offices.', 'warning');
+      return;
+    }
+
+    const outcomes = await Promise.allSettled(requests);
+    const successCount = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
+    const conflictCount = outcomes.filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status === 409).length;
+    const failureCount = outcomes.length - successCount - conflictCount;
+    const firstFailureMessage = outcomes
+      .filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status !== 409)
+      .map((outcome) => outcome.reason?.response?.data?.message || outcome.reason?.message)
+      .find(Boolean);
+    const createdAssignments = outcomes
+      .filter((outcome) => outcome.status === 'fulfilled')
+      .map((outcome) => outcome.value?.data?.data)
+      .filter(Boolean);
+
+    if (successCount > 0) {
+      if (createdAssignments.length) {
+        setSentAssignments((previous) => {
+          const existingIds = new Set(previous.map((item) => item.Id));
+          const uniqueCreated = createdAssignments.filter((item) => !existingIds.has(item.Id));
+          return [...uniqueCreated, ...previous];
+        });
+
+        const currentUserId = String(authUser?.id || authUser?.Id || '');
+        setMyAssignments((previous) => {
+          const existingIds = new Set(previous.map((item) => item.Id));
+          const ownCreated = createdAssignments.filter(
+            (item) => String(item?.UserId || '') === currentUserId && !existingIds.has(String(item?.Id || ''))
+          );
+          return [...ownCreated, ...previous];
+        });
+      }
+
+      const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
+
+      notify(
+        `Assigned ${selectedKpiRecords.length} KPI(s) to ${uniqueReceiverRoles.size} office(s). Success: ${successCount}, Duplicate: ${conflictCount}, Failed: ${failureCount}.`,
+        failureCount > 0 ? 'warning' : 'success'
+      );
+      emitReportDataChanged();
+      setSelectedOffice([]);
+      setSelectedTheme([]);
+      setSelectedSubTheme([]);
+      setSelectedKpi([]);
+      setKpiAssignmentOptions({});
+      return;
+    }
+
+    if (conflictCount > 0 && failureCount === 0) {
+      notify(`All selected KPI assignments already exist for this cycle year. Duplicate: ${conflictCount}.`, 'warning');
+      return;
+    }
+
+    notify(
+      `No KPI assignment was saved. Success: 0, Duplicate: ${conflictCount}, Failed: ${failureCount}${
+        firstFailureMessage ? `, First error: ${firstFailureMessage}` : ''
+      }`,
+      'error'
+    );
   };
 
   useEffect(() => {
     if (selectedOffice.length === 0) return;
-    const validIds = new Set(officeOptionsWithCurrent.map((option) => String(option.id)));
+    const validIds = new Set(officeOptions.map((option) => String(option.id)));
     const filtered = selectedOffice.filter((id) => validIds.has(String(id)));
     if (filtered.length !== selectedOffice.length) {
       setSelectedOffice(filtered);
     }
-  }, [officeOptionsWithCurrent, selectedOffice]);
+  }, [officeOptions, selectedOffice]);
+
+  useEffect(() => {
+    if (selectedKpi.length === 0) {
+      if (Object.keys(kpiAssignmentOptions).length > 0) {
+        setKpiAssignmentOptions({});
+      }
+      return;
+    }
+
+    setKpiAssignmentOptions((previous) => {
+      const next = {};
+      selectedKpi.forEach((kpiId) => {
+        const key = String(kpiId);
+        next[key] = previous[key] || getDefaultAssignmentOption();
+      });
+
+      const sameLength = Object.keys(next).length === Object.keys(previous).length;
+      if (sameLength && Object.keys(next).every((key) => next[key] === previous[key])) {
+        return previous;
+      }
+
+      return next;
+    });
+  }, [selectedKpi, kpiAssignmentOptions]);
+
+  useEffect(() => {
+    if (selectedSubTheme.length === 0) return;
+
+    const validSubThemes = new Set(subThemeOptions.map((subTheme) => String(subTheme)));
+    const filtered = selectedSubTheme.filter((item) => validSubThemes.has(String(item)));
+
+    if (filtered.length !== selectedSubTheme.length) {
+      setSelectedSubTheme(filtered);
+    }
+  }, [selectedSubTheme, subThemeOptions]);
+
+  useEffect(() => {
+    if (availableTabs.length === 0) return;
+    if (!availableTabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab(availableTabs[0].key);
+    }
+  }, [availableTabs, activeTab]);
+
+  const isReadyToAssign = selectedKpi.length > 0 && assignmentPreview.some((record) => record.targetRoleIds.length > 0);
+
+  const openCustomTargetModal = (kpiRecord) => {
+    if (!kpiRecord || kpiRecord.targetRoleIds.length === 0) {
+      notify('Select at least one target office before creating custom target allocation.', 'warning');
+      return;
+    }
+
+    setCustomTargetModalState({ open: true, kpiId: String(kpiRecord.id) });
+  };
+
+  const handleSaveCustomTargets = (values) => {
+    if (!customTargetModalState.kpiId) return;
+
+    setKpiAssignmentOptions((previous) => {
+      const key = String(customTargetModalState.kpiId);
+      const current = previous[key] || getDefaultAssignmentOption();
+
+      return {
+        ...previous,
+        [key]: {
+          ...current,
+          customTargets: values || {},
+        },
+      };
+    });
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -308,82 +925,546 @@ const KpiAllocationPage = () => {
 
       {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-      <Tabs defaultValue="view">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-muted/50">
-          <TabsTrigger value="view">Assigned KPI</TabsTrigger>
-          <TabsTrigger value="assign">Assign KPI</TabsTrigger>
+          {availableTabs.map((tab) => (
+            <TabsTrigger key={tab.key} value={tab.key}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="view" className="space-y-4 mt-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
-            <div className="relative min-w-0 md:w-70">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search KPIs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              <Button variant={themeFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setThemeFilter('all')}>
-                All Themes
-              </Button>
-              {allThemes.map((theme) => (
-                <Button
-                  key={theme}
-                  variant={themeFilter === theme ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setThemeFilter(theme)}
-                  className="text-xs"
-                >
-                  {theme}
+        {availableTabs.length === 0 ? (
+          <p className="mt-4 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
+            No tab is available for your current permissions.
+          </p>
+        ) : null}
+
+        {canViewKpiTab ? (
+          <TabsContent value="view" className="space-y-4 mt-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-end">
+              <div className="relative min-w-0 md:w-70">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Search KPIs..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 justify-end">
+                <Button variant={themeFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setThemeFilter('all')}>
+                  All Themes
                 </Button>
+                {allThemes.map((theme) => (
+                  <Button
+                    key={theme}
+                    variant={themeFilter === theme ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setThemeFilter(theme)}
+                    className="text-xs"
+                  >
+                    {theme}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <AssignedKpiList
+              kpis={filteredKpis}
+              emptyMessage={loading ? 'Loading KPIs...' : hasParentRole ? 'No KPI is allocated by your parent role.' : 'No registered KPIs found.'}
+            />
+          </TabsContent>
+        ) : null}
+
+        {canAssignKpiTab ? (
+          <TabsContent value="assign" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span>Assign KPI</span>
+                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{selectedKpi.length || 0} KPIs</span>
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="space-y-4">
+                <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 space-y-4">
+                  <p className="text-sm font-semibold text-foreground">Selection Criteria</p>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sub unit</p>
+                      <MultiSelect options={officeOptions} value={selectedOffice} onChange={setSelectedOffice} placeholder="Select sub unit(s)" />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Theme</p>
+                      <MultiSelect
+                        options={allThemes}
+                        value={selectedTheme}
+                        onChange={(themesSelected) => {
+                          setSelectedTheme(themesSelected);
+                          setSelectedSubTheme([]);
+                          setSelectedKpi([]);
+                        }}
+                        placeholder="Select theme(s)"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sub theme</p>
+                      <MultiSelect
+                        options={subThemeOptions}
+                        value={selectedSubTheme}
+                        onChange={(subThemesSelected) => {
+                          setSelectedSubTheme(subThemesSelected);
+                          setSelectedKpi([]);
+                        }}
+                        placeholder="Select sub-theme(s)"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">KPI</p>
+                      <MultiSelect options={kpiOptionsByTheme} value={selectedKpi} onChange={setSelectedKpi} placeholder="Select KPI(s)" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">KPI Details</p>
+                    <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                      {assignmentPreview.length} KPIs
+                    </span>
+                  </div>
+
+                  {assignmentPreview.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Select KPI(s) to preview target distribution.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignmentPreview.map((kpiRecord, index) => (
+                        <div key={kpiRecord.id} className="rounded-lg border border-border px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 text-sm font-semibold text-primary">
+                                {index + 1}
+                              </span>
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">KPI Name</p>
+                                <p className="text-sm font-medium text-foreground">{kpiRecord.kpi}</p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedKpi((previous) => previous.filter((id) => id !== kpiRecord.id))}
+                              className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">KPI Target</p>
+                            <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                              {formatNumericPreview(kpiRecord.distributedTarget)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <Checkbox
+                                  checked={Boolean(kpiAssignmentOptions[kpiRecord.id]?.targetIndividual)}
+                                  onCheckedChange={(checked) =>
+                                    setKpiAssignmentOptions((previous) => ({
+                                      ...previous,
+                                      [kpiRecord.id]: {
+                                        ...(previous[kpiRecord.id] || getDefaultAssignmentOption()),
+                                        targetIndividual: Boolean(checked),
+                                      },
+                                    }))
+                                  }
+                                />
+                                KPI Target individual
+                              </label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openCustomTargetModal(kpiRecord)}
+                                className="h-7 px-2 text-[11px]"
+                              >
+                                Create custom target
+                              </Button>
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-foreground">
+                              <Checkbox
+                                checked={Boolean(kpiAssignmentOptions[kpiRecord.id]?.includeCurrentRole)}
+                                onCheckedChange={(checked) =>
+                                  setKpiAssignmentOptions((previous) => ({
+                                    ...previous,
+                                    [kpiRecord.id]: {
+                                      ...(previous[kpiRecord.id] || getDefaultAssignmentOption()),
+                                      includeCurrentRole: Boolean(checked),
+                                    },
+                                  }))
+                                }
+                              />
+                              Include current Office
+                            </label>
+                          </div>
+
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Parent target: {formatNumericPreview(kpiRecord.targetValue)} | Receivers: {kpiRecord.receiverCount || 0} | Mode:{' '}
+                            {kpiRecord.hasCustomAllocation
+                              ? 'Custom allocation'
+                              : kpiRecord.isTargetIndividual
+                                ? 'Individual (full target)'
+                                : 'Shared (divided target)'}
+                          </p>
+                          {kpiRecord.hasCustomAllocation ? (
+                            <p className="mt-1 text-xs text-primary">
+                              Custom allocated: {formatNumericPreview(kpiRecord.customAllocatedTotal)} | Remaining shared:{' '}
+                              {formatNumericPreview(kpiRecord.remainingAfterCustom)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="py-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Ready to Assign</p>
+                      <p className="text-xs text-muted-foreground">Complete selections above to enable assignment.</p>
+                      <p className="mt-1 text-xs text-primary">Each selected unit will receive the KPI target shown above.</p>
+                    </div>
+
+                    <Button onClick={handleAssign} disabled={loading || !isReadyToAssign}>
+                      Assign KPI
+                    </Button>
+                  </CardContent>
+                </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        {canViewSentKpiTab ? (
+          <TabsContent value="sent" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>KPIs Sent to Child Roles</CardTitle>
+              </CardHeader>
+
+              <CardContent className="p-0">
+                <ScrollArea className="w-full">
+                  <div className="min-w-245">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-primary/10">
+                          <TableHead className="w-70 font-bold text-foreground border-r">Role and User</TableHead>
+                          <TableHead className="w-130 font-bold text-foreground border-r">KPI Sent</TableHead>
+                          <TableHead className="w-40 font-bold text-foreground">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+
+                      <TableBody>
+                        {sentToChildrenRows.map((recipient) => (
+                          <TableRow key={recipient.key} className="align-top">
+                            <TableCell className="border-r align-top">
+                              <p className="text-sm font-semibold text-foreground truncate max-w-62.5" title={recipient.roleName}>
+                                {recipient.roleName}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1 truncate max-w-62.5" title={recipient.userName}>
+                                {recipient.userName}
+                              </p>
+                            </TableCell>
+
+                            <TableCell className="border-r align-top p-0">
+                              <div className="divide-y divide-border">
+                                {recipient.kpis.map((kpiItem) => {
+                                  const isEditing = editingAssignmentId === kpiItem.assignmentId;
+
+                                  return (
+                                    <div key={kpiItem.assignmentId} className="px-4 py-3">
+                                      <p className="text-sm font-medium text-foreground truncate max-w-117.5" title={kpiItem.label}>
+                                        {kpiItem.label}
+                                      </p>
+
+                                      {isEditing ? (
+                                        <div className="mt-2 grid gap-2 md:grid-cols-3">
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={editForm.baseline}
+                                            onChange={(event) => setEditForm((previous) => ({ ...previous, baseline: event.target.value }))}
+                                            placeholder="Baseline"
+                                          />
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={editForm.target}
+                                            onChange={(event) => setEditForm((previous) => ({ ...previous, target: event.target.value }))}
+                                            placeholder="Target"
+                                          />
+                                          <Input
+                                            value={editForm.remark}
+                                            onChange={(event) => setEditForm((previous) => ({ ...previous, remark: event.target.value }))}
+                                            placeholder="Remark"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="mt-1 flex items-center gap-2">
+                                          <p
+                                            className="text-xs text-muted-foreground truncate max-w-105"
+                                            title={`Baseline: ${kpiItem.baseline} | Target: ${kpiItem.target}${kpiItem.remark ? ` | Remark: ${kpiItem.remark}` : ''}`}
+                                          >
+                                            Baseline: {kpiItem.baseline} | Target: {kpiItem.target}
+                                            {kpiItem.remark ? ` | Remark: ${kpiItem.remark}` : ''}
+                                          </p>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setDetailModal({
+                                                open: true,
+                                                title: 'Sent KPI Details',
+                                                data: {
+                                                  role: recipient.roleName,
+                                                  user: recipient.userName,
+                                                  kpi: kpiItem.label,
+                                                  baseline: kpiItem.baseline,
+                                                  target: kpiItem.target,
+                                                  remark: kpiItem.remark || '—',
+                                                },
+                                              })
+                                            }
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-muted"
+                                            aria-label="View full KPI details"
+                                          >
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </TableCell>
+
+                            <TableCell className="align-top p-0">
+                              <div className="divide-y divide-border">
+                                {recipient.kpis.map((kpiItem) => {
+                                  const isEditing = editingAssignmentId === kpiItem.assignmentId;
+                                  const isSaving = savingAssignmentId === kpiItem.assignmentId;
+                                  const isDeleting = deletingAssignmentId === kpiItem.assignmentId;
+
+                                  return (
+                                    <div key={kpiItem.assignmentId} className="px-4 py-3 flex items-center gap-2">
+                                      {isEditing ? (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            onClick={() => handleUpdateSentAssignment(kpiItem.assignmentId)}
+                                            disabled={isSaving || isDeleting}
+                                            className="inline-flex items-center gap-1"
+                                          >
+                                            <Save className="h-3.5 w-3.5" />
+                                            Save
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={cancelEditingAssignment}
+                                            disabled={isSaving || isDeleting}
+                                            className="inline-flex items-center gap-1"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                            Cancel
+                                          </Button>
+                                        </>
+                                      ) : canManageSentAssignments ? (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => startEditingAssignment(kpiItem)}
+                                            disabled={isDeleting}
+                                            className="inline-flex items-center gap-1"
+                                          >
+                                            <PencilLine className="h-3.5 w-3.5" />
+                                            Edit
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleUnallocateSentAssignment(kpiItem.assignmentId)}
+                                            disabled={isDeleting}
+                                            className="inline-flex items-center gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            {isDeleting ? 'Un Allocating...' : 'Un Allocate'}
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">No actions available</p>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+
+                        {sentToChildrenRows.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                              {loading ? 'Loading sent KPI assignments...' : 'No KPI has been sent to child roles/users yet.'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+
+        {canViewHomeOfficeTab ? (
+          <TabsContent value="home-office" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Home Office Kpi</CardTitle>
+              </CardHeader>
+
+              <CardContent className="p-0">
+                <ScrollArea className="w-full">
+                  <div className="min-w-245">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-primary/10">
+                          <TableHead className="w-18 text-center font-bold text-foreground border-r">No.</TableHead>
+                          <TableHead className="w-65 font-bold text-foreground border-r">KPI</TableHead>
+                          <TableHead className="w-45 font-bold text-foreground border-r">Theme</TableHead>
+                          <TableHead className="w-45 font-bold text-foreground border-r">Sub Theme</TableHead>
+                          <TableHead className="w-25 text-center font-bold text-foreground border-r">Baseline</TableHead>
+                          <TableHead className="w-25 text-center font-bold text-foreground border-r">Target</TableHead>
+                          <TableHead className="w-55 font-bold text-foreground border-r">Remark</TableHead>
+                          <TableHead className="w-37.5 font-bold text-foreground">View / Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+
+                      <TableBody>
+                        {homeOfficeKpiRows.map((row) => (
+                          <TableRow key={row.assignmentId}>
+                            <TableCell className="h-12 text-center border-r text-sm font-medium">{row.no}</TableCell>
+                            <TableCell className="h-12 border-r text-sm">
+                              <CompactCellText value={row.kpi} maxWidth="max-w-[240px]" />
+                            </TableCell>
+                            <TableCell className="h-12 border-r text-sm text-muted-foreground">
+                              <CompactCellText value={row.theme} maxWidth="max-w-[160px]" />
+                            </TableCell>
+                            <TableCell className="h-12 border-r text-sm text-muted-foreground">
+                              <CompactCellText value={row.subTheme} maxWidth="max-w-[160px]" />
+                            </TableCell>
+                            <TableCell className="h-12 text-center border-r text-sm">{row.baseline}</TableCell>
+                            <TableCell className="h-12 text-center border-r text-sm">{row.target}</TableCell>
+                            <TableCell className="h-12 border-r text-sm text-muted-foreground">
+                              <CompactCellText value={row.remark} maxWidth="max-w-[200px]" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setDetailModal({
+                                      open: true,
+                                      title: 'Home Office KPI Details',
+                                      data: {
+                                        no: row.no,
+                                        kpi: row.kpi,
+                                        theme: row.theme,
+                                        subTheme: row.subTheme,
+                                        baseline: row.baseline,
+                                        target: row.target,
+                                        remark: row.remark,
+                                      },
+                                    })
+                                  }
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border hover:bg-muted"
+                                  aria-label="View full KPI info"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </button>
+
+                                {canManageHomeOfficeAssignments ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleUnallocateHomeOfficeKpi(row.assignmentId)}
+                                    disabled={deletingAssignmentId === row.assignmentId}
+                                    className="inline-flex items-center gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    {deletingAssignmentId === row.assignmentId ? 'Un Allocating...' : 'Un Allocate'}
+                                  </Button>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">No actions</p>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+
+                        {homeOfficeKpiRows.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                              {loading ? 'Loading home office KPIs...' : 'No active home office KPI is available.'}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ) : null}
+      </Tabs>
+
+      <Dialog open={detailModal.open} onOpenChange={(open) => !open && setDetailModal({ open: false, title: '', data: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailModal.title || 'Details'}</DialogTitle>
+          </DialogHeader>
+
+          {detailModal.data ? (
+            <div className="space-y-2 text-sm">
+              {Object.entries(detailModal.data).map(([key, value]) => (
+                <p key={key}>
+                  <span className="font-semibold capitalize">{key}:</span> {String(value || '—')}
+                </p>
               ))}
             </div>
-          </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
-          <AssignedKpiList
-            kpis={filteredKpis}
-            emptyMessage={loading ? 'Loading KPIs...' : hasParentRole ? 'No KPI is allocated by your parent role.' : 'No registered KPIs found.'}
-          />
-        </TabsContent>
-
-        <TabsContent value="assign" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Assign KPI</CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <MultiSelect
-                  options={officeOptionsWithCurrent}
-                  value={selectedOffice}
-                  onChange={setSelectedOffice}
-                  placeholder="Select Sub Unit(s)"
-                />
-
-                <MultiSelect
-                  options={allThemes}
-                  value={selectedTheme}
-                  onChange={(themesSelected) => {
-                    setSelectedTheme(themesSelected);
-                    setSelectedKpi([]);
-                  }}
-                  placeholder="Select Theme(s)"
-                />
-
-                <MultiSelect options={kpiOptionsByTheme} value={selectedKpi} onChange={setSelectedKpi} placeholder="Select KPI(s)" />
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <Checkbox checked={includeCurrentRole} onCheckedChange={(checked) => setIncludeCurrentRole(Boolean(checked))} />
-                Include current role
-              </label>
-
-              <Button onClick={handleAssign} disabled={loading}>
-                Assign KPI
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <ChildOfficesModal
+        open={customTargetModalState.open}
+        onOpenChange={(open) =>
+          setCustomTargetModalState((previous) => ({
+            open,
+            kpiId: open ? previous.kpiId : null,
+          }))
+        }
+        totalTarget={Number(customModalKpiRecord?.targetValue ?? customModalKpiRecord?.target ?? 0)}
+        offices={customModalOffices}
+        initialValues={customTargetModalState.kpiId ? kpiAssignmentOptions[String(customTargetModalState.kpiId)]?.customTargets || {} : {}}
+        onSave={handleSaveCustomTargets}
+        notify={notify}
+      />
     </div>
   );
 };

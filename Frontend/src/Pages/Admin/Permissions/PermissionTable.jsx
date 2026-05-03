@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Eye, Edit, Trash2, Check, Plus, Search } from 'lucide-react';
+import { Eye, Edit, Trash2, Check, Plus } from 'lucide-react';
 import * as Switch from '@radix-ui/react-switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TablePagination } from '../../../Components/UI/Table';
 
 const permissionHeaders = [
   { label: 'View', icon: Eye },
   { label: 'Create', icon: Plus },
+  { label: 'Assign', icon: Check },
   { label: 'Edit', icon: Edit },
   { label: 'Delete', icon: Trash2 },
   { label: 'Approve', icon: Check },
@@ -13,9 +14,28 @@ const permissionHeaders = [
 
 function PermissionTable({ permissions, setPermissions, search }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 20;
+  const query = String(search || '')
+    .trim()
+    .toLowerCase();
 
-  const filteredPermissions = permissions.filter((p) => p.module.toLowerCase().includes(search.toLowerCase()));
+  const matchesPermissionRow = (permission) => {
+    const moduleLabel = String(permission?.module || '').toLowerCase();
+    const scopeKey = String(permission?.resourceKey || '').toLowerCase();
+
+    if (!query) {
+      return true;
+    }
+
+    if (moduleLabel.includes(query) || scopeKey.includes(query)) {
+      return true;
+    }
+
+    // Allow searching by concrete action key, e.g. "create_role_management".
+    return ['view', 'create', 'assign', 'edit', 'delete', 'approve'].some((action) => `${action}_${scopeKey}`.includes(query));
+  };
+
+  const filteredPermissions = permissions.filter(matchesPermissionRow);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedPermissions = filteredPermissions.slice(startIndex, startIndex + itemsPerPage);
 
@@ -46,9 +66,12 @@ function PermissionTable({ permissions, setPermissions, search }) {
         <TableBody>
           {paginatedPermissions.map((perm) => (
             <TableRow key={perm.module}>
-              <TableCell className="font-medium">{perm.module}</TableCell>
+              <TableCell>
+                <p className="font-medium text-foreground">{perm.module}</p>
+                {perm.resourceKey ? <p className="text-[11px] text-muted-foreground font-mono">scope: {perm.resourceKey}</p> : null}
+              </TableCell>
 
-              {['view', 'create', 'edit', 'delete', 'approve'].map((field) => (
+              {['view', 'create', 'assign', 'edit', 'delete', 'approve'].map((field) => (
                 <TableCell key={field} className="text-center">
                   {/* ✅ Proper Radix Switch */}
                   <Switch.Root

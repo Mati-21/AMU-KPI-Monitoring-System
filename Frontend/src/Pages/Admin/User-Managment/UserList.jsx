@@ -9,10 +9,36 @@ import SearchInput from '../../../Components/UI/SearchInput';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../Components/UI/dialog';
 import { api } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
+import permissionUtils from '../../../lib/permissionUtils';
+
+const sanitizeNamePart = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized === '-' || normalized.toLowerCase() === 'null' || normalized.toLowerCase() === 'undefined') {
+    return '';
+  }
+
+  return normalized;
+};
 
 function UserList({ setActiveTab }) {
   const navigate = useNavigate();
   const authUser = useSelector((state) => state.auth.user);
+  const userPermissions = authUser?.permissions || [];
+  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
+  const canManageUsers =
+    isSystemAdmin ||
+    permissionUtils.hasPermission(userPermissions, [
+      permissionUtils.permissionKey('create', 'User Management'),
+      permissionUtils.permissionKey('edit', 'User Management'),
+      permissionUtils.permissionKey('delete', 'User Management'),
+      permissionUtils.permissionKey('manage', 'Users'),
+    ]);
+  const canCreateChildAccounts =
+    isSystemAdmin || permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'Child Office Accounts'));
+  const canAddUser =
+    canManageUsers ||
+    canCreateChildAccounts ||
+    permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'User Management'));
   const [currentPage, setCurrentPage] = useState(1);
   const [internalSearch, setInternalSearch] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -53,9 +79,9 @@ function UserList({ setActiveTab }) {
     () =>
       usersRaw.map((u) => {
         const activeRole = u?.UserRoles?.[0]?.Role;
-        const firstName = u.FirstName || '';
-        const fatherName = u.FatherName || '';
-        const grandFatherName = u.GrandFatherName || '';
+        const firstName = sanitizeNamePart(u.FirstName);
+        const fatherName = sanitizeNamePart(u.FatherName);
+        const grandFatherName = sanitizeNamePart(u.GrandFatherName);
         const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(' ').trim();
 
         return {
@@ -123,13 +149,15 @@ function UserList({ setActiveTab }) {
           <div className="flex flex-wrap items-stretch gap-3 md:justify-end">
             <SearchInput value={internalSearch} onChange={setInternalSearch} placeholder="Search users..." className="min-w-64" />
 
-            <button
-              onClick={() => setActiveTab('add')}
-              className="flex min-w-36 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-            >
-              <UserPlus className="h-4 w-4" />
-              Add User
-            </button>
+            {canAddUser ? (
+              <button
+                onClick={() => setActiveTab('add')}
+                className="flex min-w-48 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              >
+                <UserPlus className="h-4 w-4" />
+                {canManageUsers ? 'Add User' : 'Create Child Office Account'}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -173,24 +201,28 @@ function UserList({ setActiveTab }) {
                     <TableCell>{user.joinedDate}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => navigate(`/admin/profile/${user.id}`, { state: { startEditing: true } })}
-                          className="rounded p-1 text-foreground hover:bg-muted"
-                          title="Edit user"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
+                        {canManageUsers ? (
+                          <button
+                            onClick={() => navigate(`/profile/${user.id}`, { state: { startEditing: true } })}
+                            className="rounded p-1 text-foreground hover:bg-muted"
+                            title="Edit user"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        ) : null}
+
+                        {canManageUsers ? (
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            className="rounded p-1 text-destructive hover:bg-destructive/10"
+                            title="Delete user"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
 
                         <button
-                          onClick={() => handleDeleteUser(user)}
-                          className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          title="Delete user"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-
-                        <button
-                          onClick={() => navigate(`/admin/profile/${user.id}`)}
+                          onClick={() => navigate(`/profile/${user.id}`)}
                           className="rounded p-1 text-primary hover:bg-primary/10"
                           title="View profile"
                         >

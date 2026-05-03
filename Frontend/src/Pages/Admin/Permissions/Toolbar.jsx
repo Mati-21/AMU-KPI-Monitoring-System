@@ -1,7 +1,5 @@
-import { SlidersHorizontal } from 'lucide-react';
 import CustomSelect from '../../../Components/UI/CustomSelect';
 import SearchInput from '../../../Components/UI/SearchInput';
-import Button from '../../../Components/UI/Button';
 
 function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch, loadingRoles }) {
   return (
@@ -20,12 +18,9 @@ function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch, loa
 
         {/* Search */}
 
-        <SearchInput placeholder="Search modules..." value={search} onChange={setSearch} className="pl-9 h-9 w-56 text-sm" />
-
-        <Button variant="outline" size="sm" className="h-9 flex items-center gap-1">
-          <SlidersHorizontal className="w-4 h-4" />
-          Filters
-        </Button>
+        <div className="w-56 h-9">
+          <SearchInput placeholder="Search modules..." value={search} onChange={setSearch} className="text-xs" />
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">

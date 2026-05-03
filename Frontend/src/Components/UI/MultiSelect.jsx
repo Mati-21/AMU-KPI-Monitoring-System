@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, X, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-const MultiSelect = ({ options, value = [], onChange, placeholder = 'Select options...', className }) => {
+const MultiSelect = ({ options, value = [], onChange, placeholder = 'Select options...', className, placement = 'bottom' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -57,7 +57,7 @@ const MultiSelect = ({ options, value = [], onChange, placeholder = 'Select opti
           {value.length === 0 ? (
             <span className="text-muted-foreground">{placeholder}</span>
           ) : value.length === 1 ? (
-            <span className="text-sm">{value[0]}</span>
+            <span className="text-sm">{getValueLabel(value[0])}</span>
           ) : (
             <span className="text-sm text-primary font-medium">{value.length} selected</span>
           )}
@@ -66,7 +66,12 @@ const MultiSelect = ({ options, value = [], onChange, placeholder = 'Select opti
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full top-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-96 overflow-auto">
+        <div
+          className={cn(
+            'absolute z-50 w-full bg-card border border-border rounded-md shadow-lg max-h-96 overflow-auto',
+            placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-1'
+          )}
+        >
           {/* Select All Option */}
           <div className="sticky top-0 bg-card border-b border-border">
             <label className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted">

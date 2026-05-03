@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const compression = require('compression');
 const dotenv = require('dotenv');
+const path = require('path');
 const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/errorMiddleware');
 
@@ -48,6 +50,8 @@ app.use(
 app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (httpLogMode !== 'off') {
   if (httpLogMode === 'dev') {

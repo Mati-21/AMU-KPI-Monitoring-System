@@ -12,12 +12,26 @@ const createRoleCategory = async (req, res) => {
 
     const duplicate = await RoleCategory.findOne({
       where: {
-        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('CategoryName'))), normalizedName.toLowerCase())],
+        [Op.and]: [sequelizeWhere(fn('lower', col('CategoryName')), normalizedName.toLowerCase())],
       },
     });
 
     if (duplicate && !duplicate.IsArchived) {
       return res.status(409).json({ message: 'Role category already exists' });
+    }
+
+    if (duplicate && duplicate.IsArchived) {
+      await duplicate.update({
+        CategoryName: normalizedName,
+        Description,
+        IsArchived: false,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: duplicate,
+        message: 'Role category restored successfully.',
+      });
     }
 
     const category = await RoleCategory.create({
@@ -72,12 +86,18 @@ const updateRoleCategory = async (req, res) => {
     const duplicate = await RoleCategory.findOne({
       where: {
         Id: { [Op.ne]: id },
-        [Op.and]: [sequelizeWhere(fn('lower', fn('trim', col('CategoryName'))), normalizedName.toLowerCase())],
+        [Op.and]: [sequelizeWhere(fn('lower', col('CategoryName')), normalizedName.toLowerCase())],
       },
     });
 
     if (duplicate && !duplicate.IsArchived) {
       return res.status(409).json({ message: 'Role category already exists' });
+    }
+
+    if (duplicate && duplicate.IsArchived) {
+      return res.status(409).json({
+        message: 'A matching archived role category already exists. Restore or rename it first.',
+      });
     }
 
     await category.update({

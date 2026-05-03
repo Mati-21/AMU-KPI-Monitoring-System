@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { Search, SlidersHorizontal, Edit, Trash2 } from 'lucide-react';
 import Button from '../../../Components/UI/Button';
 
@@ -12,10 +13,21 @@ import AddRole from './AddRole';
 import AddCategory from './AddCategory';
 import TabButton from '../../../Components/UI/TabButton';
 import { api } from '../../../api/axios';
+import permissionUtils from '../../../lib/permissionUtils';
 
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
 const RoleManagement = () => {
+  const authUser = useSelector((state) => state.auth?.user);
+  const userPermissions = authUser?.permissions || [];
+  const canCreateRole = permissionUtils.hasPermission(userPermissions, [
+    permissionUtils.permissionKey('create', 'Role Management'),
+    permissionUtils.permissionKey('manage', 'Roles'),
+  ]);
+  const canManageRoleCategories = permissionUtils.hasPermission(userPermissions, [
+    permissionUtils.permissionKey('manage', 'Roles'),
+    permissionUtils.permissionKey('manage', 'Permissions'),
+  ]);
   const [activeTab, setActiveTab] = useState('list');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -38,11 +50,12 @@ const RoleManagement = () => {
     roleCategoryId: '',
     parentRoleId: '',
     extraMeasure: false,
+    isDistributable: true,
   });
   const [modalError, setModalError] = useState('');
   const [modalSaving, setModalSaving] = useState(false);
 
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (activeTab !== 'list') return;
@@ -84,6 +97,7 @@ const RoleManagement = () => {
         parentRole: role?.ParentRole?.RoleName || '',
         parentRoleId: role.ParentRoleId || '',
         extraMeasure: Boolean(role.HasExtraMeasures),
+        isDistributable: Boolean(role.IsDistributable),
       })),
     [roles]
   );
@@ -114,9 +128,19 @@ const RoleManagement = () => {
 
   const tabs = [
     { key: 'list', label: 'List of Roles' },
-    { key: 'addRole', label: 'Add Role' },
-    { key: 'addCategory', label: 'Add Role Category' },
+    ...(canCreateRole ? [{ key: 'addRole', label: 'Add Role' }] : []),
+    ...(canManageRoleCategories ? [{ key: 'addCategory', label: 'Add Role Category' }] : []),
   ];
+
+  useEffect(() => {
+    if (activeTab === 'addRole' && !canCreateRole) {
+      setActiveTab('list');
+    }
+
+    if (activeTab === 'addCategory' && !canManageRoleCategories) {
+      setActiveTab('list');
+    }
+  }, [activeTab, canCreateRole, canManageRoleCategories]);
 
   const handleEditCategory = (category) => {
     setModalError('');
@@ -183,6 +207,7 @@ const RoleManagement = () => {
       roleCategoryId: role.roleCategoryId || '',
       parentRoleId: role.parentRoleId || '',
       extraMeasure: Boolean(role.extraMeasure),
+      isDistributable: Boolean(role.isDistributable),
     });
   };
 
@@ -209,6 +234,7 @@ const RoleManagement = () => {
         ParentRoleId: editRoleForm.parentRoleId || null,
         Description: editRoleForm.description?.trim() || null,
         HasExtraMeasures: Boolean(editRoleForm.extraMeasure),
+        IsDistributable: Boolean(editRoleForm.isDistributable),
       });
 
       setEditingRole(null);
@@ -331,61 +357,67 @@ const RoleManagement = () => {
                 <TablePagination currentPage={currentPage} totalItems={filtered.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
               </div>
 
-              <div className="rounded-lg border border-border bg-card p-4">
-                <h2 className="text-base font-semibold text-foreground">Registered Role Category</h2>
-                <p className="mt-1 text-xs text-muted-foreground">All role categories currently registered in the system.</p>
+              {canManageRoleCategories ? (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <h2 className="text-base font-semibold text-foreground">Registered Role Category</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">All role categories currently registered in the system.</p>
 
-                <div className="mt-4 overflow-hidden rounded-lg border border-border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/50">
-                        <TableHead>Role Category Name</TableHead>
-                        <TableHead>Their Description</TableHead>
-                        <TableHead>Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={3}>Loading role categories...</TableCell>
+                  <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead>Role Category Name</TableHead>
+                          <TableHead>Their Description</TableHead>
+                          <TableHead>Action</TableHead>
                         </TableRow>
-                      ) : categoryRows.length ? (
-                        categoryRows.map((category) => (
-                          <TableRow key={category.id}>
-                            <TableCell className="font-medium">{category.name}</TableCell>
-                            <TableCell>{category.description || 'No description'}</TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <button onClick={() => handleEditCategory(category)} className="rounded p-1 hover:bg-muted" title="Edit category">
-                                  <Edit className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteCategory(category)}
-                                  className="rounded p-1 text-destructive hover:bg-destructive/10"
-                                  title="Delete category"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
+                      </TableHeader>
+
+                      <TableBody>
+                        {loading ? (
+                          <TableRow>
+                            <TableCell colSpan={3}>Loading role categories...</TableCell>
                           </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={3}>No role categories found.</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                        ) : categoryRows.length ? (
+                          categoryRows.map((category) => (
+                            <TableRow key={category.id}>
+                              <TableCell className="font-medium">{category.name}</TableCell>
+                              <TableCell>{category.description || 'No description'}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleEditCategory(category)} className="rounded p-1 hover:bg-muted" title="Edit category">
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCategory(category)}
+                                    className="rounded p-1 text-destructive hover:bg-destructive/10"
+                                    title="Delete category"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3}>No role categories found.</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           )}
 
-          {activeTab === 'addRole' && <AddRole setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addRole' && canCreateRole ? (
+            <AddRole setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+          ) : null}
 
-          {activeTab === 'addCategory' && <AddCategory setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addCategory' && canManageRoleCategories ? (
+            <AddCategory setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+          ) : null}
 
           <Dialog open={Boolean(editingCategory)} onOpenChange={(open) => !open && setEditingCategory(null)}>
             <DialogContent>
@@ -501,6 +533,16 @@ const RoleManagement = () => {
                     className="h-4 w-4"
                   />
                   Extra Measure
+                </label>
+
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={editRoleForm.isDistributable}
+                    onChange={(e) => setEditRoleForm((prev) => ({ ...prev, isDistributable: e.target.checked }))}
+                    className="h-4 w-4"
+                  />
+                  Is Distributable
                 </label>
               </div>
 
