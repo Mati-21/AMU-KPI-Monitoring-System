@@ -121,7 +121,7 @@ const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiCh
 
         <div className="w-full">
           <div className="flex items-center justify-end w-full">
-            <div className="flex items-center justify-end gap-2 w-full flex-nowrap overflow-x-auto pb-1">
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full pb-1">
               <Button
                 variant="outline"
                 size="sm"
@@ -147,13 +147,13 @@ const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiCh
                 <FileText className="w-3.5 h-3.5" /> {isExportingPdf ? 'Generating...' : 'PDF'}
               </Button>
 
-              {Array.isArray(config.derivedKpiOptions) && typeof onDerivedKpiChange === 'function' && (
+              {Array.isArray(config.derivedKpiOptions) && config.derivedKpiOptions.length > 0 && typeof onDerivedKpiChange === 'function' && (
                 <div className="w-56 text-xs shrink-0">
                   <CustomSelect
-                    options={[{ label: 'All Derived KPIs', value: '__ALL__' }, ...config.derivedKpiOptions]}
+                    options={[{ label: 'Total Performance (All KPIs)', value: '__ALL__' }, ...config.derivedKpiOptions]}
                     value={derivedKpiId}
                     onChange={onDerivedKpiChange}
-                    placeholder="All Derived KPIs"
+                    placeholder="Total Performance (All KPIs)"
                   />
                 </div>
               )}
