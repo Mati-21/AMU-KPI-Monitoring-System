@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNotification } from '../../Context/NotificationContext';
-import { Eye, Plus, Minus, Pencil, Trash2, UserMinus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Plus, Minus, Pencil, Trash2, UserMinus, UserX, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { read, utils, writeFile } from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import Button from '../../Components/UI/Button';
@@ -16,10 +16,10 @@ import { api } from '../../api/axios';
 import permissionUtils, { hasPermission } from '../../lib/permissionUtils';
 import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
 
-const tableHeaders = ['Parent Kpi', 'Drived Kpi', 'Unit', 'Baseline', 'Target', 'Remark'];
+const tableHeaders = ['Drived Kpi', 'Unit', 'Baseline', 'Target', 'Remark'];
 
 const formatValue = (value) => {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return 'null';
   const numeric = Number(value);
   return Number.isNaN(numeric) ? String(value) : numeric.toString();
 };
@@ -92,6 +92,8 @@ const DrivedKpiAllocationPage = () => {
   const [customTargetDrafts, setCustomTargetDrafts] = useState({});
   const [customTargetModalState, setCustomTargetModalState] = useState({ open: false, kpiId: null });
   const [customTargetEditors, setCustomTargetEditors] = useState({});
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const mainKpiOptions = useMemo(
     () =>
       assignedKpis
@@ -201,7 +203,8 @@ const DrivedKpiAllocationPage = () => {
               IsTargetIndividual: !!targetIndividualDrafts[String(selectedDrivenKpi.id)],
               IncludeCurrentOffice: kpiIncludeCurrentRole && userRoles.some(ur => String(ur.UserId) === String(userId) && String(ur.RoleId) === String(currentRoleId)),
               AssignmentBatchId: assignmentBatchId,
-              Remark: remarkText,
+              Name: selectedDrivenKpi.name || remarkText,
+              Remark: '',
             });
           });
         });
@@ -235,6 +238,7 @@ const DrivedKpiAllocationPage = () => {
     drivedKpiAssignment: [],
     distributionMethod: 'equal',
     selectedUserIds: [],
+    remark: '',
   });
   const selectedMainKpiLabel = mainKpiOptions.find((item) => String(item.value) === String(formState.mainKpi))?.label || '';
 
@@ -394,11 +398,11 @@ const DrivedKpiAllocationPage = () => {
           targetUser: assignment.User?.FirstName || assignment.User?.UserName || 'Unknown',
           targetRole:
             roles.find((r) => String(r.Id) === String(userRoles.find((ur) => ur.UserId === assignment.UserId)?.RoleId))?.RoleName || 'Target Role',
-          drivedKpi: assignment.Remark || '—',
+          drivedKpi: assignment.Name || assignment.Remark || 'null',
           recipients: 1,
           includeCurrentRole: assignment.IncludeCurrentOffice,
           mainKpiId: assignment.KPIId,
-          unit: assignment.KPI?.Unit?.Code || '—',
+          unit: assignment.KPI?.Unit?.Code || 'null',
           baseline: assignment.Baseline,
           target: assignment.AssignedTarget,
         }));
@@ -413,13 +417,14 @@ const DrivedKpiAllocationPage = () => {
               id: assignment.Id, // Use Assignment ID instead of KPI ID for uniqueness
               kpiId: kpi.Id,
               label: `${kpi.KPIType?.KPIName || kpi.KPIName || 'Unnamed KPI'}${kpi.Unit?.Code || kpi.Unit?.Name ? ` (${kpi.Unit?.Code || kpi.Unit?.Name})` : ''}`,
-              remark: assignment.Remark || kpi.Remark || '',
+              remark: assignment.Remark || '',
+              name: assignment.Name || '',
               assignedTarget: assignment.AssignedTarget ?? null,
               originalTarget: kpi.Target ?? null,
               hasDerivedRemark: !!assignment.Remark, // Specifically track if THIS assignment is derived
-              unit: kpi.Unit?.Code || kpi.Unit?.Name || '—',
-              baseline: assignment.Baseline ?? kpi.Baseline ?? '—',
-              target: assignment.AssignedTarget ?? kpi.Target ?? '—',
+              unit: kpi.Unit?.Code || kpi.Unit?.Name || 'null',
+              baseline: assignment.Baseline ?? kpi.Baseline ?? 'null',
+              target: assignment.AssignedTarget ?? kpi.Target ?? 'null',
               isAssigned: String(assignment.CreatedBy) !== String(authUser?.Id || authUser?.id),
             };
           })
@@ -430,34 +435,36 @@ const DrivedKpiAllocationPage = () => {
         // If manager, drivedKpis are their "Created" ones (own assignments with remarks)
         // If subordinate, drivedKpis are parent assignments
         const myCreatedDrived = assigned
-          .filter((item) => item.remark && !item.isAssigned)
+          .filter((item) => item.name && !item.isAssigned)
           .map((item) => ({
             id: item.id,
             mainKpiId: item.kpiId,
             parent: item.label,
-            drived: item.remark,
+            drived: item.name,
             unit: item.unit,
             baseline: item.baseline,
             target: item.target,
             assignedTarget: item.assignedTarget,
             originalTarget: item.originalTarget,
-            remark: 'Created locally',
+            remark: item.remark || 'null',
+            name: item.name || '',
             isAssigned: false,
           }));
 
         const parentAssignedDrived = assigned
-          .filter((item) => item.remark && item.isAssigned)
+          .filter((item) => item.name && item.isAssigned)
           .map((item) => ({
             id: item.id,
             mainKpiId: item.kpiId,
             parent: item.label,
-            drived: item.remark,
+            drived: item.name,
             unit: item.unit,
             baseline: item.baseline,
             target: item.target,
             assignedTarget: item.assignedTarget,
             originalTarget: item.originalTarget,
-            remark: item.remark || 'Assigned by Parent',
+            remark: item.remark || 'null',
+            name: item.name || '',
             isAssigned: true,
           }));
 
@@ -529,7 +536,8 @@ const DrivedKpiAllocationPage = () => {
         Baseline: parseNumericValue(formState.baseline),
         AssignedTarget: parseNumericValue(formState.target),
         IncludeCurrentOffice: false,
-        Remark: remarkText,
+        Name: remarkText,
+        Remark: formState.remark || '',
       });
 
       notify('Drived KPI created and saved successfully.', 'success');
@@ -542,6 +550,7 @@ const DrivedKpiAllocationPage = () => {
         chair: '',
         baseline: '',
         target: '',
+        remark: '',
         drivedKpis: [createDrivenKpiRow()],
       }));
     } catch (error) {
@@ -649,7 +658,8 @@ const DrivedKpiAllocationPage = () => {
               AssignedTarget: parseNumericValue(target),
               UnitId: targetUnitId,
               IncludeCurrentOffice: false,
-              Remark: derivedValue,
+              Name: derivedValue,
+              Remark: '',
             });
             successCount++;
           } catch (err) {
@@ -729,6 +739,25 @@ const DrivedKpiAllocationPage = () => {
     }
   };
 
+  const handleDeleteAllDrivedKpis = async () => {
+    if (drivedKpis.length === 0) return;
+    
+    setDeletingAll(true);
+    try {
+      // Delete all KPIs currently in the list
+      const deleteRequests = drivedKpis.map(kpi => api.delete(`/user-kpis/${kpi.id}`));
+      await Promise.all(deleteRequests);
+      
+      notify(`Successfully deleted all ${drivedKpis.length} Drived KPI(s).`, 'success');
+      setConfirmDeleteAll(false);
+      setRefreshToken(prev => prev + 1);
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to delete all Drived KPIs.', 'error');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   const handleEditSent = (row) => {
     setFormState((previous) => ({
       ...previous,
@@ -791,8 +820,20 @@ const DrivedKpiAllocationPage = () => {
 
         <TabsContent value="view-drived" className="space-y-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>List Of Drived kpis</CardTitle>
+              {hasExtraMeasures && drivedKpis.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  onClick={() => setConfirmDeleteAll(true)} 
+                  disabled={deletingAll || deleting}
+                  className="h-9 gap-2"
+                >
+                  <Trash2 size={16} />
+                  <span>Delete All</span>
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-hidden rounded-b-lg border-t border-border">
@@ -811,18 +852,11 @@ const DrivedKpiAllocationPage = () => {
                     <TableBody>
                       {paginatedDrivedKpis.map((row, index) => (
                         <TableRow key={row.id}>
-                          {hasExtraMeasures ? (
-                            rowSpans[index] > 0 ? (
-                              <TableCell rowSpan={rowSpans[index]} className="align-top font-medium bg-muted/5">
-                                {row.parent}
-                              </TableCell>
-                            ) : null
-                          ) : null}
                           <TableCell>
                             <div className="flex flex-col gap-1">
-                              {Array.isArray(row.drived)
+                              {row.name || (Array.isArray(row.drived)
                                 ? row.drived.map((item, index) => <span key={`${row.id}-${index}`}>{item}</span>)
-                                : row.drived}
+                                : row.drived)}
                             </div>
                           </TableCell>
                           <TableCell>{row.unit}</TableCell>
@@ -854,7 +888,7 @@ const DrivedKpiAllocationPage = () => {
                                 <button
                                   type="button"
                                   className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                  title="Unassign Drived KPI"
+                                  title="Delete Drived KPI"
                                   onClick={() =>
                                     handleRequestDelete({
                                       id: row.id,
@@ -862,7 +896,7 @@ const DrivedKpiAllocationPage = () => {
                                     })
                                   }
                                 >
-                                  <UserMinus className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4" />
                                 </button>
                             </div>
                           </TableCell>
@@ -1021,6 +1055,15 @@ const DrivedKpiAllocationPage = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Remark (Optional)</p>
+                  <Input
+                    value={formState.remark}
+                    onChange={(event) => setFormState((previous) => ({ ...previous, remark: event.target.value }))}
+                    placeholder="Enter any additional notes or remark..."
+                  />
                 </div>
               </div>
 
@@ -1265,15 +1308,16 @@ const DrivedKpiAllocationPage = () => {
                                 <button
                                   type="button"
                                   className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                  title="Unassign Sent KPI"
+                                  title="Unallocate Sent KPI"
                                 onClick={() =>
                                   handleRequestDelete({
                                     id: item.id,
                                     title: item.drivedKpi,
+                                    type: 'unallocate',
                                   })
                                 }
                               >
-                                  <UserMinus className="h-4 w-4" />
+                                  <UserX className="h-4 w-4" />
                               </button>
                             </div>
                           </TableCell>
@@ -1306,18 +1350,18 @@ const DrivedKpiAllocationPage = () => {
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parent KPI</div>
-                  <div className="mt-1 text-sm font-medium text-foreground">{selectedDrivedKpi.parent || '—'}</div>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Drived KPI</div>
                   <div className="mt-1 text-sm font-medium text-foreground">
-                    {Array.isArray(selectedDrivedKpi.drived) ? selectedDrivedKpi.drived.join(' | ') : selectedDrivedKpi.drived || '—'}
+                    {Array.isArray(selectedDrivedKpi.drived) ? selectedDrivedKpi.drived.join(' | ') : selectedDrivedKpi.drived}
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parent KPI</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{selectedDrivedKpi.parent || 'null'}</div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unit</div>
-                  <div className="mt-1 text-sm font-medium text-foreground">{selectedDrivedKpi.unit || '—'}</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{selectedDrivedKpi.unit || 'null'}</div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Baseline</div>
@@ -1337,7 +1381,7 @@ const DrivedKpiAllocationPage = () => {
 
               <div className="rounded-lg border border-border bg-background p-4">
                 <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Remark</div>
-                <div className="mt-1 text-sm leading-6 text-foreground">{selectedDrivedKpi.remark || '—'}</div>
+                <div className="mt-1 text-sm leading-6 text-foreground">{selectedDrivedKpi.remark || 'null'}</div>
               </div>
 
               <div className="space-y-2">
@@ -1372,10 +1416,15 @@ const DrivedKpiAllocationPage = () => {
       <Dialog open={Boolean(deletingDrivedKpi)} onOpenChange={(open) => !open && !deleting && setDeletingDrivedKpi(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unassign Drived KPI</DialogTitle>
+            <DialogTitle>
+              {deletingDrivedKpi?.type === 'unallocate' ? 'Unallocate Sent KPI' : 'Delete Drived KPI'}
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to unassign <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>? This action
-              cannot be undone.
+              Are you sure you want to {deletingDrivedKpi?.type === 'unallocate' ? 'unallocate' : 'delete'}{' '}
+              <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>? 
+              {deletingDrivedKpi?.type === 'unallocate' 
+                ? ' This will remove the KPI from the recipient role.'
+                : ' This action cannot be undone.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1384,7 +1433,9 @@ const DrivedKpiAllocationPage = () => {
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDeleteDrivedKpi} disabled={deleting}>
-              {deleting ? 'Unassigning...' : 'Unassign'}
+              {deleting 
+                ? (deletingDrivedKpi?.type === 'unallocate' ? 'Unallocating...' : 'Deleting...') 
+                : (deletingDrivedKpi?.type === 'unallocate' ? 'Confirm Unallocate' : 'Delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1409,6 +1460,27 @@ const DrivedKpiAllocationPage = () => {
         }}
         notify={notify}
       />
+
+      <Dialog open={confirmDeleteAll} onOpenChange={(open) => !open && !deletingAll && setConfirmDeleteAll(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete All Drived KPIs</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-bold text-red-600">ALL {drivedKpis.length}</span> Drived KPIs? 
+              This action will remove all local office measures and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteAll(false)} disabled={deletingAll}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAllDrivedKpis} disabled={deletingAll}>
+              {deletingAll ? 'Deleting...' : 'Confirm Delete All'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

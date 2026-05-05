@@ -49,6 +49,10 @@ const UserKPI = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    Name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

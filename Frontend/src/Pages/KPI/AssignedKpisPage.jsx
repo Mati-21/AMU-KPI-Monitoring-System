@@ -110,10 +110,16 @@ function AssignedKpisPage() {
 
         const assignments = combinedAssignments.filter((assignment) => {
           const remark = String(assignment?.Remark || assignment?.KPI?.Remark || '').trim();
-          const isDerived = remark.length > 0 && remark.toLowerCase() !== 'null';
+          const name = String(assignment?.Name || '').trim();
+          const isDerived = (remark.length > 0 && remark.toLowerCase() !== 'null') || (name.length > 0);
+          const isFromParent = fromParentAssignmentIds.has(assignment.Id);
 
-          // Derived KPIs are hidden from performance tracking if the role is distributable,
-          // unless they are explicitly marked for inclusion in the current office.
+          // Original KPIs: If from parent, only show if 'IncludeCurrentOffice' is true (self-assignment)
+          if (!isDerived && isFromParent && !Boolean(assignment?.IncludeCurrentOffice)) {
+            return false;
+          }
+
+          // Derived KPIs: Hidden if the role is distributable, unless explicitly marked for current office.
           if (isDerived && isDistributable && !Boolean(assignment?.IncludeCurrentOffice)) {
             return false;
           }
@@ -141,8 +147,8 @@ function AssignedKpisPage() {
           if (!kpiRecord) return;
 
           const isFromParent = fromParentAssignmentIds.has(assignment.Id);
-          const remark = String(assignment?.Remark || assignment?.KPI?.Remark || '').trim();
-          const isDerived = remark.length > 0 && remark.toLowerCase() !== 'null';
+          const isDerived = Boolean(assignment.Name || (assignment.Remark && assignment.Remark.toLowerCase() !== 'null'));
+          const targetValue = assignment.AssignedTarget ?? kpiRecord.Target;
 
           const quarterlyResults = Array.isArray(assignment.quarterlyResults) ? assignment.quarterlyResults : [];
           const quarterValues = quarterlyResults.reduce(
@@ -178,9 +184,9 @@ function AssignedKpisPage() {
           subThemeMap.get(subThemeName).push({
             id: assignment.Id,
             kpiId: kpiRecord.Id,
-            name: (assignment.Remark || leaf?.KPIName || kpiRecord.KPIType?.KPIName || '—').trim(),
+            name: (assignment.Name || assignment.Remark || leaf?.KPIName || kpiRecord.KPIType?.KPIName || '—').trim(),
             baseline: formatValue(assignment.Baseline ?? kpiRecord.Baseline),
-            target: formatValue(kpiRecord.Target),
+            target: formatValue(targetValue),
             theme: themeName,
             subTheme: subThemeName,
             isDerived,
@@ -342,7 +348,30 @@ function AssignedKpisPage() {
                       <tbody>
                         {derivedKpis.map((kpi) => (
                           <tr key={kpi.id} className="border-b border-border text-sm text-foreground last:border-b-0">
-                            <td className="px-4 py-4 align-top font-medium leading-6 whitespace-normal wrap-break-word">{kpi.name}</td>
+                            <td className="px-4 py-4 align-top font-medium leading-6 whitespace-normal wrap-break-word">
+                              <div className="flex flex-col gap-1">
+                                {kpi.name}
+                                {(() => {
+                                  const qValues = [kpi.q1, kpi.q2, kpi.q3, kpi.q4].map((v) => {
+                                    const num = parseFloat(v);
+                                    return isNaN(num) ? 0 : num;
+                                  });
+                                  const total = qValues.reduce((sum, v) => sum + v, 0);
+                                  const target = parseFloat(kpi.target);
+                                  const baseline = parseFloat(kpi.baseline);
+                                  const goal = target - (isNaN(baseline) ? 0 : baseline);
+                                  
+                                  if (!isNaN(target) && goal > 0 && total >= goal) {
+                                    return (
+                                      <span className="inline-flex w-fit items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 uppercase tracking-wider">
+                                        Achieved
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            </td>
                             <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.unit}</td>
                             <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.baseline}</td>
                             <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.target}</td>
@@ -465,9 +494,32 @@ function AssignedKpisPage() {
                               </thead>
                               <tbody>
                                 {subTheme.kpis.map((kpi) => (
-                                  <tr key={kpi.id} className="border-b border-border text-sm text-foreground last:border-b-0">
-                                    <td className="px-4 py-4 align-top font-medium leading-6 whitespace-normal wrap-break-word">{kpi.name}</td>
-                                    <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.unit}</td>
+                                    <tr key={kpi.id} className="border-b border-border text-sm text-foreground last:border-b-0">
+                                      <td className="px-4 py-4 align-top font-medium leading-6 whitespace-normal wrap-break-word">
+                                        <div className="flex flex-col gap-1">
+                                          {kpi.name}
+                                          {(() => {
+                                            const qValues = [kpi.q1, kpi.q2, kpi.q3, kpi.q4].map((v) => {
+                                              const num = parseFloat(v);
+                                              return isNaN(num) ? 0 : num;
+                                            });
+                                            const total = qValues.reduce((sum, v) => sum + v, 0);
+                                            const target = parseFloat(kpi.target);
+                                            const baseline = parseFloat(kpi.baseline);
+                                            const goal = target - (isNaN(baseline) ? 0 : baseline);
+
+                                            if (!isNaN(target) && goal > 0 && total >= goal) {
+                                              return (
+                                                <span className="inline-flex w-fit items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 uppercase tracking-wider">
+                                                  Achieved
+                                                </span>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.unit}</td>
                                     <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.baseline}</td>
                                     <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.target}</td>
                                     <td className="border-l border-border bg-primary/5 px-4 py-4 align-top text-center whitespace-nowrap">
@@ -568,11 +620,27 @@ function AssignedKpisPage() {
         onSubmit={async ({ quarter, result, remark, file }) => {
           if (!activeKpi) return;
 
+          // Sequential validation: Ensure previous quarter exists unless editing current
+          const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+          const qIdx = QUARTERS.indexOf(quarter);
+          if (qIdx > 0) {
+            const prevQ = QUARTERS[qIdx - 1];
+            const results = Array.isArray(activeKpi.quarterlyResults) ? activeKpi.quarterlyResults : [];
+            const hasPrev = results.some((r) => String(r.quarter || '').toUpperCase() === prevQ);
+            const hasCurrent = results.some((r) => String(r.quarter || '').toUpperCase() === quarter.toUpperCase());
+
+            if (!hasPrev && !hasCurrent) {
+              notify(`Submission blocked: Please submit ${prevQ} performance before ${quarter}.`, 'error');
+              return;
+            }
+          }
+
           try {
             setSavingSubmission(true);
 
             const payload = new FormData();
             payload.append('KPIId', activeKpi.kpiId);
+            payload.append('UserKPIId', activeKpi.id);
             payload.append('KPIResult', result);
             payload.append('Quarter', quarter);
             payload.append('Description', remark || activeKpi.name || '');

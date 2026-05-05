@@ -14,6 +14,10 @@ const UserKPIResult = sequelize.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    UserKPIId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     CycleYear: {
       type: DataTypes.STRING,
       allowNull: false,

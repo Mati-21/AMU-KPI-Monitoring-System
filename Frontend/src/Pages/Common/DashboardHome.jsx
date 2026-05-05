@@ -1,7 +1,7 @@
 import { useSelector } from 'react-redux';
 import permissionUtils from '../../lib/permissionUtils';
+import UnifiedDashboard from './UnifiedDashboard';
 import LegacyAdminDashboard from './LegacyAdminDashboard';
-import LegacyUserDashboard from './LegacyUserDashboard';
 
 const DashboardHome = () => {
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
@@ -12,7 +12,7 @@ const DashboardHome = () => {
     return <LegacyAdminDashboard />;
   }
 
-  return <LegacyUserDashboard />;
+  return <UnifiedDashboard />;
 };
 
 export default DashboardHome;

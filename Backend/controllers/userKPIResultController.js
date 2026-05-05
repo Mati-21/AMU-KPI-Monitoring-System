@@ -1093,10 +1093,19 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
 
 const createUserKPIResult = async (req, res) => {
   try {
-    const { KPIId, KPIResult, Description, CycleYear, Quarter, PerformanceTitle } = req.body;
+    const {
+      KPIId,
+      UserKPIId,
+      CycleYear,
+      Quarter,
+      KPIResult,
+      Description,
+      PerformanceTitle,
+    } = req.body;
+
     const cycleYear = CycleYear || getCurrentCycleYear();
     const quarter = normalizeQuarter(Quarter) || getCurrentQuarter();
-    const userId = req.user?.Id;
+    const userId = req.user?.Id || req.user?.id;
 
     if (!userId) {
       return res.status(401).json({ message: 'User context is required.' });
@@ -1118,18 +1127,24 @@ const createUserKPIResult = async (req, res) => {
       return res.status(400).json({ message: 'Evidence file is required for this KPI.' });
     }
 
-    const existingResult = await UserKPIResult.findOne({
-      where: {
-        KPIId,
-        UserId: userId,
-        CycleYear: cycleYear,
-        Quarter: quarter,
-        IsArchived: false,
-      },
-    });
+    const where = {
+      UserId: userId,
+      CycleYear: cycleYear,
+      Quarter: quarter,
+      IsArchived: false,
+    };
+
+    if (UserKPIId) {
+      where.UserKPIId = UserKPIId;
+    } else {
+      where.KPIId = KPIId;
+    }
+
+    const existingResult = await UserKPIResult.findOne({ where });
 
     const payload = {
       KPIId,
+      UserKPIId: UserKPIId || null,
       CycleYear: cycleYear,
       Quarter: quarter,
       UserId: userId,

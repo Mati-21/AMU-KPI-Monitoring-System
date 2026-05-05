@@ -139,11 +139,27 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
                   onChange={(event) => setForm((previous) => ({ ...previous, quarter: event.target.value }))}
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:bg-white"
                 >
-                  {QUARTERS.map((quarter) => (
-                    <option key={quarter} value={quarter}>
-                      {quarter}
-                    </option>
-                  ))}
+                  {QUARTERS.map((quarter, index) => {
+                    const quarterKey = quarter.toUpperCase();
+                    const hasResult = kpi?.quarterlyResults?.some(
+                      (r) => String(r.quarter || '').toUpperCase() === quarterKey
+                    );
+                    
+                    let isAllowed = true;
+                    if (index > 0) {
+                      const prevQuarterKey = QUARTERS[index - 1].toUpperCase();
+                      const prevHasResult = kpi?.quarterlyResults?.some(
+                        (r) => String(r.quarter || '').toUpperCase() === prevQuarterKey
+                      );
+                      isAllowed = hasResult || prevHasResult;
+                    }
+
+                    return (
+                      <option key={quarter} value={quarter} disabled={!isAllowed}>
+                        {quarter} {!isAllowed ? '(Previous quarter missing)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

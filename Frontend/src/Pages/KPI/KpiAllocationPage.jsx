@@ -123,9 +123,9 @@ const KpiAllocationPage = () => {
       const [rolesRes, userRolesRes, myUserKpiRes, userKpiRes, allUserKpiRes, kpiRes, kpiTypeRes] = await Promise.all([
         api.get('/roles', { params: { t: Date.now() } }),
         api.get('/user-roles', { params: { t: Date.now() } }),
-        api.get('/user-kpis', { params: { scope: 'mine', isDerived: 'false', t: Date.now() } }),
-        api.get('/user-kpis', { params: { scope: 'mine', fromParent: true, isDerived: 'false', t: Date.now() } }),
-        api.get('/user-kpis', { params: { isDerived: 'false', t: Date.now() } }),
+        api.get('/user-kpis', { params: { scope: 'mine', t: Date.now() } }),
+        api.get('/user-kpis', { params: { scope: 'mine', fromParent: true, t: Date.now() } }),
+        api.get('/user-kpis', { params: { t: Date.now() } }),
         api.get('/kpis', { params: { t: Date.now() } }),
         api.get('/kpi-types', { params: { t: Date.now() } }),
       ]);
@@ -309,6 +309,7 @@ const KpiAllocationPage = () => {
   }, [roles, activeUserRoles, currentUserId, currentRoleId, authUser?.roleName, authUser?.role]);
 
   const hasParentRole = Boolean(currentRole?.ParentRoleId);
+  const isExtraMeasureRole = Boolean(currentRole?.HasExtraMeasures);
 
   const canCascadeKpis = useMemo(
     () =>
@@ -598,7 +599,7 @@ const KpiAllocationPage = () => {
 
     const activePerformanceAssignments = myAssignments.filter((assignment) => {
       const passedFromParent = fromParentIds.has(assignment.Id);
-      if (passedFromParent) return !canCascadeKpis || Boolean(assignment.IncludeCurrentOffice);
+      if (passedFromParent) return !canCascadeKpis || Boolean(assignment.IncludeCurrentOffice) || isExtraMeasureRole;
       return true;
     });
 

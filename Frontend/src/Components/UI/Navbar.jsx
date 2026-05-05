@@ -6,6 +6,7 @@ import useTheme from '../../Hooks/useTheme';
 
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../UI/DropDown';
 import { logout } from '../../Features/authSlice';
+import { api } from '../../api/axios';
 
 const navLinks = ['About', 'Features', 'Benefits', 'Contact'];
 
@@ -34,9 +35,22 @@ const Navbar = () => {
     };
   }, [displayRole]);
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/signin');
+  const handleLogout = async () => {
+    try {
+      // 1. Tell backend to clear the cookie
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.warn('Backend logout failed or was already cleared', err);
+    } finally {
+      // 2. Clear frontend state
+      dispatch(logout());
+      
+      // 3. Clear all local storage to be safe
+      localStorage.clear();
+      
+      // 4. Hard redirect to signin to flush all memory/cache
+      window.location.href = '/signin';
+    }
   };
 
   return isAuthenticated ? (

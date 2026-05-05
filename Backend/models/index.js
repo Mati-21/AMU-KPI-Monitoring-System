@@ -47,6 +47,9 @@ UserKPIResult.belongsTo(User, { foreignKey: 'UserId' });
 KPI.hasMany(UserKPIResult, { foreignKey: 'KPIId' });
 UserKPIResult.belongsTo(KPI, { foreignKey: 'KPIId' });
 
+UserKPI.hasMany(UserKPIResult, { foreignKey: 'UserKPIId', as: 'Results' });
+UserKPIResult.belongsTo(UserKPI, { foreignKey: 'UserKPIId', as: 'Assignment' });
+
 User.hasMany(KPIDocument, { foreignKey: 'UserId' });
 KPIDocument.belongsTo(User, { foreignKey: 'UserId' });
 

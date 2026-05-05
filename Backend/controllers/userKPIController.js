@@ -82,7 +82,7 @@ const hasExtraMeasuresAccess = (req) =>
 
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
+    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
     const cycleYear = CycleYear || getCurrentCycleYear();
     const assignmentBatchId = parseUuidValue(AssignmentBatchId);
 
@@ -102,7 +102,8 @@ const createUserKPI = async (req, res) => {
         UserId,
         CycleYear: cycleYear,
         IsArchived: false,
-        Remark: Remark || null, // Check for exact same remark
+        Remark: Remark || null,
+        Name: Name || null, // Check for exact same name as well
       },
     });
 
@@ -167,6 +168,7 @@ const createUserKPI = async (req, res) => {
       IncludeCurrentOffice: Boolean(IncludeCurrentOffice),
       AssignmentBatchId: assignmentBatchId,
       Remark,
+      Name,
       CreatedBy: req.user?.Id,
     });
 
@@ -190,16 +192,22 @@ const getUserKPIs = async (req, res) => {
       where.UserId = req.user?.Id;
     } else if (scope === 'sent') {
       where.CreatedBy = req.user?.Id;
-      // Optionally filter out self-assignments if you only want to see what was sent to others
+      // Filter out self-assignments so the parent's source isn't accidentally deleted from the sent tracker
       where.UserId = { [Op.ne]: req.user?.Id };
     }
 
     const { isDerived } = req.query;
     if (isDerived !== undefined) {
       if (String(isDerived).toLowerCase() === 'true') {
-        where.Remark = { [Op.not]: null };
+        // Derived: Has either a local Name or a local Remark
+        where[Op.or] = [
+          { Remark: { [Op.not]: null }, [Op.and]: [{ Remark: { [Op.ne]: '' } }] },
+          { Name: { [Op.not]: null }, [Op.and]: [{ Name: { [Op.ne]: '' } }] },
+        ];
       } else if (String(isDerived).toLowerCase() === 'false') {
-        where.Remark = null;
+        // Original: Has neither a local Name nor a local Remark
+        where.Remark = { [Op.or]: [null, ''] };
+        where.Name = { [Op.or]: [null, ''] };
       }
     }
 
@@ -249,43 +257,56 @@ const getUserKPIs = async (req, res) => {
               UserId: { [Op.in]: assignmentUserIds },
               KPIId: { [Op.in]: assignmentKpiIds },
             },
-            attributes: ['Id', 'UserId', 'KPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
+            attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
             order: [['CreatedAt', 'DESC']],
           })
         : [];
 
-    const quarterlyResultsByAssignment = new Map();
+    const quarterlyResultsByAssignmentId = new Map();
+    const quarterlyResultsByLegacyKey = new Map();
 
     quarterlyResults.forEach((result) => {
-      const assignmentKey = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
-      if (!quarterlyResultsByAssignment.has(assignmentKey)) {
-        quarterlyResultsByAssignment.set(assignmentKey, {
-          q1: '-',
-          q2: '-',
-          q3: '-',
-          q4: '-',
-          quarterlyResults: [],
-        });
-      }
-
-      const bucket = quarterlyResultsByAssignment.get(assignmentKey);
-      bucket.quarterlyResults.push({
+      const normalizedQuarter = String(result.Quarter || '').toUpperCase();
+      const item = {
         id: result.Id,
         quarter: result.Quarter,
         result: result.KPIResult,
         createdAt: result.CreatedAt,
-      });
+      };
 
-      const normalizedQuarter = String(result.Quarter || '').toUpperCase();
-      if (normalizedQuarter === 'Q1' && bucket.q1 === '-') bucket.q1 = result.KPIResult;
-      if (normalizedQuarter === 'Q2' && bucket.q2 === '-') bucket.q2 = result.KPIResult;
-      if (normalizedQuarter === 'Q3' && bucket.q3 === '-') bucket.q3 = result.KPIResult;
-      if (normalizedQuarter === 'Q4' && bucket.q4 === '-') bucket.q4 = result.KPIResult;
+      if (result.UserKPIId) {
+        const idKey = String(result.UserKPIId);
+        if (!quarterlyResultsByAssignmentId.has(idKey)) {
+          quarterlyResultsByAssignmentId.set(idKey, { q1: '-', q2: '-', q3: '-', q4: '-', quarterlyResults: [] });
+        }
+        const bucket = quarterlyResultsByAssignmentId.get(idKey);
+        bucket.quarterlyResults.push(item);
+        const resultVal = parseNumericValue(result.KPIResult) || 0;
+        if (normalizedQuarter === 'Q1') bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
+        if (normalizedQuarter === 'Q2') bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
+        if (normalizedQuarter === 'Q3') bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
+        if (normalizedQuarter === 'Q4') bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+      } else {
+        const legacyKey = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
+        if (!quarterlyResultsByLegacyKey.has(legacyKey)) {
+          quarterlyResultsByLegacyKey.set(legacyKey, { q1: '-', q2: '-', q3: '-', q4: '-', quarterlyResults: [] });
+        }
+        const bucket = quarterlyResultsByLegacyKey.get(legacyKey);
+        bucket.quarterlyResults.push(item);
+        
+        const resultVal = parseNumericValue(result.KPIResult) || 0;
+        if (normalizedQuarter === 'Q1') bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
+        if (normalizedQuarter === 'Q2') bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
+        if (normalizedQuarter === 'Q3') bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
+        if (normalizedQuarter === 'Q4') bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+      }
     });
 
     const userKpisWithQuarterlyResults = userKpis.map((assignment) => {
-      const assignmentKey = `${String(assignment.UserId || '')}::${String(assignment.KPIId || '')}`;
-      const bucket = quarterlyResultsByAssignment.get(assignmentKey);
+      const assignmentIdKey = String(assignment.Id);
+      const legacyKey = `${String(assignment.UserId || '')}::${String(assignment.KPIId || '')}`;
+      
+      const bucket = quarterlyResultsByAssignmentId.get(assignmentIdKey) || quarterlyResultsByLegacyKey.get(legacyKey);
 
       return {
         ...assignment.toJSON(),
@@ -328,7 +349,7 @@ const getUserKPIById = async (req, res) => {
 const updateUserKPI = async (req, res) => {
   try {
     const { id } = req.params;
-    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
+    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
 
     const userKPI = await UserKPI.findByPk(id);
     if (!userKPI) {
@@ -394,6 +415,7 @@ const updateUserKPI = async (req, res) => {
       IncludeCurrentOffice: includeCurrentOfficeBoolean,
       AssignmentBatchId: AssignmentBatchId !== undefined ? AssignmentBatchId || null : userKPI.AssignmentBatchId,
       CycleYear: CycleYear || userKPI.CycleYear,
+      Name: Name !== undefined ? Name : userKPI.Name,
       CreatedBy: nextCreatedBy,
     });
 
@@ -429,6 +451,17 @@ const deleteUserKPI = async (req, res) => {
     }
 
     await userKPI.update({ IsArchived: true });
+
+    // Reset/Archive performance results associated with this specific assignment ID
+    await UserKPIResult.update(
+      { IsArchived: true },
+      {
+        where: {
+          UserKPIId: userKPI.Id,
+          IsArchived: false,
+        },
+      }
+    );
 
     res.json({ success: true, message: 'User KPI archived successfully' });
   } catch (error) {

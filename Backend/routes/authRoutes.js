@@ -36,12 +36,14 @@ router.get('/me', protect, getCurrentUser);
 
 // Logout route to clear cookie
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', {
+  res.cookie('token', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    expires: new Date(0), // Expire immediately
+    path: '/', // Ensure it matches the path the cookie was set on
   });
-  res.json({ success: true });
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 module.exports = router;

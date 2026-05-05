@@ -1,13 +1,28 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../UI/Card';
 import { Progress } from '../UI/progress';
 import { Badge } from '../UI/Badge';
 import CustomSelect from '../UI/CustomSelect';
 import Button from '../UI/Button';
-import { Download, FileText, Filter } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { exportElementToPdf } from '../../lib/exportPdf';
+import { useNotification } from '../../Context/NotificationContext';
 
-const COLORS_CHART = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
+const COLORS_CHART = [
+  'var(--color-primary)',
+  'var(--color-success)',
+  'var(--color-warning)',
+  'var(--color-destructive)',
+  'var(--sidebar-primary)',
+  '#2563eb', // blue
+  '#16a34a', // green
+  '#d97706', // amber
+  '#9333ea', // purple
+  '#e11d48', // rose
+  '#0891b2', // cyan
+  '#4f46e5', // indigo
+];
 
 const ringMap = {
   primary: 'ring-primary text-primary',
@@ -65,44 +80,93 @@ const MiniDonut = ({ achieved, inProgress, delayed }) => {
 };
 
 const heatColor = (v) => {
-  if (v >= 80) return 'bg-emerald-100 text-emerald-800';
-  if (v >= 60) return 'bg-amber-100 text-amber-800';
-  return 'bg-red-100 text-red-800';
+  if (v >= 25) return 'bg-emerald-100 text-emerald-800'; // Very Good (Green)
+  if (v >= 20) return 'bg-yellow-100 text-yellow-800'; // Good (Yellow)
+  if (v >= 15) return 'bg-amber-100 text-amber-800'; // Enough (Amber)
+  if (v >= 10) return 'bg-orange-100 text-orange-800'; // Needs Improvement (Orange)
+  return 'bg-red-100 text-red-800'; // Critical (Red)
 };
 
-const PerformanceDashboard = ({ config }) => {
+const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiChange }) => {
   const [year, setYear] = useState(config.yearOptions?.[0] || '2023-2024');
   const [quarter, setQuarter] = useState('All Quarters');
   const comparisonTitlePrefix = config.comparisonTitlePrefix || config.subUnitLabel || 'Sub Unit';
+  const dashboardRef = useRef(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const { notify } = useNotification();
+
+  const yearlyTrendData = config.kpiTrends && config.kpiTrends.length ? config.kpiTrends : config.yearlyTrend || [];
+
+  const inferredSeriesKeys =
+    yearlyTrendData && yearlyTrendData.length ? Object.keys(yearlyTrendData[0]).filter((k) => !['year', 'score', 'anySubmitted'].includes(k)) : [];
+
+  const seriesKeys = config.kpiNames && config.kpiNames.length ? config.kpiNames : inferredSeriesKeys;
+
+  const getStatusColor = (value, isSubmitted) => {
+    if (!isSubmitted) return '#e2e8f0'; // Gray for unsubmitted
+    if (value >= 25) return '#10b981'; // Emerald-500 (Very Good)
+    if (value >= 20) return '#eab308'; // Yellow-500 (Good)
+    if (value >= 15) return '#f59e0b'; // Amber-500 (Enough)
+    if (value >= 10) return '#f97316'; // Orange-500 (Needs Improvement)
+    return '#ef4444'; // Red-500 (Critical)
+  };
 
   return (
-    <div className="space-y-6 overflow-y-scroll p-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div ref={dashboardRef} className="space-y-6 overflow-y-scroll p-6">
+      <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{config.title}</h1>
           <p className="text-sm text-muted-foreground">{config.subtitle}</p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-          <div className="min-w-[150px] w-full sm:w-auto text-xs">
-            <CustomSelect options={config.yearOptions || ['2023-2024', '2022-2023']} value={year} onChange={setYear} placeholder="2023-2024" />
+        <div className="w-full">
+          <div className="flex items-center justify-end w-full">
+            <div className="flex items-center justify-end gap-2 w-full flex-nowrap overflow-x-auto pb-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 text-xs shrink-0"
+                disabled={isExportingPdf}
+                onClick={async () => {
+                  if (!dashboardRef.current || isExportingPdf) return;
+                  setIsExportingPdf(true);
+                  try {
+                    await exportElementToPdf({
+                      element: dashboardRef.current,
+                      filename: config?.title || 'dashboard',
+                    });
+                    notify('Print dialog opened. Choose "Save as PDF" to download.', 'success');
+                  } catch (e) {
+                    console.error('PDF export failed', e);
+                    notify(e?.message || 'PDF export failed. Please allow popups/print dialog and try again.', 'error');
+                  } finally {
+                    setIsExportingPdf(false);
+                  }
+                }}
+              >
+                <FileText className="w-3.5 h-3.5" /> {isExportingPdf ? 'Generating...' : 'PDF'}
+              </Button>
+
+              {Array.isArray(config.derivedKpiOptions) && typeof onDerivedKpiChange === 'function' && (
+                <div className="w-56 text-xs shrink-0">
+                  <CustomSelect
+                    options={[{ label: 'All Derived KPIs', value: '__ALL__' }, ...config.derivedKpiOptions]}
+                    value={derivedKpiId}
+                    onChange={onDerivedKpiChange}
+                    placeholder="All Derived KPIs"
+                  />
+                </div>
+              )}
+
+              <div className="w-40 text-xs shrink-0">
+                <CustomSelect options={config.yearOptions || ['2023-2024', '2022-2023']} value={year} onChange={setYear} placeholder="2023-2024" />
+              </div>
+
+              <div className="w-40 text-xs shrink-0">
+                <CustomSelect options={['All Quarters', 'Q1', 'Q2', 'Q3', 'Q4']} value={quarter} onChange={setQuarter} placeholder="All Quarters" />
+              </div>
+            </div>
           </div>
-
-          <div className="min-w-[150px] w-full sm:w-auto text-xs">
-            <CustomSelect options={['All Quarters', 'Q1', 'Q2', 'Q3', 'Q4']} value={quarter} onChange={setQuarter} placeholder="All Quarters" />
-          </div>
-
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs flex-shrink-0">
-            <Filter className="w-3.5 h-3.5" /> Filter
-          </Button>
-
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs flex-shrink-0">
-            <FileText className="w-3.5 h-3.5" /> PDF
-          </Button>
-
-          <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs flex-shrink-0">
-            <Download className="w-3.5 h-3.5" /> Excel
-          </Button>
         </div>
       </div>
 
@@ -215,16 +279,43 @@ const PerformanceDashboard = ({ config }) => {
           </CardHeader>
           <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={config.quarterlyData} barGap={2}>
+              <BarChart data={config.isDistributable === false ? config.quarterlyComparison || [] : config.quarterlyData || []} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
+                <YAxis domain={[0, 30]} tickFormatter={(v) => `${v}`} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)} Points`, undefined]} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="q1" name="Quarter 1" fill={COLORS_CHART[0]} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="q2" name="Quarter 2" fill={COLORS_CHART[1]} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="q3" name="Quarter 3" fill={COLORS_CHART[2]} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="q4" name="Quarter 4" fill={COLORS_CHART[3]} radius={[3, 3, 0, 0]} />
+
+                {config.isDistributable === false ? (
+                  <Bar dataKey="score" name="Average Performance" radius={[3, 3, 0, 0]}>
+                    {(config.quarterlyComparison || []).map((entry, index) => (
+                      <Cell key={`cell-score-${index}`} fill={getStatusColor(entry.score, entry.submitted)} />
+                    ))}
+                  </Bar>
+                ) : (
+                  <>
+                    <Bar dataKey="q1" name="Quarter 1" radius={[3, 3, 0, 0]}>
+                      {config.quarterlyData.map((entry, index) => (
+                        <Cell key={`cell-q1-${index}`} fill={getStatusColor(entry.q1, entry.q1Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q2" name="Quarter 2" radius={[3, 3, 0, 0]}>
+                      {config.quarterlyData.map((entry, index) => (
+                        <Cell key={`cell-q2-${index}`} fill={getStatusColor(entry.q2, entry.q2Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q3" name="Quarter 3" radius={[3, 3, 0, 0]}>
+                      {config.quarterlyData.map((entry, index) => (
+                        <Cell key={`cell-q3-${index}`} fill={getStatusColor(entry.q3, entry.q3Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q4" name="Quarter 4" radius={[3, 3, 0, 0]}>
+                      {config.quarterlyData.map((entry, index) => (
+                        <Cell key={`cell-q4-${index}`} fill={getStatusColor(entry.q4, entry.q4Submitted)} />
+                      ))}
+                    </Bar>
+                  </>
+                )}
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -236,12 +327,41 @@ const PerformanceDashboard = ({ config }) => {
           </CardHeader>
           <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={config.yearlyTrend}>
+              <LineChart data={yearlyTrendData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4, fill: 'hsl(var(--primary))' }} />
+                <YAxis
+                  domain={[0, (dataMax) => Math.max(100, Math.ceil((Number(dataMax) || 0) / 10) * 10)]}
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)}%`, undefined]} />
+                {seriesKeys.length > 0 && <Legend iconSize={10} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />}
+                {seriesKeys.length > 0 ? (
+                  seriesKeys.map((name, i) => (
+                    <Line
+                      key={name}
+                      type="linear"
+                      dataKey={name}
+                      stroke={COLORS_CHART[i % COLORS_CHART.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 0 }}
+                      connectNulls
+                    />
+                  ))
+                ) : (
+                  // Fallback to average series when KPI-specific series are not present
+                  <Line
+                    type="linear"
+                    dataKey="score"
+                    stroke="var(--color-primary)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    connectNulls
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -301,7 +421,7 @@ const PerformanceDashboard = ({ config }) => {
                     <td className="py-2 font-medium text-foreground">{h.pillar}</td>
                     {[h.q1, h.q2, h.q3, h.q4].map((v, i) => (
                       <td key={i} className="text-center py-2">
-                        <span className={`inline-block px-3 py-1 rounded-md font-semibold ${heatColor(v)}`}>{v}%</span>
+                        <span className={`inline-block px-3 py-1 rounded-md font-semibold ${heatColor(v)}`}>{v}</span>
                       </td>
                     ))}
                   </tr>
@@ -311,15 +431,23 @@ const PerformanceDashboard = ({ config }) => {
             <div className="flex gap-4 mt-3 text-[10px] text-muted-foreground justify-center">
               <span className="flex items-center gap-1">
                 <span className="w-3 h-2 rounded bg-emerald-100" />
-                Excellent (80-100)
+                Very Good (25+)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-2 rounded bg-yellow-100" />
+                Good (20-25)
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-2 rounded bg-amber-100" />
-                At Risk (60-79)
+                Enough (15-20)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-2 rounded bg-orange-100" />
+                Needs Improvement (10-15)
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-2 rounded bg-red-100" />
-                Critical (&lt;60)
+                Critical (&lt;10)
               </span>
             </div>
           </CardContent>
