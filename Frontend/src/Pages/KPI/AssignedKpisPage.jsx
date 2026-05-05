@@ -322,9 +322,8 @@ function AssignedKpisPage() {
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-235 table-fixed border-collapse" style={{ tableLayout: 'fixed' }}>
                       <colgroup>
-                        <col style={{ width: '26%' }} />
+                        <col style={{ width: '35%' }} />
                         <col style={{ width: '8%' }} />
-                        <col style={{ width: '9%' }} />
                         <col style={{ width: '9%' }} />
                         <col style={{ width: '9%' }} />
                         <col style={{ width: '9%' }} />
@@ -336,13 +335,12 @@ function AssignedKpisPage() {
                         <tr className="border-y border-border text-left text-sm text-foreground">
                           <th className="px-4 py-3 font-semibold">KPI</th>
                           <th className="px-4 py-3 text-center font-semibold">Unit</th>
-                          <th className="px-4 py-3 text-center font-semibold">Baseline</th>
                           <th className="px-4 py-3 text-center font-semibold">Target</th>
                           <th className="border-l border-border bg-primary/5 px-4 py-3 text-center font-semibold">Q1</th>
                           <th className="border-l border-border bg-primary/5 px-4 py-3 text-center font-semibold">Q2</th>
                           <th className="border-l border-border bg-primary/5 px-4 py-3 text-center font-semibold">Q3</th>
                           <th className="border-l border-border bg-primary/5 px-4 py-3 text-center font-semibold">Q4</th>
-                          <th className="border-l border-border px-4 py-3 text-right font-semibold">Action Button</th>
+                          <th className="border-l border-border px-4 py-3 text-right font-semibold">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -373,7 +371,6 @@ function AssignedKpisPage() {
                               </div>
                             </td>
                             <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.unit}</td>
-                            <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.baseline}</td>
                             <td className="px-4 py-4 align-top text-center whitespace-nowrap">{kpi.target}</td>
                             <td className="border-l border-border bg-primary/5 px-4 py-4 align-top text-center whitespace-nowrap">{kpi.q1}</td>
                             <td className="border-l border-border bg-primary/5 px-4 py-4 align-top text-center whitespace-nowrap">{kpi.q2}</td>

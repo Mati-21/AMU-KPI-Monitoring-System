@@ -187,7 +187,7 @@ const DrivedKpiAllocationPage = () => {
           const perUserTarget =
             targetIndividualDrafts[String(selectedDrivenKpi.id)]
               ? targetNumber
-              : isDistributable && formState.distributionMethod === 'equal' && recipientUserIds.length > 0
+              : recipientUserIds.length > 0
                 ? Number((targetNumber / recipientUserIds.length).toFixed(2))
                 : targetNumber;
 
@@ -198,7 +198,7 @@ const DrivedKpiAllocationPage = () => {
             return api.post('/user-kpis', {
               KPIId: selectedDrivenKpi.mainKpiId,
               UserId: userId,
-              Baseline: Number.isFinite(baselineNumber) ? baselineNumber : null,
+              Baseline: (isDistributable && formState.distributionMethod === 'equal') ? 0 : (Number.isFinite(baselineNumber) ? baselineNumber : null),
               AssignedTarget: Number.isFinite(finalTarget) ? finalTarget : null,
               IsTargetIndividual: !!targetIndividualDrafts[String(selectedDrivenKpi.id)],
               IncludeCurrentOffice: kpiIncludeCurrentRole && userRoles.some(ur => String(ur.UserId) === String(userId) && String(ur.RoleId) === String(currentRoleId)),
@@ -1239,11 +1239,24 @@ const DrivedKpiAllocationPage = () => {
                             </div>
                           ) : null}
 
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Parent target: {formatValue(item.originalTarget)} | Receivers: {getRecipientUserIdsForKpi(item.id).length} | Mode:{' '}
-                            {targetIndividualDrafts[String(item.id)] ? 'Individual Target' : 'Shared (divided target)'}
-                            {customTargetDrafts[String(item.id)] ? ' | Custom Allocation' : ''}
-                          </p>
+                          <div className="mt-3 rounded bg-muted/30 p-2 border border-border/50">
+                            <p className="text-[11px] font-medium text-foreground flex flex-wrap gap-x-4 gap-y-1">
+                              <span><span className="text-muted-foreground uppercase tracking-wider text-[10px]">Dispatching:</span> {formatValue(currentTarget)}</span>
+                              <span><span className="text-muted-foreground uppercase tracking-wider text-[10px]">Receivers:</span> {getRecipientUserIdsForKpi(item.id).length}</span>
+                            </p>
+                            <p className="mt-1 text-[11px] font-medium text-foreground flex flex-wrap gap-x-4 gap-y-1">
+                              <span><span className="text-muted-foreground uppercase tracking-wider text-[10px]">Mode:</span> {targetIndividualDrafts[String(item.id)] ? 'Individual' : 'Shared (divided)'}</span>
+                              <span className="text-primary font-bold">
+                                <span className="text-muted-foreground uppercase tracking-wider text-[10px] font-medium">Each Child Receives:</span> {' '}
+                                {(() => {
+                                  const num = getRecipientUserIdsForKpi(item.id).length;
+                                  const t = Number(currentTarget) || 0;
+                                  if (targetIndividualDrafts[String(item.id)] || num <= 1) return formatValue(t);
+                                  return formatValue(Number((t / num).toFixed(2)));
+                                })()}
+                              </span>
+                            </p>
+                          </div>
                         </div>
                       );
                     })}
