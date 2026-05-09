@@ -289,13 +289,15 @@ const RoleManagement = () => {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-foreground">All Roles {filtered.length}</p>
 
-                <div className="flex gap-3 items-stretch">
-                  <SearchInput value={search} onChange={setSearch} />
+                <div className="flex items-center gap-3">
+                  <div className="w-80">
+                    <SearchInput value={search} onChange={setSearch} placeholder="Search roles..." />
+                  </div>
 
-                  <Button size="lg" className="flex items-center gap-2">
+                  <button className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-muted shadow-soft">
                     <SlidersHorizontal className="w-4 h-4" />
-                    Filters
-                  </Button>
+                    <span>Filters</span>
+                  </button>
                 </div>
               </div>
 

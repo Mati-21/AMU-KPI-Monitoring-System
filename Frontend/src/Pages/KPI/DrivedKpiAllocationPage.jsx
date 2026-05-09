@@ -16,7 +16,7 @@ import { api } from '../../api/axios';
 import permissionUtils, { hasPermission } from '../../lib/permissionUtils';
 import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
 
-const tableHeaders = ['Drived Kpi', 'Unit', 'Baseline', 'Target', 'Remark'];
+const tableHeaders = ['Parent KPI', 'Drived Kpi', 'Unit', 'Baseline', 'Target', 'Remark'];
 
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') return 'null';
@@ -795,7 +795,7 @@ const DrivedKpiAllocationPage = () => {
   }, [paginatedDrivedKpis]);
 
   const showManagerTabs = hasExtraMeasures || canCreate || canAssign;
-  const visibleTableHeaders = hasExtraMeasures ? tableHeaders : tableHeaders.filter((header) => header !== 'Parent Kpi');
+  const visibleTableHeaders = tableHeaders;
 
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6">
@@ -852,6 +852,14 @@ const DrivedKpiAllocationPage = () => {
                     <TableBody>
                       {paginatedDrivedKpis.map((row, index) => (
                         <TableRow key={row.id}>
+                          {rowSpans[index] > 0 && (
+                            <TableCell 
+                              className="font-medium text-primary/80 align-top border-r" 
+                              rowSpan={rowSpans[index]}
+                            >
+                              {row.parent || 'null'}
+                            </TableCell>
+                          )}
                           <TableCell>
                             <div className="flex flex-col gap-1">
                               {row.name || (Array.isArray(row.drived)

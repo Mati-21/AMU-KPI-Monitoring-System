@@ -5,7 +5,7 @@ import { api } from '../../api/axios';
 import { useNotification } from '../../Context/NotificationContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
-import PerformanceHistoryModal from '../../Components/KPI/PerformanceHistoryModal';
+import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
 import permissionUtils from '../../lib/permissionUtils';
 
 const formatValue = (value) => {
@@ -26,7 +26,7 @@ function AssignedKpisPage() {
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [savingSubmission, setSavingSubmission] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [activePerformanceTab, setActivePerformanceTab] = useState('original');
@@ -378,18 +378,18 @@ function AssignedKpisPage() {
                             <td className="border-l border-border bg-primary/5 px-4 py-4 align-top text-center whitespace-nowrap">{kpi.q4}</td>
                             <td className="border-l border-border px-4 py-4">
                               <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveKpi(kpi);
-                                    setHistoryModalOpen(true);
-                                  }}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-purple-300 text-purple-600 hover:bg-purple-50"
-                                  title="View Performance History"
-                                  aria-label={`View ${kpi.name} history`}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveKpi(kpi);
+                                      setDetailModalOpen(true);
+                                    }}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50"
+                                    title="View Performance Detail"
+                                    aria-label={`View ${kpi.name} performance detail`}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </button>
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -537,11 +537,11 @@ function AssignedKpisPage() {
                                          type="button"
                                          onClick={() => {
                                            setActiveKpi(kpi);
-                                           setHistoryModalOpen(true);
+                                           setDetailModalOpen(true);
                                          }}
-                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-purple-300 text-purple-600 hover:bg-purple-50"
-                                         title="View Performance History"
-                                         aria-label={`View ${kpi.name} history`}
+                                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50"
+                                         title="View Performance Detail"
+                                         aria-label={`View ${kpi.name} performance detail`}
                                        >
                                          <Eye className="h-4 w-4" />
                                        </button>
@@ -660,10 +660,10 @@ function AssignedKpisPage() {
           }
         }}
       />
-      <PerformanceHistoryModal
-        open={historyModalOpen}
+      <PerformanceDetailModal
+        open={detailModalOpen}
         onOpenChange={(open) => {
-          setHistoryModalOpen(open);
+          setDetailModalOpen(open);
           if (!open) {
             setActiveKpi(null);
           }

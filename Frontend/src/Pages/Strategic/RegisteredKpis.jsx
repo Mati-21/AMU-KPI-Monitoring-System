@@ -145,6 +145,7 @@ const RegisteredKpis = () => {
             baseline: formatValue(kpi.Baseline),
             target: formatValue(kpi.Target),
             remark: kpi.Remark || kpi.Description || '—',
+            isEvidenceRequired: kpi.IsEvedenceRequired || false,
           };
         })
         .sort((left, right) => compareCodes(left.no, right.no)),

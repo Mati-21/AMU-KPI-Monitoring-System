@@ -146,16 +146,18 @@ function UserList({ setActiveTab }) {
         <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <p className="text-xs text-muted-foreground">Total registered users: {users.length}</p>
 
-          <div className="flex flex-wrap items-stretch gap-3 md:justify-end">
-            <SearchInput value={internalSearch} onChange={setInternalSearch} placeholder="Search users..." className="min-w-64" />
+          <div className="flex items-center gap-3">
+            <div className="w-80">
+              <SearchInput value={internalSearch} onChange={setInternalSearch} placeholder="Search users..." />
+            </div>
 
             {canAddUser ? (
               <button
                 onClick={() => setActiveTab('add')}
-                className="flex min-w-48 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:bg-primary/90 shadow-soft"
               >
                 <UserPlus className="h-4 w-4" />
-                {canManageUsers ? 'Add User' : 'Create Child Office Account'}
+                <span>{canManageUsers ? 'Add User' : 'Create Child Office Account'}</span>
               </button>
             ) : null}
           </div>

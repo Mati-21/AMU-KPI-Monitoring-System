@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Input } from '../../../Components/UI/Input';
 import CustomSelect from '../../../Components/UI/CustomSelect';
 import Button from '../../../Components/UI/Button';
+import Checkbox from '../../../Components/UI/Checkbox';
 import { api } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
 
@@ -33,6 +34,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
     target: '',
     description: '',
     remark: '',
+    isEvidenceRequired: false,
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -169,7 +171,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         Target: parsedTarget,
         Description: kpiForm.description?.trim() || null,
         Remark: kpiForm.remark?.trim() || null,
-        IsEvedenceRequired: false,
+        IsEvedenceRequired: kpiForm.isEvidenceRequired,
       });
 
       notify(`KPI "${kpiForm.kpiName}" saved successfully.`, 'success');
@@ -184,6 +186,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         target: '',
         description: '',
         remark: '',
+        isEvidenceRequired: false,
       });
       setActiveTab('list');
     } catch (saveErr) {
@@ -245,6 +248,18 @@ function RegisterKpi({ setActiveTab, onSaved }) {
             className="h-11"
           />
           <Input placeholder="Target" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
+          
+          <div className="flex items-center gap-3 h-11 px-1">
+            <Checkbox
+              id="isEvidenceRequired"
+              checked={kpiForm.isEvidenceRequired}
+              onCheckedChange={(checked) => setKpiForm({ ...kpiForm, isEvidenceRequired: !!checked })}
+            />
+            <label htmlFor="isEvidenceRequired" className="text-sm font-medium text-foreground cursor-pointer select-none">
+              Needs Evidence Verification
+            </label>
+          </div>
+
           <Input
             placeholder="Enter Description"
             value={kpiForm.description}
@@ -276,6 +291,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
                 target: '',
                 description: '',
                 remark: '',
+                isEvidenceRequired: false,
               });
               setActiveTab('list');
             }}

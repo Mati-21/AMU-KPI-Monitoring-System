@@ -49,6 +49,12 @@ body,
 
   --color-radius: 0.75rem; /* border radius */
 
+  /* Custom Search Bar Colors */
+  --search-border: #d1d5db; /* Light gray border */
+  --search-border-active: #60a5fa; /* Light blue focus */
+  --search-text: #0d9488; /* Teal/Emerald */
+  --search-bg: #f3f4f6; /* Light gray bg */
+
   /* Sidebar Colors */
   --sidebar-background: #ffffff; /* sidebar background (white) */
   --sidebar-foreground: #24262d; /* sidebar text (dark charcoal) */

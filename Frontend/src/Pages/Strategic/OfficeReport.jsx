@@ -5,7 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import Button from '../../Components/UI/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import { Badge } from '../../Components/UI/Badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/KPITable/Kpitable';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/UI/Table';
 import { ScrollArea } from '../../Components/UI/scroll-area';
 import { api } from '../../api/axios';
 import permissionUtils from '../../lib/permissionUtils';
@@ -35,10 +35,10 @@ const truncateColumnName = (name) => {
 };
 
 const getRowClassName = (rowType) => {
-  if (rowType === 'stable') return 'bg-primary/20 font-bold';
-  if (rowType === 'theme') return 'bg-primary/12 font-semibold';
-  if (rowType === 'subTheme') return 'bg-primary/6 font-medium';
-  if (rowType === 'subTotal') return 'report-subtotal-row bg-muted font-semibold border-t border-border';
+  if (rowType === 'stable') return 'bg-primary/10 font-bold';
+  if (rowType === 'theme') return 'bg-primary/5 font-semibold';
+  if (rowType === 'subTheme') return 'bg-primary/2 font-medium';
+  if (rowType === 'subTotal') return 'report-subtotal-row bg-muted/50 font-semibold';
   return 'hover:bg-muted/30';
 };
 
@@ -63,6 +63,7 @@ const OfficeReport = () => {
   const [submittingReport, setSubmittingReport] = useState(false);
   const [selectedScopeRoleId, setSelectedScopeRoleId] = useState('');
   const [expandedColumns, setExpandedColumns] = useState({});
+  const [selectedReportType, setSelectedReportType] = useState('all');
 
   const toggleColumnExpand = (columnId) => {
     setExpandedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
@@ -81,7 +82,7 @@ const OfficeReport = () => {
       setError('');
 
       try {
-        const params = { t: Date.now() };
+        const params = { t: Date.now(), reportType: selectedReportType };
         if (selectedScopeRoleId) {
           params.roleId = selectedScopeRoleId;
         }
@@ -110,7 +111,7 @@ const OfficeReport = () => {
     return () => {
       mounted = false;
     };
-  }, [canViewReport, refreshToken, selectedScopeRoleId]);
+  }, [canViewReport, refreshToken, selectedScopeRoleId, selectedReportType]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -140,14 +141,38 @@ const OfficeReport = () => {
 
   const columns = reportData?.columns || [];
   const allRows = reportData?.rows || [];
-  const rows = allRows.filter((row) => String(row?.rowType || 'kpi') === 'kpi');
+  const rows = allRows.filter((row) => {
+    const rowType = String(row?.rowType || 'kpi');
+    return rowType === 'kpi' || rowType === 'leaf';
+  });
   const hasKpiRows = rows.length > 0;
   const currentOfficeName = reportData?.scopeRole?.name || authUser?.roleName || authUser?.role || 'Current Office';
   const scopeRoleOptions = reportData?.availableScopeRoles || [];
   const showScopeSelector = scopeRoleOptions.length > 0;
 
+  const hasOriginal = reportData?.hasOriginal ?? false;
+  const hasDerived = reportData?.hasDerived ?? false;
+  const showReportTypeSelector = hasOriginal && hasDerived;
+  const isDerivedView = selectedReportType === 'derived';
+
+  useEffect(() => {
+    if (!reportData) {
+      return;
+    }
+
+    if (hasOriginal && !hasDerived && selectedReportType !== 'original') {
+      setSelectedReportType('original');
+      return;
+    }
+
+    if (!hasOriginal && hasDerived && selectedReportType !== 'derived') {
+      setSelectedReportType('derived');
+      return;
+    }
+  }, [hasDerived, hasOriginal, reportData, selectedReportType]);
+
   return (
-    <div className="flex h-full flex-col space-y-4 overflow-hidden p-6">
+    <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
       <div className="shrink-0 space-y-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Report</h1>
@@ -169,7 +194,7 @@ const OfficeReport = () => {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
             {showScopeSelector ? (
               <>
                 <span className="text-xs font-medium text-muted-foreground">Report Scope</span>
@@ -183,6 +208,20 @@ const OfficeReport = () => {
                       {scopeRole.name}
                     </option>
                   ))}
+                </select>
+              </>
+            ) : null}
+
+            {showReportTypeSelector ? (
+              <>
+                <span className="text-xs font-medium text-muted-foreground">Report Type</span>
+                <select
+                  value={selectedReportType}
+                  onChange={(event) => setSelectedReportType(event.target.value)}
+                  className="min-w-48 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                >
+                  <option value="original">Original KPI</option>
+                  <option value="derived">Derived KPI</option>
                 </select>
               </>
             ) : null}
@@ -222,24 +261,24 @@ const OfficeReport = () => {
 
       {error ? <p className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Card className="border-border bg-white shadow-sm">
         <CardHeader className="shrink-0 space-y-2">
-          <CardTitle className="text-lg">Report for {currentOfficeName}</CardTitle>
+          <CardTitle className="text-lg">
+            {isDerivedView ? 'Derived KPI Report' : 'Report'} for {currentOfficeName}
+          </CardTitle>
         </CardHeader>
 
-        <CardContent className="min-h-0 flex-1 overflow-auto p-0">
-          <div className="min-w-[1200px]">
+        <CardContent className="p-0">
+          <div className="overflow-hidden rounded-b-lg border-t border-border">
             <Table>
               <TableHeader>
-                <TableRow className="bg-primary/15">
-                  <TableHead className="w-15 text-center font-bold text-foreground border-r border-border">No.</TableHead>
-                  <TableHead style={{ textAlign: 'left', paddingLeft: '8px' }} className="min-w-65 font-bold text-foreground border-r border-border">
-                    KPI
-                  </TableHead>
-                  <TableHead className="w-22.5 text-center font-bold text-foreground border-r border-border">Unit</TableHead>
-                  <TableHead className="w-22.5 text-center font-bold text-foreground border-r border-border">Weight</TableHead>
-                  <TableHead className="w-25 text-center font-bold text-foreground border-r border-border">Baseline</TableHead>
-                  <TableHead className="w-22.5 text-center font-bold text-foreground border-r border-border">Target</TableHead>
+                <TableRow>
+                  {!isDerivedView && <TableHead className="w-16 text-center font-bold">No.</TableHead>}
+                  <TableHead className="min-w-50 font-bold">KPI</TableHead>
+                  <TableHead className="w-24 text-center font-bold">Unit</TableHead>
+                  {!isDerivedView && <TableHead className="w-24 text-center font-bold">Weight</TableHead>}
+                  <TableHead className="w-24 text-center font-bold">Baseline</TableHead>
+                  <TableHead className="w-24 text-center font-bold">Target</TableHead>
                   {columns.map((column) => {
                     const fullName = String(column.name || '').trim();
                     const isLong = fullName.length > MAX_COLUMN_NAME_LENGTH;
@@ -247,25 +286,23 @@ const OfficeReport = () => {
                     const displayName = isExpanded ? fullName : truncateColumnName(fullName);
 
                     return (
-                      <TableHead
-                        key={column.id}
-                        className="min-w-35 text-center font-bold text-foreground bg-primary/10 border-r border-border"
-                        title={fullName}
-                      >
-                        <span>{displayName}</span>
-                        {isLong ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleColumnExpand(column.id)}
-                            className="ml-1 inline-flex text-xs font-normal text-primary hover:underline"
-                          >
-                            {isExpanded ? 'Less' : 'More'}
-                          </button>
-                        ) : null}
+                      <TableHead key={column.id} className="min-w-30 text-center font-bold" title={fullName}>
+                        <div className="flex items-center justify-center gap-1">
+                          <span>{displayName}</span>
+                          {isLong ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleColumnExpand(column.id)}
+                              className="text-[10px] font-normal text-primary hover:underline"
+                            >
+                              [{isExpanded ? 'Less' : 'More'}]
+                            </button>
+                          ) : null}
+                        </div>
                       </TableHead>
                     );
                   })}
-                  <TableHead className="min-w-45 text-center font-bold text-foreground">Remark</TableHead>
+                  <TableHead className="min-w-37.5 font-bold">Remark</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -277,43 +314,45 @@ const OfficeReport = () => {
                     </TableCell>
                   </TableRow>
                 ) : rows.length ? (
-                  rows.map((row) => {
+                  allRows.map((row) => {
                     const rowType = String(row?.rowType || 'kpi');
                     const isSubTotal = rowType === 'subTotal';
-                    const compactPad = isSubTotal ? { paddingTop: '2px', paddingBottom: '2px' } : undefined;
+                    const compactPad = isSubTotal ? { paddingTop: '4px', paddingBottom: '4px' } : undefined;
 
                     return (
                       <TableRow key={row.id} className={getRowClassName(rowType)}>
-                        <TableCell style={compactPad} className="border-r border-border text-center text-sm font-medium">
-                          {row.no || ''}
-                        </TableCell>
-                        <TableCell
-                          style={{ textAlign: 'left', paddingLeft: '8px', ...compactPad }}
-                          className={`border-r border-border text-sm ${getRowLabelClassName(rowType)}`}
-                        >
+                        {!isDerivedView && (
+                          <TableCell style={compactPad} className="text-center text-sm font-medium">
+                            {row.no || ''}
+                          </TableCell>
+                        )}
+                        <TableCell style={compactPad} className={`text-sm ${isDerivedView ? '' : getRowLabelClassName(rowType)}`}>
                           {row.kpi}
                         </TableCell>
-                        <TableCell style={compactPad} className="border-r border-border text-center text-sm">
+                        <TableCell style={compactPad} className="text-center text-sm">
                           {row.unit}
                         </TableCell>
-                        <TableCell style={compactPad} className="border-r border-border text-center text-sm font-medium">
-                          {row.weight}
-                        </TableCell>
-                        <TableCell style={compactPad} className="border-r border-border text-center text-sm">
+                        {!isDerivedView && (
+                          <TableCell style={compactPad} className="text-center text-sm font-medium">
+                            {row.weight}
+                          </TableCell>
+                        )}
+                        <TableCell style={compactPad} className="text-center text-sm">
                           {row.baseline}
                         </TableCell>
-                        <TableCell style={compactPad} className="border-r border-border text-center text-sm">
+                        <TableCell style={compactPad} className="text-center text-sm">
                           {row.target}
                         </TableCell>
                         {columns.map((column) => {
                           const cellValue = row.values?.[column.id];
-                          const isMissingValue = cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A';
+                          const isMissingValue =
+                            cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A';
 
                           return (
                             <TableCell
                               key={column.id}
                               style={compactPad}
-                              className={`border-r border-border text-center text-sm bg-primary/5 ${isMissingValue ? 'text-slate-500 font-medium' : 'text-foreground'}`}
+                              className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
                             >
                               {formatCellValue(cellValue)}
                             </TableCell>
@@ -328,7 +367,7 @@ const OfficeReport = () => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={7 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
-                      No report data available for this office.
+                      {isDerivedView ? 'No derived KPI data available for this office.' : 'No report data available for this office.'}
                     </TableCell>
                   </TableRow>
                 )}
