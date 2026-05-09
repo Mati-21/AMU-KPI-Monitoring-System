@@ -54,7 +54,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
 
         // Essential data for all users
         const [parentReceivedRes, kpiRes, kpiTypeRes] = await Promise.all([
-          api.get('/user-kpis', { params: { scope: 'mine', t: Date.now() } }),
+          api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', t: Date.now() } }),
           api.get('/kpis', fetchOptions),
           api.get('/kpi-types', fetchOptions),
         ]);

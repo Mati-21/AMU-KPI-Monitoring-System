@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, Eye, Target } from 'lucide-react';
 
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../../Components/UI/Table';
 import { Input } from '../../../Components/UI/Input';
 import SearchInput from '../../../Components/UI/SearchInput';
 import Button from '../../../Components/UI/Button';
+import Checkbox from '../../../Components/UI/Checkbox';
+import { Badge } from '../../../Components/UI/Badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../Components/UI/dialog';
 import { api } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
@@ -27,6 +29,7 @@ const emptyEditKpi = {
   target: '',
   remark: '',
   description: '',
+  isEvidenceRequired: false,
 };
 
 const emptyEditTheme = {
@@ -68,6 +71,7 @@ function KpiList({ refreshKey }) {
   const [deletingTheme, setDeletingTheme] = useState(null);
   const [deletingSubTheme, setDeletingSubTheme] = useState(null);
   const [deletingUnit, setDeletingUnit] = useState(null);
+  const [viewingKpi, setViewingKpi] = useState(null);
 
   const [editKpiForm, setEditKpiForm] = useState(emptyEditKpi);
   const [editThemeForm, setEditThemeForm] = useState(emptyEditTheme);
@@ -221,8 +225,8 @@ function KpiList({ refreshKey }) {
           weight: formatValue(kpi.Weight),
           baseline: formatValue(kpi.Baseline),
           target: formatValue(kpi.Target),
-          remark: kpi.Remark || kpi.Description || '—',
           description: kpi.Description || '',
+          isEvidenceRequired: kpi.IsEvedenceRequired || false,
         };
       })
       .sort((left, right) => compareCodes(left.no, right.no));
@@ -293,6 +297,7 @@ function KpiList({ refreshKey }) {
       target: row.target === '—' ? '' : row.target,
       remark: row.remark === '—' ? '' : row.remark,
       description: row.description,
+      isEvidenceRequired: row.isEvidenceRequired,
     });
     setEditingKpi(true);
   };
@@ -348,6 +353,7 @@ function KpiList({ refreshKey }) {
         Target: Number(editKpiForm.target || 0),
         Description: editKpiForm.description?.trim() || null,
         Remark: editKpiForm.remark?.trim() || null,
+        IsEvedenceRequired: editKpiForm.isEvidenceRequired,
       });
 
       notify('KPI updated successfully.', 'success');
@@ -516,11 +522,14 @@ function KpiList({ refreshKey }) {
             All KPIs <span className="text-muted-foreground">{filteredKpis.length}</span>
           </h2>
 
-          <div className="flex items-stretch gap-2">
-            <SearchInput onChange={setSearch} value={search} placeholder="Search KPI records..." />
-            <Button variant="outline" className="flex items-center gap-1.5">
+          <div className="flex items-center gap-3">
+            <div className="w-80">
+              <SearchInput onChange={setSearch} value={search} placeholder="Search KPI records..." />
+            </div>
+
+            <button className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-muted shadow-soft">
               <span>Filters</span>
-            </Button>
+            </button>
           </div>
         </div>
 
@@ -552,7 +561,16 @@ function KpiList({ refreshKey }) {
                 paginatedKpis.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-medium">{row.no}</TableCell>
-                    <TableCell>{row.kpiName}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span>{row.kpiName}</span>
+                        {row.isEvidenceRequired && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 w-fit">
+                            Evidence Required
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.theme}</TableCell>
                     <TableCell>{row.subTheme}</TableCell>
                     <TableCell>{row.unit}</TableCell>
@@ -562,6 +580,9 @@ function KpiList({ refreshKey }) {
                     <TableCell>{row.remark}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        <button onClick={() => setViewingKpi(row)} className="rounded p-1 hover:bg-muted" title="View Details">
+                          <Eye className="h-4 w-4" />
+                        </button>
                         <button onClick={() => openKpiEditor(row)} className="rounded p-1 hover:bg-muted" title="Edit KPI">
                           <Edit className="h-4 w-4" />
                         </button>
@@ -806,6 +827,16 @@ function KpiList({ refreshKey }) {
               onChange={(e) => setEditKpiForm((prev) => ({ ...prev, remark: e.target.value }))}
               className="md:col-span-2"
             />
+            <div className="flex items-center gap-3 py-1 px-1">
+              <Checkbox
+                id="editIsEvidenceRequired"
+                checked={editKpiForm.isEvidenceRequired}
+                onCheckedChange={(checked) => setEditKpiForm((prev) => ({ ...prev, isEvidenceRequired: !!checked }))}
+              />
+              <label htmlFor="editIsEvidenceRequired" className="text-sm font-medium text-foreground cursor-pointer select-none">
+                Needs Evidence Verification
+              </label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingKpi(false)} disabled={saving}>
@@ -983,6 +1014,94 @@ function KpiList({ refreshKey }) {
               {saving ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(viewingKpi)} onOpenChange={(open) => !open && setViewingKpi(null)}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border-0 bg-slate-50 shadow-2xl rounded-[2rem] max-h-[85vh] flex flex-col">
+          <div className="bg-white px-6 py-6 border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100/50">
+                <Target className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <DialogTitle className="text-2xl font-bold text-slate-900 leading-tight">
+                  KPI Information
+                </DialogTitle>
+                <DialogDescription className="text-sm text-slate-500 font-medium">
+                  Review the full configuration and strategic metadata for this objective.
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 overflow-y-auto flex-grow">
+            {viewingKpi && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* KPI Name - Full Width */}
+                <div className="md:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">KPI Name</p>
+                  <p className="text-base font-bold text-slate-900 leading-snug">{viewingKpi.kpiName}</p>
+                </div>
+
+                {/* Baseline & Target */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Baseline</p>
+                  <p className="text-lg font-black text-slate-900">{viewingKpi.baseline}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Target</p>
+                  <p className="text-lg font-black text-indigo-600">{viewingKpi.target}</p>
+                </div>
+
+                {/* Theme & Sub-Theme */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Theme</p>
+                  <p className="text-sm font-bold text-slate-700">{viewingKpi.theme}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Sub-Theme</p>
+                  <p className="text-sm font-bold text-slate-700">{viewingKpi.subTheme}</p>
+                </div>
+
+                {/* Unit & Weight */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Unit</p>
+                  <p className="text-sm font-bold text-indigo-600">{viewingKpi.unit}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Weight</p>
+                  <p className="text-sm font-bold text-slate-700">{viewingKpi.weight}%</p>
+                </div>
+
+                {/* Evidence Status & Remark */}
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Evidence Required</p>
+                  <Badge className={viewingKpi.isEvidenceRequired ? "bg-indigo-100 text-indigo-700 border-0" : "bg-slate-100 text-slate-600 border-0"}>
+                    {viewingKpi.isEvidenceRequired ? 'Yes' : 'No'}
+                  </Badge>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Remark</p>
+                  <p className="text-sm font-medium text-slate-500 italic">{viewingKpi.remark || 'No remark provided'}</p>
+                </div>
+
+                {/* Description - Full Width */}
+                {viewingKpi.description && (
+                  <div className="md:col-span-2 bg-slate-100/50 rounded-2xl border border-slate-200/60 p-4">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Detailed Description</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">{viewingKpi.description}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white px-6 py-4 border-t border-slate-100 flex justify-end">
+            <Button onClick={() => setViewingKpi(null)} className="rounded-xl px-8 bg-slate-900 hover:bg-slate-800">
+              Close Detail
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

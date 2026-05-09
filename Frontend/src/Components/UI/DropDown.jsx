@@ -1,17 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Check } from 'lucide-react';
 
 export const DropdownMenu = ({ trigger, children }) => {
   const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" ref={dropdownRef}>
       <div onClick={() => setOpen(!open)}>{trigger}</div>
 
-      {open && <div className="absolute mt-2 w-48 rounded-md  bg-white shadow-md z-50">{children}</div>}
+      {open && (
+        <div className="absolute right-0 mt-2 w-48 rounded-md bg-white shadow-md z-50 border border-gray-100 overflow-hidden" onClick={() => setOpen(false)}>
+          {children}
+        </div>
+      )}
     </div>
   );
-}; 
+};
 
 export const DropdownMenuItem = ({ children, onClick }) => {
   return (

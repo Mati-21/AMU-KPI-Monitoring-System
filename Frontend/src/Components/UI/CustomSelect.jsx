@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 
 const isOptionObject = (opt) => opt && typeof opt === 'object' && ('value' in opt || 'label' in opt);
 
@@ -14,6 +14,22 @@ const getOptionLabel = (opt) => {
 
 function CustomSelect({ options, value, onChange, placeholder, compact = false, menuPlacement = 'bottom' }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
   const buttonClassName = compact
     ? 'w-full h-9 px-3 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center'
     : 'w-full h-full px-4 py-2 text-left text-xs min-w-40 bg-card border border-border rounded-md flex justify-between items-center';
@@ -35,7 +51,7 @@ function CustomSelect({ options, value, onChange, placeholder, compact = false, 
   }, [options, value]);
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full" ref={containerRef}>
       <button type="button" onClick={() => setOpen(!open)} className={buttonClassName}>
         <span className="flex-1 block truncate text-left">{displayValue || placeholder}</span>
         <svg
