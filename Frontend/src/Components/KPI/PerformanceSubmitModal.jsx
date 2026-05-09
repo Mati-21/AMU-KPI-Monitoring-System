@@ -15,6 +15,15 @@ const getCurrentQuarter = (date = new Date()) => {
   return 'Q4';
 };
 
+const getFirstEmptyQuarter = (quarterlyResults = []) => {
+  if (!Array.isArray(quarterlyResults)) return 'Q1';
+  const filledQuarters = new Set(quarterlyResults.map(r => String(r.quarter || '').toUpperCase()));
+  for (const q of QUARTERS) {
+    if (!filledQuarters.has(q.toUpperCase())) return q;
+  }
+  return 'Q1';
+};
+
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
@@ -27,7 +36,7 @@ const formatValue = (value) => {
         .replace(/(\.\d*?)0+$/, '$1');
 };
 
-const createInitialForm = (quarter = getCurrentQuarter(), initialValues = {}) => ({
+const createInitialForm = (quarter = 'Q1', initialValues = {}) => ({
   quarter: initialValues.quarter || quarter,
   result: initialValues.result || '',
   remark: initialValues.remark || '',
@@ -39,8 +48,12 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
 
   useEffect(() => {
     if (!open) return;
+    
+    // Default to first empty quarter if not editing specific entry
+    const defaultQuarter = getFirstEmptyQuarter(kpi?.quarterlyResults);
+    
     setForm(
-      createInitialForm(initialValues?.quarter || getCurrentQuarter(), {
+      createInitialForm(initialValues?.quarter || defaultQuarter, {
         quarter: initialValues?.quarter,
         result: initialValues?.result || '',
         remark: initialValues?.remark || '',

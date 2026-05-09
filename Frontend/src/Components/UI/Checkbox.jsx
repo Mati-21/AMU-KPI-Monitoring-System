@@ -3,8 +3,16 @@ import { cn } from '../../lib/utils';
 
 const Checkbox = ({ checked = false, onCheckedChange, className }) => {
   return (
-    <span className={cn('inline-flex items-center justify-center', className)}>
-      <input type="checkbox" checked={checked} onChange={(event) => onCheckedChange?.(event.target.checked)} className="peer sr-only" />
+    <span
+      className={cn('inline-flex items-center justify-center cursor-pointer', className)}
+      onClick={() => onCheckedChange?.(!checked)}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => event.stopPropagation()}
+        className="peer sr-only"
+      />
       <span
         aria-hidden="true"
         className={cn(

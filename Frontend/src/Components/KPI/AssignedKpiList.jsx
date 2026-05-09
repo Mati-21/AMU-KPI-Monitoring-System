@@ -43,7 +43,14 @@ const AssignedKpiList = ({ kpis, emptyMessage = 'No KPIs found matching your cri
                     <TableRow key={row.id} className="hover:bg-muted/30">
                       <TableCell className="h-12 text-center border-r text-sm font-medium">{row.no}</TableCell>
                       <TableCell className="h-12 border-r text-sm" title={row.kpi}>
-                        <p className="truncate max-w-55">{row.kpi}</p>
+                        <div className="flex flex-col gap-0.5">
+                          <p className="truncate max-w-55">{row.kpi}</p>
+                          {row.isEvidenceRequired && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-200 w-fit">
+                              EVIDENCE REQ
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="border-r">
                         <Badge variant="outline" className={`text-xs ${getThemeBadgeColor(row.theme)}`}>
@@ -120,6 +127,9 @@ const AssignedKpiList = ({ kpis, emptyMessage = 'No KPIs found matching your cri
               </p>
               <p>
                 <span className="font-semibold">Remark:</span> {selectedRow.remark}
+              </p>
+              <p>
+                <span className="font-semibold">Evidence Required:</span> {selectedRow.isEvidenceRequired ? 'Yes' : 'No'}
               </p>
             </div>
           ) : null}

@@ -1,7 +1,7 @@
 const { UserKPIResult, User, KPI, KPIType, Unit, Role, UserRole, UserKPI, OfficeReportSubmission } = require('../models');
 const { hasPermission, permissionKey } = require('../middleware/authMiddleware');
 const { getCurrentCycleYear, getCurrentQuarter, normalizeQuarter, QUARTERS } = require('../utils/kpiCycle');
-const { Op } = require('sequelize');
+const { Op, Sequelize } = require('sequelize');
 
 const parseNumericValue = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -16,6 +16,34 @@ const formatNumericValue = (value) => {
   }
 
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2);
+};
+
+const compareKpiNumbers = (leftValue, rightValue) => {
+  const left = String(leftValue || '').trim();
+  const right = String(rightValue || '').trim();
+
+  if (!left && !right) return 0;
+  if (!left) return 1;
+  if (!right) return -1;
+
+  const leftParts = left.split('.').map((part) => Number(part));
+  const rightParts = right.split('.').map((part) => Number(part));
+  const maxLength = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftPart = leftParts[index];
+    const rightPart = rightParts[index];
+
+    if (Number.isNaN(leftPart) || Number.isNaN(rightPart)) {
+      return left.localeCompare(right);
+    }
+
+    if (leftPart !== rightPart) {
+      return leftPart - rightPart;
+    }
+  }
+
+  return 0;
 };
 
 const AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS = [
@@ -110,9 +138,19 @@ const buildStructuredReportRows = ({ kpiRows, columns }) => {
       String(left.stableName || '').localeCompare(String(right.stableName || '')) ||
       String(left.themeName || '').localeCompare(String(right.themeName || '')) ||
       String(left.subThemeName || '').localeCompare(String(right.subThemeName || '')) ||
-      String(left.no || '').localeCompare(String(right.no || '')) ||
+      compareKpiNumbers(left.no, right.no) ||
       String(left.kpi || '').localeCompare(String(right.kpi || ''))
   );
+
+  // If we have ONLY derived KPIs (no 'no' field), we return them as a flat list without categories
+  const onlyDerived = sortedRows.length > 0 && sortedRows.every((row) => !row.no || row.no === '');
+  if (onlyDerived) {
+    return sortedRows.map((row) => ({
+      ...row,
+      rowType: 'leaf',
+      level: 0,
+    }));
+  }
 
   sortedRows.forEach((row) => {
     const stableKey = String(row.stableName || 'Uncategorized Stable');
@@ -187,19 +225,25 @@ const buildStructuredReportRows = ({ kpiRows, columns }) => {
         const subThemeNo = `${themeNo}.${subThemeCounter}`;
         let subThemeWeightTotal = 0;
 
-        themeBlock.push({
-          id: `subtheme-${subThemeNo}`,
-          rowType: 'subTheme',
-          level: 2,
-          no: subThemeNo,
-          kpi: subThemeName,
-          unit: '—',
-          weight: '—',
-          target: '—',
-          baseline: '—',
-          remark: '—',
-          values: createPlaceholderValues(columns),
-        });
+        // Redundancy Check: If a sub-theme contains only one KPI and has the exact same name, 
+        // we suppress the header to avoid a "Double Row" effect.
+        const isRedundantSubTheme = subThemeRows.length === 1 && String(subThemeRows[0].kpi || '').trim() === String(subThemeName || '').trim();
+
+        if (!isRedundantSubTheme) {
+          themeBlock.push({
+            id: `subtheme-${subThemeNo}`,
+            rowType: 'subTheme',
+            level: 2,
+            no: subThemeNo,
+            kpi: subThemeName,
+            unit: '—',
+            weight: '—',
+            target: '—',
+            baseline: '—',
+            remark: '—',
+            values: createPlaceholderValues(columns),
+          });
+        }
 
         const kpiRowsForSubTheme = [...subThemeRows].sort(
           (left, right) =>
@@ -207,7 +251,8 @@ const buildStructuredReportRows = ({ kpiRows, columns }) => {
         );
 
         kpiRowsForSubTheme.forEach((row, index) => {
-          const kpiNo = `${subThemeNo}.${index + 1}`;
+          // If redundant, the KPI takes the sub-theme's numbering (e.g. 1.1.1 instead of 1.1.1.1)
+          const kpiNo = isRedundantSubTheme ? subThemeNo : `${subThemeNo}.${index + 1}`;
           const rowWeight = parseNumericValue(row.weightNumeric) || 0;
           subThemeWeightTotal += rowWeight;
           themeWeightTotal += rowWeight;
@@ -216,24 +261,27 @@ const buildStructuredReportRows = ({ kpiRows, columns }) => {
           themeBlock.push({
             ...row,
             rowType: 'kpi',
-            level: 3,
+            level: isRedundantSubTheme ? 2 : 3, // Adjust indentation if merged
             no: kpiNo,
           });
         });
 
-        themeBlock.push({
-          id: `subtotal-${subThemeNo}`,
-          rowType: 'subTotal',
-          level: 3,
-          no: '',
-          kpi: 'Sub Total',
-          unit: '—',
-          weight: formatNumericValue(subThemeWeightTotal),
-          target: '—',
-          baseline: '—',
-          remark: `${subThemeName} Weight`,
-          values: createPlaceholderValues(columns),
-        });
+        // Only show Sub Total if there are multiple KPIs in the sub-theme
+        if (subThemeRows.length > 1) {
+          themeBlock.push({
+            id: `subtotal-${subThemeNo}`,
+            rowType: 'subTotal',
+            level: 3,
+            no: '',
+            kpi: 'Sub Total',
+            unit: '—',
+            weight: formatNumericValue(subThemeWeightTotal),
+            target: '—',
+            baseline: '—',
+            remark: `${subThemeName} Weight`,
+            values: createPlaceholderValues(columns),
+          });
+        }
       });
 
       themeBlock[0].weight = formatNumericValue(themeWeightTotal);
@@ -288,7 +336,7 @@ const sumUserKpiPerformance = (results) => {
       return;
     }
 
-    const key = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
+    const key = result.UserKPIId ? String(result.UserKPIId) : `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
     if (!groupedResults.has(key)) {
       groupedResults.set(key, []);
     }
@@ -374,7 +422,10 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
     let hasAnySubmission = false;
 
     const cumulativeValues = [...grouped.assignedUsers].map((userId) => {
-      const userKpiKey = `${String(userId)}::${kpiId}`;
+      // Find the specific assignment ID for this user/kpi combo to ensure isolated performance tracking
+      const specificAssignment = assignments.find((a) => String(a.UserId) === userId && String(a.KPIId) === kpiId);
+      const userKpiKey = specificAssignment ? String(specificAssignment.Id) : `${String(userId)}::${kpiId}`;
+
       if (userKpiSums.has(userKpiKey)) {
         hasAnySubmission = true;
       }
@@ -439,10 +490,10 @@ const buildAnnualSummary = (results) => {
   });
 };
 
-const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId }) => {
+const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId, viewerUserId, reportType }) => {
   const roles = await Role.findAll({
     where: { IsArchived: false },
-    attributes: ['Id', 'RoleName', 'ParentRoleId'],
+    attributes: ['Id', 'RoleName', 'ParentRoleId', 'IsDistributable'],
     order: [['RoleName', 'ASC']],
   });
 
@@ -497,7 +548,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId 
       },
       {
         model: Role,
-        attributes: ['Id', 'RoleName', 'ParentRoleId'],
+        attributes: ['Id', 'RoleName', 'ParentRoleId', 'IsDistributable'],
       },
     ],
     order: [['CreatedAt', 'DESC']],
@@ -524,36 +575,79 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId 
     .filter((assignment) => String(assignment.RoleId || assignment.Role?.Id || '') === String(selectedScopeRole.Id))
     .map((assignment) => String(assignment.UserId || ''))
     .filter(Boolean);
-  const uniqueScopeOwnerUserIds = [...new Set(scopeOwnerUserIds)];
 
+  // Also include the current user in the dispatcher list if they are viewing their own role's report
+  // and ensure we include any historical users who made assignments to these children.
+  const uniqueScopeOwnerUserIds = [...new Set([...scopeOwnerUserIds, viewerUserId])].filter(Boolean);
+
+  // 1. Identify the parent role's users to filter for "Official" assignments only
+  const parentRoleIdOfScope = selectedScopeRole?.ParentRoleId;
+  let parentOfParentUserIds = [];
+  if (parentRoleIdOfScope) {
+    const pUserRoles = await UserRole.findAll({
+      where: { RoleId: parentRoleIdOfScope, IsArchived: false },
+      attributes: ['UserId'],
+    });
+    parentOfParentUserIds = pUserRoles.map((ur) => String(ur.UserId));
+  }
+
+  const kpiInclude = [
+    {
+      model: KPI,
+      attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Baseline', 'Target', 'Description', 'Remark'],
+      include: [
+        {
+          model: KPIType,
+          attributes: ['Id', 'KPIName', 'ParentKPIID'],
+        },
+        {
+          model: Unit,
+          attributes: ['Id', 'Code', 'Name'],
+        },
+      ],
+    },
+  ];
+
+  // 2. Fetch KPIs assigned TO the scope role by their parent (Official Rows)
+  const officialParentAssignments = await UserKPI.findAll({
+    where: {
+      IsArchived: false,
+      CycleYear: cycleYear,
+      UserId: { [Op.in]: uniqueScopeOwnerUserIds },
+      ...(parentOfParentUserIds.length ? { CreatedBy: { [Op.in]: parentOfParentUserIds } } : {}),
+    },
+    include: kpiInclude,
+    order: [['CreatedAt', 'ASC']],
+  });
+
+  // 3. Fetch KPIs assigned BY the scope role to their children (Column Data)
+  const childAssignments = uniqueVisibleUserIds.length
+    ? await UserKPI.findAll({
+        where: {
+          IsArchived: false,
+          CycleYear: cycleYear,
+          UserId: { [Op.in]: uniqueVisibleUserIds },
+          CreatedBy: { [Op.in]: uniqueScopeOwnerUserIds },
+        },
+        include: kpiInclude,
+        order: [['CreatedAt', 'ASC']],
+      })
+    : [];
+
+  const allAssignments = officialParentAssignments;
+
+  // Split into original vs derived
+  const isDerivedAssignment = (a) => !!(a.Name || (a.Remark && String(a.Remark).toLowerCase() !== 'null' && String(a.Remark).trim() !== ''));
+  const hasOriginal = allAssignments.some((a) => !isDerivedAssignment(a));
+  const hasDerived = allAssignments.some((a) => isDerivedAssignment(a));
+
+  // Filter based on reportType
   const assignments =
-    uniqueVisibleUserIds.length && uniqueScopeOwnerUserIds.length
-      ? await UserKPI.findAll({
-          where: {
-            IsArchived: false,
-            CycleYear: cycleYear,
-            UserId: { [Op.in]: uniqueVisibleUserIds },
-            CreatedBy: { [Op.in]: uniqueScopeOwnerUserIds },
-          },
-          include: [
-            {
-              model: KPI,
-              attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Baseline', 'Target', 'Description', 'Remark'],
-              include: [
-                {
-                  model: KPIType,
-                  attributes: ['Id', 'KPIName', 'ParentKPIID'],
-                },
-                {
-                  model: Unit,
-                  attributes: ['Id', 'Code', 'Name'],
-                },
-              ],
-            },
-          ],
-          order: [['CreatedAt', 'ASC']],
-        })
-      : [];
+    reportType === 'derived'
+      ? allAssignments.filter((a) => isDerivedAssignment(a))
+      : reportType === 'original'
+        ? allAssignments.filter((a) => !isDerivedAssignment(a))
+        : allAssignments;
 
   const kpiById = new Map();
   assignments.forEach((assignment) => {
@@ -562,10 +656,54 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId 
     }
   });
 
-  const reportColumns = childRoles.map((role) => ({
-    id: role.Id,
-    name: role.RoleName,
-  }));
+  // Determine columns based on hierarchy: Roles with children get a Role column, leaf roles get User columns.
+  const reportColumns = [];
+  childRoles.forEach((role) => {
+    const roleId = String(role.Id);
+    // If IsDistributable is true, it is treated as a parent role (not a leaf), regardless of whether sub-roles exist.
+    if (role.IsDistributable === true) {
+      reportColumns.push({
+        id: role.Id,
+        name: role.RoleName,
+        isUserColumn: false,
+      });
+    } else {
+      // It's a leaf role - show users assigned to it
+      const usersInRole = activeUserRoles.filter((ur) => String(ur.RoleId || ur.Role?.Id) === roleId);
+
+      if (usersInRole.length > 0) {
+        // Get unique users in this role
+        const uniqueUsers = usersInRole.filter(
+          (ur, index, self) => self.findIndex((entry) => String(entry.UserId) === String(ur.UserId)) === index
+        );
+
+        uniqueUsers.forEach((ur) => {
+          reportColumns.push({
+            id: ur.User.Id,
+            name: `${ur.User.FirstName} ${ur.User.FatherName || ''}`.trim(),
+            isUserColumn: true,
+            roleId: ur.RoleId,
+          });
+        });
+      } else {
+        // Fallback: If no users assigned to leaf role, show Role name column so it's not missing from report
+        reportColumns.push({
+          id: role.Id,
+          name: role.RoleName,
+          isUserColumn: false,
+        });
+      }
+    }
+  });
+
+  // Build a map for efficient individual performance lookup
+  // Key: UserId::RowKey, Value: UserKPIId (assignment ID of the child)
+  const userAssignmentMap = new Map();
+  childAssignments.forEach((a) => {
+    const leafType = a.KPI?.KPIType || null;
+    const rowKey = `${String(a.KPIId)}::${(leafType?.KPIName || '').trim()}::${(a.Name || '').trim()}::${(a.Remark || '').trim()}`;
+    userAssignmentMap.set(`${String(a.UserId)}::${rowKey}`, String(a.Id));
+  });
 
   const kpiTypes = await KPIType.findAll({
     attributes: ['Id', 'KPIName', 'ParentKPIID'],
@@ -600,61 +738,83 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId 
   });
 
   const aggregation = buildRoleKpiAggregation({
-    assignments,
+    assignments: childAssignments,
     userRoleByUserId: userChildColumnByUserId,
     visibleRoleIds: new Set(childRoles.map((role) => String(role.Id))),
     userKpiSums: sumUserKpiPerformance(results),
   });
 
   const reportRows = assignments.reduce((rows, assignment) => {
-    const kpiId = String(assignment.KPIId || '');
-    if (!kpiId || rows.has(kpiId)) {
+    const leafType = assignment.KPI?.KPIType || null;
+    // Use a composite key for report rows to prevent squashing different derived versions of the same template KPI
+    const rowKey = `${String(assignment.KPIId)}::${(leafType?.KPIName || '').trim()}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
+
+    if (rows.has(rowKey)) {
       return rows;
     }
 
     const kpi = assignment.KPI;
-    const leafType = kpi?.KPIType || null;
-
     const hierarchy = buildHierarchyNames(leafType, byId);
+    const isDerived = !!(assignment.Name || assignment.Remark);
 
-    rows.set(kpiId, {
-      id: kpiId,
-      no: leafType?.Id ? buildCode(leafType.Id) : '',
-      kpi: leafType?.KPIName || kpi?.Description || '—',
-      stableName: hierarchy.stableName,
-      themeName: hierarchy.themeName,
-      subThemeName: hierarchy.subThemeName,
+    rows.set(rowKey, {
+      id: rowKey,
+      kpiId: String(assignment.KPIId),
+      assignmentId: assignment.Id,
+      no: isDerived ? '' : leafType?.Id ? buildCode(leafType.Id) : '',
+      kpi: assignment.Name || leafType?.KPIName || kpi?.Description || '—',
+      stableName: isDerived ? '—' : hierarchy.stableName || '—',
+      themeName: isDerived ? '—' : hierarchy.themeName || '—',
+      subThemeName: isDerived ? '—' : hierarchy.subThemeName || '—',
       unit: kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
-      weight: formatNumericValue(kpi?.Weight),
-      weightNumeric: parseNumericValue(kpi?.Weight) ?? 0,
+      weight: isDerived ? '' : formatNumericValue(kpi?.Weight),
+      weightNumeric: isDerived ? 0 : (parseNumericValue(kpi?.Weight) ?? 0),
       baseline: formatNumericValue(assignment.Baseline ?? kpi?.Baseline),
       baselineNumeric: parseNumericValue(assignment.Baseline ?? kpi?.Baseline) ?? 0,
       target: formatNumericValue(assignment.AssignedTarget ?? kpi?.Target),
-      remark: assignment.Remark || kpi?.Remark || kpi?.Description || '—',
+      remark: (String(assignment.Remark || '').trim().toLowerCase() === 'null' ? '' : assignment.Remark) || (isDerived ? '—' : (kpi?.Remark || kpi?.Description || '—')),
       values: {},
     });
 
     return rows;
   }, new Map());
 
+  const userKpiSums = sumUserKpiPerformance(results);
+
   reportRows.forEach((row) => {
-    childRoles.forEach((role) => {
-      const key = `${String(role.Id)}::${String(row.id)}`;
-      const metrics = aggregation.get(key);
-      if (!metrics) {
-        row.values[String(role.Id)] = 'N/A';
-      } else if (!metrics.hasAnySubmission) {
-        row.values[String(role.Id)] = '—';
+    reportColumns.forEach((column) => {
+      if (column.isUserColumn) {
+        const userKey = `${String(column.id)}::${String(row.id)}`;
+        const assignmentId = userAssignmentMap.get(userKey);
+        const performance = assignmentId ? userKpiSums.get(assignmentId) : undefined;
+
+        if (!assignmentId) {
+          row.values[String(column.id)] = 'N/A';
+        } else if (performance === undefined) {
+          row.values[String(column.id)] = '—';
+        } else {
+          row.values[String(column.id)] = formatNumericValue(performance);
+        }
       } else {
-        row.values[String(role.Id)] = formatNumericValue(metrics.aggregatedPerformance);
+        const metrics = aggregation.get(`${String(column.id)}::${String(row.kpiId)}`);
+        if (!metrics) {
+          row.values[String(column.id)] = 'N/A';
+        } else if (!metrics.hasAnySubmission) {
+          row.values[String(column.id)] = '—';
+        } else {
+          row.values[String(column.id)] = formatNumericValue(metrics.aggregatedPerformance);
+        }
       }
     });
 
+    // Cleanup internal IDs before sending to frontend
+    delete row.kpiId;
+    delete row.assignmentId;
     delete row.baselineNumeric;
   });
 
   const flatRows = [...reportRows.values()].sort(
-    (left, right) => String(left.no || '').localeCompare(String(right.no || '')) || String(left.kpi || '').localeCompare(String(right.kpi || ''))
+    (left, right) => compareKpiNumbers(left.no, right.no) || String(left.kpi || '').localeCompare(String(right.kpi || ''))
   );
 
   return {
@@ -668,6 +828,9 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId 
       kpiRows: flatRows,
       columns: reportColumns,
     }),
+    hasOriginal,
+    hasDerived,
+    reportType: reportType || 'all',
   };
 };
 
@@ -707,23 +870,33 @@ const getAffiliatedOfficeReport = async (req, res) => {
           (role, index, items) => items.findIndex((entry) => String(entry.Id) === String(role.Id)) === index
         )
       : [selectedScopeRole];
-    const reportData = await buildAffiliatedOfficeReportDataForScope({
-      cycleYear,
-      scopeRoleId: selectedScopeRole.Id,
+    const selectedRoleHasChildren = await Role.findOne({
+      where: { IsArchived: false, ParentRoleId: selectedScopeRole.Id },
+      attributes: ['Id'],
     });
+
+    const reportData = selectedRoleHasChildren
+      ? await buildAffiliatedOfficeReportDataForScope({
+          cycleYear,
+          scopeRoleId: selectedScopeRole.Id,
+          viewerUserId: req.user?.Id,
+          reportType: req.query.reportType || undefined,
+        })
+      : await buildCurrentOfficeReportData({
+          cycleYear,
+          currentRoleId: selectedScopeRole.Id,
+          reportType: req.query.reportType || undefined,
+        });
 
     res.json({
       success: true,
       data: {
-        year: reportData.year,
-        scopeRole: reportData.scopeRole,
+        ...reportData,
         canSeeOtherAffiliatedOfficeReports,
         availableScopeRoles: availableScopeRoles.map((role) => ({
           id: role.Id,
           name: role.RoleName,
         })),
-        columns: reportData.columns,
-        rows: reportData.rows,
       },
     });
   } catch (error) {
@@ -732,7 +905,7 @@ const getAffiliatedOfficeReport = async (req, res) => {
   }
 };
 
-const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
+const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportType }) => {
   if (!currentRoleId) {
     const error = new Error('Current role is required to build the report.');
     error.statusCode = 400;
@@ -763,7 +936,6 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
               where: {
                 IsArchived: false,
                 RoleId: parentRole.Id,
-                [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
               },
               attributes: ['UserId'],
             })
@@ -802,34 +974,45 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
 
   const uniqueVisibleUserIds = [...new Set(activeUserRoles.map((assignment) => String(assignment.UserId || '')).filter(Boolean))];
 
-  const assignments =
-    uniqueVisibleUserIds.length && (!parentRole?.Id || parentAssignerUserIds.length)
-      ? await UserKPI.findAll({
-          where: {
-            IsArchived: false,
-            CycleYear: cycleYear,
-            UserId: { [Op.in]: uniqueVisibleUserIds },
-            ...(parentRole?.Id ? { CreatedBy: { [Op.in]: parentAssignerUserIds } } : {}),
+  const allAssignments = uniqueVisibleUserIds.length
+    ? await UserKPI.findAll({
+        where: {
+          IsArchived: false,
+          CycleYear: cycleYear,
+          UserId: { [Op.in]: uniqueVisibleUserIds },
+        },
+        include: [
+          {
+            model: KPI,
+            attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Baseline', 'Target', 'Description', 'Remark'],
+            include: [
+              {
+                model: KPIType,
+                attributes: ['Id', 'KPIName', 'ParentKPIID'],
+              },
+              {
+                model: Unit,
+                attributes: ['Id', 'Code', 'Name'],
+              },
+            ],
           },
-          include: [
-            {
-              model: KPI,
-              attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Baseline', 'Target', 'Description', 'Remark'],
-              include: [
-                {
-                  model: KPIType,
-                  attributes: ['Id', 'KPIName', 'ParentKPIID'],
-                },
-                {
-                  model: Unit,
-                  attributes: ['Id', 'Code', 'Name'],
-                },
-              ],
-            },
-          ],
-          order: [['CreatedAt', 'ASC']],
-        })
-      : [];
+        ],
+        order: [['CreatedAt', 'ASC']],
+      })
+    : [];
+
+  // Split into original vs derived
+  const isDerivedAssignment = (a) => !!(a.Name || (a.Remark && String(a.Remark).toLowerCase() !== 'null' && String(a.Remark).trim() !== ''));
+  const hasOriginal = allAssignments.some((a) => !isDerivedAssignment(a));
+  const hasDerived = allAssignments.some((a) => isDerivedAssignment(a));
+
+  // Filter based on reportType
+  const assignments =
+    reportType === 'derived'
+      ? allAssignments.filter((a) => isDerivedAssignment(a))
+      : reportType === 'original'
+        ? allAssignments.filter((a) => !isDerivedAssignment(a))
+        : allAssignments;
 
   const kpiById = new Map();
   assignments.forEach((assignment) => {
@@ -868,26 +1051,30 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
   });
 
   const reportRows = assignments.reduce((rows, assignment) => {
-    const kpiId = String(assignment.KPIId || '');
-    if (!kpiId || rows.has(kpiId)) {
+    const leafType = assignment.KPI?.KPIType || null;
+    // Use a composite key for report rows to prevent squashing different derived versions of the same template KPI
+    const rowKey = `${String(assignment.KPIId)}::${(leafType?.KPIName || '').trim()}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
+
+    if (rows.has(rowKey)) {
       return rows;
     }
 
     const kpi = assignment.KPI;
-    const leafType = kpi?.KPIType || null;
-
     const hierarchy = buildHierarchyNames(leafType, byId);
+    const isDerived = !!(assignment.Name || assignment.Remark);
 
-    rows.set(kpiId, {
-      id: kpiId,
-      no: leafType?.Id ? buildCode(leafType.Id) : '',
-      kpi: leafType?.KPIName || kpi?.Description || '—',
-      stableName: hierarchy.stableName,
-      themeName: hierarchy.themeName,
-      subThemeName: hierarchy.subThemeName,
+    rows.set(rowKey, {
+      id: rowKey,
+      kpiId: String(assignment.KPIId),
+      assignmentId: assignment.Id,
+      no: isDerived ? '' : leafType?.Id ? buildCode(leafType.Id) : '',
+      kpi: assignment.Name || leafType?.KPIName || kpi?.Description || '—',
+      stableName: isDerived ? '—' : hierarchy.stableName || '—',
+      themeName: isDerived ? '—' : hierarchy.themeName || '—',
+      subThemeName: isDerived ? '—' : hierarchy.subThemeName || '—',
       unit: kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
-      weight: formatNumericValue(kpi?.Weight),
-      weightNumeric: parseNumericValue(kpi?.Weight) ?? 0,
+      weight: isDerived ? '' : formatNumericValue(kpi?.Weight),
+      weightNumeric: isDerived ? 0 : (parseNumericValue(kpi?.Weight) ?? 0),
       baseline: formatNumericValue(assignment.Baseline ?? kpi?.Baseline),
       baselineNumeric: parseNumericValue(assignment.Baseline ?? kpi?.Baseline) ?? 0,
       target: formatNumericValue(assignment.AssignedTarget ?? kpi?.Target),
@@ -899,8 +1086,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
   }, new Map());
 
   reportRows.forEach((row) => {
-    const key = `${String(currentRoleId)}::${String(row.id)}`;
-    const metrics = aggregation.get(key);
+    const metrics = aggregation.get(`${String(currentRoleId)}::${String(row.kpiId)}`);
     if (!metrics) {
       row.values[String(currentRoleId)] = 'N/A';
     } else if (!metrics.hasAnySubmission) {
@@ -908,11 +1094,13 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
     } else {
       row.values[String(currentRoleId)] = formatNumericValue(metrics.aggregatedPerformance);
     }
+    delete row.kpiId;
+    delete row.assignmentId;
     delete row.baselineNumeric;
   });
 
   const flatRows = [...reportRows.values()].sort(
-    (left, right) => String(left.no || '').localeCompare(String(right.no || '')) || String(left.kpi || '').localeCompare(String(right.kpi || ''))
+    (left, right) => compareKpiNumbers(left.no, right.no) || String(left.kpi || '').localeCompare(String(right.kpi || ''))
   );
 
   return {
@@ -942,12 +1130,15 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId }) => {
         },
       ],
     }),
+    hasOriginal,
+    hasDerived,
+    reportType: reportType || 'all',
   };
 };
 
 const getCurrentOfficeReport = async (req, res) => {
   try {
-    const { year, roleId } = req.query;
+    const { year, roleId, reportType } = req.query;
     const cycleYear = year || getCurrentCycleYear();
     const requesterRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
 
@@ -1006,10 +1197,13 @@ const getCurrentOfficeReport = async (req, res) => {
       ? await buildAffiliatedOfficeReportDataForScope({
           cycleYear,
           scopeRoleId: selectedRoleId,
+          viewerUserId: req.user?.Id,
+          reportType: reportType || undefined,
         })
       : await buildCurrentOfficeReportData({
           cycleYear,
           currentRoleId: selectedRoleId,
+          reportType: reportType || undefined,
         });
 
     res.json({
@@ -1093,15 +1287,7 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
 
 const createUserKPIResult = async (req, res) => {
   try {
-    const {
-      KPIId,
-      UserKPIId,
-      CycleYear,
-      Quarter,
-      KPIResult,
-      Description,
-      PerformanceTitle,
-    } = req.body;
+    const { KPIId, UserKPIId, CycleYear, Quarter, KPIResult, Description, PerformanceTitle } = req.body;
 
     const cycleYear = CycleYear || getCurrentCycleYear();
     const quarter = normalizeQuarter(Quarter) || getCurrentQuarter();
