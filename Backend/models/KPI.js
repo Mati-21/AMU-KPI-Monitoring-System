@@ -17,6 +17,11 @@ const KPI = sequelize.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    LifecycleType: {
+      type: DataTypes.ENUM('RECURRING', 'PROGRESSIVE', 'ONE_TIME'),
+      defaultValue: 'RECURRING',
+      allowNull: false,
+    },
     Weight: {
       type: DataTypes.DECIMAL(5, 2),
       allowNull: false,
@@ -25,13 +30,10 @@ const KPI = sequelize.define(
         max: 100,
       },
     },
-    Baseline: {
+    DefaultBaseline: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
-    },
-    Target: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
+      defaultValue: 0,
     },
     Description: {
       type: DataTypes.TEXT,
@@ -52,6 +54,10 @@ const KPI = sequelize.define(
     CreatedBy: {
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    IsActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
     },
     IsArchived: {
       type: DataTypes.BOOLEAN,

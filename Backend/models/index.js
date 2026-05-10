@@ -12,6 +12,7 @@ const UserKPI = require('./UserKPI');
 const UserKPIResult = require('./UserKPIResult');
 const KPIDocument = require('./KPIDocument');
 const OfficeReportSubmission = require('./OfficeReportSubmission');
+const KPIYearPlan = require('./KPIYearPlan');
 
 // Set up associations
 RoleCategory.hasMany(Role, { foreignKey: 'RoleCategoryId' });
@@ -40,6 +41,12 @@ UserKPI.belongsTo(User, { foreignKey: 'UserId' });
 
 KPI.hasMany(UserKPI, { foreignKey: 'KPIId' });
 UserKPI.belongsTo(KPI, { foreignKey: 'KPIId' });
+
+KPI.hasMany(KPIYearPlan, { foreignKey: 'KPIId' });
+KPIYearPlan.belongsTo(KPI, { foreignKey: 'KPIId' });
+
+KPIYearPlan.hasMany(UserKPI, { foreignKey: 'KPIYearPlanId' });
+UserKPI.belongsTo(KPIYearPlan, { foreignKey: 'KPIYearPlanId' });
 
 User.hasMany(UserKPIResult, { foreignKey: 'UserId' });
 UserKPIResult.belongsTo(User, { foreignKey: 'UserId' });
@@ -70,4 +77,5 @@ module.exports = {
   UserKPIResult,
   KPIDocument,
   OfficeReportSubmission,
+  KPIYearPlan,
 };

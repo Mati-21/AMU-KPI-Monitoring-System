@@ -22,6 +22,7 @@ const kpiRoutes = require('./routes/kpiRoutes');
 const userKpiRoutes = require('./routes/userKpiRoutes');
 const userKpiResultRoutes = require('./routes/userKpiResultRoutes');
 const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
+const kpiYearPlanRoutes = require('./routes/kpiYearPlanRoutes');
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
@@ -78,6 +79,7 @@ app.use('/api/kpis', kpiRoutes);
 app.use('/api/user-kpis', userKpiRoutes);
 app.use('/api/user-kpi-results', userKpiResultRoutes);
 app.use('/api/kpi-documents', kpiDocumentRoutes);
+app.use('/api/kpi-year-plans', kpiYearPlanRoutes);
 
 app.get('/health', (req, res) => {
   res.json({
