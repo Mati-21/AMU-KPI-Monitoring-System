@@ -155,7 +155,7 @@ const createUserKPI = async (req, res) => {
         KPIId,
         UserId,
         cycleYear,
-        fallbackBaseline: kpi.Baseline,
+        fallbackBaseline: kpi.DefaultBaseline,
       }));
 
     const userKPI = await UserKPI.create({
@@ -239,8 +239,9 @@ const getUserKPIs = async (req, res) => {
     const userKpis = await UserKPI.findAll({
       where,
       include: [
-        { model: User, attributes: ['Id', 'FirstName', 'UserName', 'Email'] },
-        { model: KPI, attributes: ['Id', 'Baseline', 'Target', 'Description'] },
+        { model: User, attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'] },
+        { model: KPI, attributes: ['Id', 'Description', 'DefaultBaseline'] },
+        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false }
       ],
       order: [['CreatedAt', 'DESC']],
     });
@@ -330,8 +331,9 @@ const getUserKPIById = async (req, res) => {
     const { id } = req.params;
     const userKPI = await UserKPI.findByPk(id, {
       include: [
-        { model: User, attributes: ['Id', 'FirstName', 'UserName', 'Email'] },
-        { model: KPI, attributes: ['Id', 'Baseline', 'Target', 'Description'] },
+        { model: User, attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'] },
+        { model: KPI, attributes: ['Id', 'Description', 'DefaultBaseline'] },
+        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false }
       ],
     });
 

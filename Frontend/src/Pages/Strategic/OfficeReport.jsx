@@ -10,6 +10,8 @@ import { ScrollArea } from '../../Components/UI/scroll-area';
 import { api } from '../../api/axios';
 import permissionUtils from '../../lib/permissionUtils';
 import { useNotification } from '../../Context/NotificationContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../Components/UI/dialog';
+import { AlertCircle } from 'lucide-react';
 
 const REPORT_PERMISSION_KEYS = [
   permissionUtils.permissionKey('view', 'KPI Reporting'),
@@ -64,6 +66,10 @@ const OfficeReport = () => {
   const [selectedScopeRoleId, setSelectedScopeRoleId] = useState('');
   const [expandedColumns, setExpandedColumns] = useState({});
   const [selectedReportType, setSelectedReportType] = useState('all');
+  const [availableYears, setAvailableYears] = useState([]);
+  const [selectedCycleYear, setSelectedCycleYear] = useState('');
+  const [selectedReportMode, setSelectedReportMode] = useState('individual');
+  const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
 
   const toggleColumnExpand = (columnId) => {
     setExpandedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
@@ -85,6 +91,12 @@ const OfficeReport = () => {
         const params = { t: Date.now(), reportType: selectedReportType };
         if (selectedScopeRoleId) {
           params.roleId = selectedScopeRoleId;
+        }
+        if (selectedCycleYear) {
+          params.cycleYear = selectedCycleYear;
+        }
+        if (selectedReportMode) {
+          params.reportMode = selectedReportMode;
         }
 
         const response = await api.get('/user-kpi-results/report', { params });
@@ -111,7 +123,24 @@ const OfficeReport = () => {
     return () => {
       mounted = false;
     };
-  }, [canViewReport, refreshToken, selectedScopeRoleId, selectedReportType]);
+  }, [canViewReport, refreshToken, selectedScopeRoleId, selectedReportType, selectedCycleYear, selectedReportMode]);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchYears = async () => {
+      try {
+        const res = await api.get('/kpi-year-plans');
+        if (!mounted) return;
+        const plans = res.data?.data || [];
+        const years = [...new Set(plans.map(p => p.CycleYear))].sort((a, b) => b.localeCompare(a));
+        setAvailableYears(years);
+      } catch (err) {
+        console.error('Failed to load cycle years', err);
+      }
+    };
+    fetchYears();
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -130,12 +159,10 @@ const OfficeReport = () => {
 
     window.addEventListener('amu:report-data-changed', triggerRefresh);
     window.addEventListener('storage', handleStorage);
-    window.addEventListener('focus', triggerRefresh);
 
     return () => {
       window.removeEventListener('amu:report-data-changed', triggerRefresh);
       window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('focus', triggerRefresh);
     };
   }, []);
 
@@ -152,24 +179,16 @@ const OfficeReport = () => {
 
   const hasOriginal = reportData?.hasOriginal ?? false;
   const hasDerived = reportData?.hasDerived ?? false;
-  const showReportTypeSelector = hasOriginal && hasDerived;
+  
+  // Show Original/Derived dropdown if role has extra measures OR if both types exist in data
+  const showReportTypeSelector = (reportData?.scopeRoleHasExtraMeasures) || (hasOriginal && hasDerived);
+  
+  // Show Individual/Combined dropdown if role is distributable OR if it has multiple columns (children)
+  const showReportModeSelector = (reportData?.scopeRoleIsDistributable) || (columns.length > 1 && !reportData?.reportMode === 'combined');
+
   const isDerivedView = selectedReportType === 'derived';
 
-  useEffect(() => {
-    if (!reportData) {
-      return;
-    }
-
-    if (hasOriginal && !hasDerived && selectedReportType !== 'original') {
-      setSelectedReportType('original');
-      return;
-    }
-
-    if (!hasOriginal && hasDerived && selectedReportType !== 'derived') {
-      setSelectedReportType('derived');
-      return;
-    }
-  }, [hasDerived, hasOriginal, reportData, selectedReportType]);
+  // Removed automatic report type switching to respect user's manual selection even if data is empty.
 
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
@@ -213,18 +232,49 @@ const OfficeReport = () => {
             ) : null}
 
             {showReportTypeSelector ? (
-              <>
-                <span className="text-xs font-medium text-muted-foreground">Report Type</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">Type</span>
                 <select
                   value={selectedReportType}
                   onChange={(event) => setSelectedReportType(event.target.value)}
-                  className="min-w-48 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
                 >
-                  <option value="original">Original KPI</option>
-                  <option value="derived">Derived KPI</option>
+                  <option value="all">All KPIs</option>
+                  <option value="original">Original</option>
+                  <option value="derived">Derived</option>
+                </select>
+              </div>
+            ) : null}
+
+            {showReportModeSelector ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">View Mode</span>
+                <select
+                  value={selectedReportMode}
+                  onChange={(event) => setSelectedReportMode(event.target.value)}
+                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                >
+                  <option value="individual">Individual</option>
+                  <option value="combined">Combined</option>
+                </select>
+              </div>
+            ) : null}
+
+            {availableYears.length > 0 && (
+              <>
+                <span className="text-xs font-medium text-muted-foreground">Year</span>
+                <select
+                  value={selectedCycleYear}
+                  onChange={(event) => setSelectedCycleYear(event.target.value)}
+                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                >
+                  <option value="">Current Cycle</option>
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
                 </select>
               </>
-            ) : null}
+            )}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -233,21 +283,8 @@ const OfficeReport = () => {
               type="button"
               size="sm"
               className="flex items-center gap-2"
-              disabled={loading || submittingReport || !hasKpiRows}
-              onClick={async () => {
-                try {
-                  setSubmittingReport(true);
-                  const response = await api.post('/user-kpi-results/report/submit', {
-                    year: reportData?.year,
-                  });
-                  const parentRoleName = response.data?.data?.parentRole?.name || reportData?.parentRole?.name || 'parent role';
-                  notify(`Report submitted to ${parentRoleName}.`, 'success');
-                } catch (submitErr) {
-                  notify(submitErr?.response?.data?.message || 'Failed to submit report to parent role.', 'error');
-                } finally {
-                  setSubmittingReport(false);
-                }
-              }}
+              disabled={submittingReport}
+              onClick={() => setIsSubmitDialogOpen(true)}
             >
               {submittingReport ? 'Submitting...' : 'Submit Report'}
             </Button>
@@ -284,11 +321,17 @@ const OfficeReport = () => {
                     const isLong = fullName.length > MAX_COLUMN_NAME_LENGTH;
                     const isExpanded = expandedColumns[column.id];
                     const displayName = isExpanded ? fullName : truncateColumnName(fullName);
+                    const isSubmitted = column.isSubmitted;
 
                     return (
                       <TableHead key={column.id} className="min-w-30 text-center font-bold" title={fullName}>
-                        <div className="flex items-center justify-center gap-1">
-                          <span>{displayName}</span>
+                        <div className="flex flex-col items-center justify-center gap-0.5">
+                          <div className="flex items-center justify-center gap-1">
+                            {isSubmitted && !reportData?.reportMode === 'combined' && (
+                              <span className="text-emerald-500 font-bold" title="Report Submitted">✓ </span>
+                            )}
+                            <span>{displayName}</span>
+                          </div>
                           {isLong ? (
                             <button
                               type="button"
@@ -366,8 +409,21 @@ const OfficeReport = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
-                      {isDerivedView ? 'No derived KPI data available for this office.' : 'No report data available for this office.'}
+                    <TableCell colSpan={7 + columns.length} className="py-20 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <p className="text-base font-medium text-muted-foreground">
+                          {selectedReportType === 'derived' 
+                            ? 'No Derived KPIs found for this office.' 
+                            : selectedReportType === 'original'
+                            ? 'No Original KPIs found for this office.'
+                            : 'No report data available for this office.'}
+                        </p>
+                        <p className="text-sm text-muted-foreground/60">
+                          {selectedReportType === 'derived' 
+                            ? 'Try switching to "Original" or "All KPIs" to see standard metrics.' 
+                            : 'Ensure KPIs have been allocated and performance has been submitted.'}
+                        </p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -376,6 +432,49 @@ const OfficeReport = () => {
           </div>
         </CardContent>
       </Card>
+      <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Confirm Report Submission
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-foreground/80">
+              Are you sure you want to submit your finalized performance report to <strong>{reportData?.parentRole?.name || 'your parent office'}</strong>?
+              <p className="mt-2 text-xs text-muted-foreground">
+                Once submitted, your data will become visible in their comparative reports and used for higher-level performance tracking.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={submittingReport}
+              onClick={async () => {
+                try {
+                  setIsSubmitDialogOpen(false);
+                  setSubmittingReport(true);
+                  const response = await api.post('/user-kpi-results/report/submit', {
+                    year: reportData?.year,
+                  });
+                  const parentRoleName = response.data?.data?.parentRole?.name || reportData?.parentRole?.name || 'parent role';
+                  notify(`Report successfully submitted to ${parentRoleName}.`, 'success');
+                  setRefreshToken(prev => prev + 1); // Refresh to show checkmarks
+                } catch (submitErr) {
+                  notify(submitErr?.response?.data?.message || 'Failed to submit report. Please try again.', 'error');
+                } finally {
+                  setSubmittingReport(false);
+                }
+              }}
+            >
+              {submittingReport ? 'Submitting...' : 'Yes, Submit Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -14,6 +14,10 @@ const UserKPI = sequelize.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    KPIYearPlanId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
     CycleYear: {
       type: DataTypes.STRING,
       allowNull: false,

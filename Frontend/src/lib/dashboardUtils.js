@@ -70,6 +70,7 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
     groups.set(normalized, {
       name: normalized,
       totalKpis: 0,
+      kpiIds: new Set(),
       achieved: 0,
       inProgress: 0,
       delayed: 0,
@@ -103,6 +104,7 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
       groups.set(groupName, {
         name: groupName,
         totalKpis: 0,
+        kpiIds: new Set(),
         achieved: 0,
         inProgress: 0,
         delayed: 0,
@@ -113,7 +115,8 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
     }
 
     const group = groups.get(groupName);
-    group.totalKpis += 1;
+    group.kpiIds.add(String(assignment.KPIId));
+    group.totalKpis = group.kpiIds.size;
     group.targets.push(target);
     group.actualSums.push(totalPerformance);
 
@@ -207,7 +210,7 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
       q3Submitted: g.quarterPcts.q3.length > 0,
       q4Submitted: g.quarterPcts.q4.length > 0,
     };
-  }).sort((a, b) => b.score - a.score);
+  }).filter(s => s.totalKpis > 0).sort((a, b) => b.score - a.score);
 
   const assignedKpis = subUnits.reduce((acc, s) => acc + s.totalKpis, 0);
   const achievedKpis = subUnits.reduce((acc, s) => acc + s.achieved, 0);
@@ -292,8 +295,8 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
     inProgressKpis,
     delayedKpis,
     avgScore: safePercent(avgScore),
-    subUnits: subUnits.slice(0, 6),
-    quarterlyData: subUnits.slice(0, 5).map(s => ({
+    subUnits: subUnits,
+    quarterlyData: subUnits.map(s => ({
       name: s.name,
       q1: s.q1, q2: s.q2, q3: s.q3, q4: s.q4,
       q1Submitted: s.q1Submitted,
@@ -310,9 +313,9 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
       { name: 'In Progress', value: safePercent(assignedKpis ? (inProgressKpis / assignedKpis) * 100 : 0), color: 'hsl(45 93% 47%)' },
       { name: 'Delayed', value: safePercent(assignedKpis ? (delayedKpis / assignedKpis) * 100 : 0), color: 'hsl(0 84% 60%)' },
     ],
-    heatmap: subUnits.slice(0, 6).map(s => ({ pillar: s.name, q1: s.q1, q2: s.q2, q3: s.q3, q4: s.q4 })),
-    topPerformers: subUnits.slice(0, 4).map(s => ({ name: s.name, unit: `${s.totalKpis} KPI(s)`, score: s.score })),
-    achievementGap: subUnits.slice(0, 4).map(s => ({ name: s.name, target: s.target, actual: s.score })),
+    heatmap: subUnits.map(s => ({ pillar: s.name, q1: s.q1, q2: s.q2, q3: s.q3, q4: s.q4 })),
+    topPerformers: subUnits.map(s => ({ name: s.name, unit: `${s.totalKpis} KPI(s)`, score: s.score })),
+    achievementGap: subUnits.map(s => ({ name: s.name, target: s.target, actual: s.score })),
     quarterlyComparison: [
       { name: 'Q1', score: kpiQuarterlyTrends[0]?.score || 0, submitted: kpiQuarterlyTrends[0]?.anySubmitted || false },
       { name: 'Q2', score: kpiQuarterlyTrends[1]?.score || 0, submitted: kpiQuarterlyTrends[1]?.anySubmitted || false },

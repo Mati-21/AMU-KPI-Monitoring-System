@@ -4,6 +4,7 @@ import GeneralSystemSetting from "./GeneralSystemSetting";
 import KpiSystemConfiguration from "./KpiSystemConfiguration";
 import GradingScale from "./GradingScale";
 import PageTitle from "./PageTitle";
+import CycleManagement from "./CycleManagement";
 import Footer from "./Footer";
 
 
@@ -41,6 +42,9 @@ const Configuration = () => {
           <div className=" space-y-8 animate-fade-in">
             {/* Page Title */}
             <PageTitle />
+
+            {/* Cycle Management (Root Role Only) */}
+            <CycleManagement />
 
             {/* General System Setting */}
             <GeneralSystemSetting

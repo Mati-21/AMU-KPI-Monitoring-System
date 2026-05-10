@@ -87,8 +87,15 @@ const heatColor = (v) => {
   return 'bg-red-100 text-red-800'; // Critical (Red)
 };
 
-const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiChange }) => {
-  const [year, setYear] = useState(config.yearOptions?.[0] || '2023-2024');
+const PerformanceDashboard = ({ 
+  config, 
+  derivedKpiId = '__ALL__', 
+  onDerivedKpiChange, 
+  focusedRoleId = '__ALL__',
+  onRoleChange,
+  selectedCycleYear, 
+  onYearChange 
+}) => {
   const [quarter, setQuarter] = useState('All Quarters');
   const comparisonTitlePrefix = config.comparisonTitlePrefix || config.subUnitLabel || 'Sub Unit';
   const dashboardRef = useRef(null);
@@ -147,19 +154,30 @@ const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiCh
                 <FileText className="w-3.5 h-3.5" /> {isExportingPdf ? 'Generating...' : 'PDF'}
               </Button>
 
-              {Array.isArray(config.derivedKpiOptions) && config.derivedKpiOptions.length > 0 && typeof onDerivedKpiChange === 'function' && (
+              {Array.isArray(config.childRoleOptions) && config.childRoleOptions.length > 0 && typeof onRoleChange === 'function' ? (
                 <div className="w-56 text-xs shrink-0">
                   <CustomSelect
-                    options={[{ label: 'Total Performance (All KPIs)', value: '__ALL__' }, ...config.derivedKpiOptions]}
-                    value={derivedKpiId}
-                    onChange={onDerivedKpiChange}
-                    placeholder="Total Performance (All KPIs)"
+                    options={[{ label: `All ${config.subUnitLabel || 'Units'}`, value: '__ALL__' }, ...config.childRoleOptions]}
+                    value={focusedRoleId}
+                    onChange={onRoleChange}
+                    placeholder={`Select ${config.subUnitLabel || 'Unit'}`}
                   />
                 </div>
+              ) : (
+                Array.isArray(config.derivedKpiOptions) && config.derivedKpiOptions.length > 0 && typeof onDerivedKpiChange === 'function' && (
+                  <div className="w-56 text-xs shrink-0">
+                    <CustomSelect
+                      options={[{ label: 'Total Performance (All KPIs)', value: '__ALL__' }, ...config.derivedKpiOptions]}
+                      value={derivedKpiId}
+                      onChange={onDerivedKpiChange}
+                      placeholder="Total Performance (All KPIs)"
+                    />
+                  </div>
+                )
               )}
 
               <div className="w-40 text-xs shrink-0">
-                <CustomSelect options={config.yearOptions || ['2023-2024', '2022-2023']} value={year} onChange={setYear} placeholder="2023-2024" />
+                <CustomSelect options={config.yearOptions || ['Current Cycle']} value={selectedCycleYear || 'Current Cycle'} onChange={(val) => onYearChange(val === 'Current Cycle' ? '' : val)} placeholder="Current Cycle" />
               </div>
 
               <div className="w-40 text-xs shrink-0">
@@ -223,7 +241,7 @@ const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiCh
       </Card>
 
       <div>
-        <h2 className="text-base font-semibold mb-3">{config.subUnitLabel} Performance Comparison</h2>
+        <h2 className="text-base font-semibold mb-3">Performance Comparison</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {config.subUnits.map((u) => (
             <Card
@@ -231,14 +249,16 @@ const PerformanceDashboard = ({ config, derivedKpiId = '__ALL__', onDerivedKpiCh
               className={`border-t-4 ${u.color === 'primary' ? 'border-t-primary' : u.color === 'green' ? 'border-t-emerald-500' : u.color === 'red' ? 'border-t-red-500' : u.color === 'blue' ? 'border-t-blue-500' : u.color === 'purple' ? 'border-t-purple-500' : 'border-t-amber-500'}`}
             >
               <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-sm text-foreground">
-                      {comparisonTitlePrefix}: {u.name}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-sm text-foreground truncate" title={u.name}>
+                      {u.name}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Performance Health Check</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">Performance Health Check</p>
                   </div>
-                  <MiniDonut achieved={u.achieved} inProgress={u.inProgress} delayed={u.delayed} />
+                  <div className="shrink-0">
+                    <MiniDonut achieved={u.achieved} inProgress={u.inProgress} delayed={u.delayed} />
+                  </div>
                 </div>
                 <div className="mt-3 flex items-baseline gap-4">
                   <div>

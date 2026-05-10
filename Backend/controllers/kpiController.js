@@ -1,4 +1,5 @@
-const { KPI, KPIType, Unit } = require('../models');
+const { KPI, KPIType, Unit, KPIYearPlan } = require('../models');
+const { getCurrentCycleYear } = require('../utils/kpiCycle');
 
 const parseNumericValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -11,10 +12,11 @@ const parseNumericValue = (value) => {
 
 const createKPI = async (req, res) => {
   try {
-    const { KPITypeId, UnitId, Weight, Baseline, Target, Description, IsEvedenceRequired, Remark } = req.body;
+    const { KPITypeId, UnitId, Weight, Baseline, Target, Description, IsEvedenceRequired, Remark, LifecycleType, DefaultBaseline } = req.body;
     const parsedWeight = parseNumericValue(Weight);
     const parsedBaseline = parseNumericValue(Baseline);
     const parsedTarget = parseNumericValue(Target);
+    const parsedDefaultBaseline = parseNumericValue(DefaultBaseline);
 
     if (parsedWeight === null || parsedTarget === null) {
       return res.status(400).json({ message: 'Weight and Target must be valid numbers.' });
@@ -37,13 +39,23 @@ const createKPI = async (req, res) => {
     const kpi = await KPI.create({
       KPITypeId,
       UnitId,
+      LifecycleType: LifecycleType || 'RECURRING',
       Weight: parsedWeight,
-      Baseline: parsedBaseline,
-      Target: parsedTarget,
+      DefaultBaseline: parsedDefaultBaseline !== null ? parsedDefaultBaseline : (LifecycleType === 'RECURRING' ? 0 : parsedBaseline),
       Description,
       IsEvedenceRequired: IsEvedenceRequired || false,
       Remark,
       CreatedBy: req.user?.Id,
+    });
+
+    // Automatically create the first Year Plan
+    await KPIYearPlan.create({
+      KPIId: kpi.Id,
+      CycleYear: getCurrentCycleYear(),
+      Baseline: parsedBaseline || 0,
+      Target: parsedTarget,
+      Status: 'ACTIVE',
+      IsLocked: false,
     });
 
     res.status(201).json({ success: true, data: kpi });
@@ -77,11 +89,25 @@ const getKPIs = async (req, res) => {
           ],
         },
         { model: Unit, attributes: ['Id', 'Name', 'Code'] },
+        { 
+          model: KPIYearPlan, 
+          attributes: ['Id', 'CycleYear', 'Baseline', 'Target', 'FinalPerformance', 'Status', 'IsLocked'],
+          order: [['CycleYear', 'DESC']]
+        }
       ],
       order: [['CreatedAt', 'ASC']],
     });
 
-    res.json({ success: true, data: kpis });
+    const currentYear = getCurrentCycleYear();
+    const formattedKpis = kpis.map(kpi => {
+      const kpiJson = kpi.toJSON();
+      const currentPlan = kpiJson.KPIYearPlans?.find(p => p.CycleYear === currentYear) || kpiJson.KPIYearPlans?.[0];
+      kpiJson.Baseline = currentPlan?.Baseline ?? kpiJson.DefaultBaseline ?? 0;
+      kpiJson.Target = currentPlan?.Target ?? 0;
+      return kpiJson;
+    });
+
+    res.json({ success: true, data: formattedKpis });
   } catch (error) {
     console.error('Get KPIs error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -112,6 +138,10 @@ const getKPIById = async (req, res) => {
           ],
         },
         { model: Unit, attributes: ['Id', 'Name', 'Code'] },
+        { 
+          model: KPIYearPlan, 
+          attributes: ['Id', 'CycleYear', 'Baseline', 'Target', 'FinalPerformance', 'Status', 'IsLocked']
+        }
       ],
     });
 
@@ -119,7 +149,13 @@ const getKPIById = async (req, res) => {
       return res.status(404).json({ message: 'KPI not found' });
     }
 
-    res.json({ success: true, data: kpi });
+    const currentYear = getCurrentCycleYear();
+    const kpiJson = kpi.toJSON();
+    const currentPlan = kpiJson.KPIYearPlans?.find(p => p.CycleYear === currentYear) || kpiJson.KPIYearPlans?.[0];
+    kpiJson.Baseline = currentPlan?.Baseline ?? kpiJson.DefaultBaseline ?? 0;
+    kpiJson.Target = currentPlan?.Target ?? 0;
+
+    res.json({ success: true, data: kpiJson });
   } catch (error) {
     console.error('Get KPI error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -128,11 +164,11 @@ const getKPIById = async (req, res) => {
 
 const updateKPI = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { KPITypeId, UnitId, Weight, Baseline, Target, Description, IsEvedenceRequired, Remark } = req.body;
+    const { KPITypeId, UnitId, Weight, Baseline, Target, Description, IsEvedenceRequired, Remark, LifecycleType, DefaultBaseline } = req.body;
     const parsedWeight = parseNumericValue(Weight);
     const parsedBaseline = parseNumericValue(Baseline);
     const parsedTarget = parseNumericValue(Target);
+    const parsedDefaultBaseline = parseNumericValue(DefaultBaseline);
 
     const kpi = await KPI.findByPk(id);
     if (!kpi) {
@@ -153,8 +189,8 @@ const updateKPI = async (req, res) => {
       }
     }
 
-    if (parsedWeight === null || parsedTarget === null) {
-      return res.status(400).json({ message: 'Weight and Target must be valid numbers.' });
+    if (parsedWeight === null) {
+      return res.status(400).json({ message: 'Weight must be a valid number.' });
     }
 
     if (parsedWeight < 0 || parsedWeight > 100) {
@@ -164,13 +200,28 @@ const updateKPI = async (req, res) => {
     await kpi.update({
       KPITypeId,
       UnitId,
+      LifecycleType,
       Weight: parsedWeight,
-      Baseline: parsedBaseline,
-      Target: parsedTarget,
+      DefaultBaseline: parsedDefaultBaseline,
       Description,
       IsEvedenceRequired,
       Remark,
     });
+
+    // Update the current year plan if baseline/target provided
+    if (parsedBaseline !== null || parsedTarget !== null) {
+      const currentYear = getCurrentCycleYear();
+      const plan = await KPIYearPlan.findOne({
+        where: { KPIId: id, CycleYear: currentYear }
+      });
+
+      if (plan && !plan.IsLocked) {
+        await plan.update({
+          Baseline: parsedBaseline !== null ? parsedBaseline : plan.Baseline,
+          Target: parsedTarget !== null ? parsedTarget : plan.Target
+        });
+      }
+    }
 
     res.json({ success: true, data: kpi });
   } catch (error) {

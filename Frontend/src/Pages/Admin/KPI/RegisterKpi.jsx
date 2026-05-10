@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Input } from '../../../Components/UI/Input';
+import { Label } from '../../../Components/UI/Label';
 import CustomSelect from '../../../Components/UI/CustomSelect';
 import Button from '../../../Components/UI/Button';
 import Checkbox from '../../../Components/UI/Checkbox';
@@ -32,6 +33,8 @@ function RegisterKpi({ setActiveTab, onSaved }) {
     weight: '',
     baseline: '',
     target: '',
+    lifecycleType: 'RECURRING',
+    defaultBaseline: '0',
     description: '',
     remark: '',
     isEvidenceRequired: false,
@@ -169,6 +172,8 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         Weight: parsedWeight,
         Baseline: parsedBaseline,
         Target: parsedTarget,
+        LifecycleType: kpiForm.lifecycleType,
+        DefaultBaseline: kpiForm.lifecycleType === 'RECURRING' ? parseNumericInput(kpiForm.defaultBaseline) : null,
         Description: kpiForm.description?.trim() || null,
         Remark: kpiForm.remark?.trim() || null,
         IsEvedenceRequired: kpiForm.isEvidenceRequired,
@@ -184,6 +189,8 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         weight: '',
         baseline: '',
         target: '',
+        lifecycleType: 'RECURRING',
+        defaultBaseline: '0',
         description: '',
         remark: '',
         isEvidenceRequired: false,
@@ -200,56 +207,101 @@ function RegisterKpi({ setActiveTab, onSaved }) {
 
   return (
     <section className="space-y-6">
-      <div className="bg-card border border-border rounded-xl p-8 max-w-2xl">
+      <div className="bg-card border border-border rounded-xl p-8 w-full">
         <h2 className="text-xl font-semibold text-foreground mb-6">Add KPI</h2>
 
         {error ? <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Input
-            placeholder="KPI Name"
-            value={kpiForm.kpiName}
-            onChange={(e) => setKpiForm({ ...kpiForm, kpiName: e.target.value })}
-            className="h-11"
-          />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="space-y-1">
+            <Label>KPI Name</Label>
+            <Input
+              placeholder="KPI Name"
+              value={kpiForm.kpiName}
+              onChange={(e) => setKpiForm({ ...kpiForm, kpiName: e.target.value })}
+              className="h-11"
+            />
+          </div>
 
-          <CustomSelect
-            placeholder={loading ? 'Loading themes...' : NO_THEME_OPTION}
-            value={kpiForm.themeId ? getThemePath(kpiForm.themeId) : ''}
-            onChange={(value) => {
-              const selectedTheme = rootThemes.find((theme) => theme.KPIName === value);
-              setKpiForm({ ...kpiForm, themeId: selectedTheme?.Id || '', subThemeId: '' });
-            }}
-            options={rootThemes.map((theme) => theme.KPIName)}
-          />
+          <div className="space-y-1">
+            <Label>Theme</Label>
+            <CustomSelect
+              placeholder={loading ? 'Loading themes...' : NO_THEME_OPTION}
+              value={kpiForm.themeId ? getThemePath(kpiForm.themeId) : ''}
+              onChange={(value) => {
+                const selectedTheme = rootThemes.find((theme) => theme.KPIName === value);
+                setKpiForm({ ...kpiForm, themeId: selectedTheme?.Id || '', subThemeId: '' });
+              }}
+              options={rootThemes.map((theme) => theme.KPIName)}
+            />
+          </div>
 
-          <CustomSelect
-            placeholder={loading ? 'Loading sub-themes...' : NO_SUB_THEME_OPTION}
-            value={kpiForm.subThemeId ? getSubThemePath(kpiForm.subThemeId) : ''}
-            onChange={(value) => {
-              const selectedSubTheme = subThemeOptions.find((subTheme) => subTheme.KPIName === value);
-              setKpiForm({ ...kpiForm, subThemeId: selectedSubTheme?.Id || '' });
-            }}
-            options={subThemeOptions.map((subTheme) => subTheme.KPIName)}
-          />
+          <div className="space-y-1">
+            <Label>Sub-Theme</Label>
+            <CustomSelect
+              placeholder={loading ? 'Loading sub-themes...' : NO_SUB_THEME_OPTION}
+              value={kpiForm.subThemeId ? getSubThemePath(kpiForm.subThemeId) : ''}
+              onChange={(value) => {
+                const selectedSubTheme = subThemeOptions.find((subTheme) => subTheme.KPIName === value);
+                setKpiForm({ ...kpiForm, subThemeId: selectedSubTheme?.Id || '' });
+              }}
+              options={subThemeOptions.map((subTheme) => subTheme.KPIName)}
+            />
+          </div>
 
-          <CustomSelect
-            placeholder={loading ? 'Loading units...' : 'KPI Unit'}
-            value={kpiForm.unit}
-            onChange={(value) => setKpiForm({ ...kpiForm, unit: value })}
-            options={unitOptions}
-          />
+          <div className="space-y-1">
+            <Label>KPI Unit</Label>
+            <CustomSelect
+              placeholder={loading ? 'Loading units...' : 'KPI Unit'}
+              value={kpiForm.unit}
+              onChange={(value) => setKpiForm({ ...kpiForm, unit: value })}
+              options={unitOptions}
+            />
+          </div>
 
-          <Input placeholder="Weight" value={kpiForm.weight} onChange={(e) => setKpiForm({ ...kpiForm, weight: e.target.value })} className="h-11" />
-          <Input
-            placeholder="Baseline"
-            value={kpiForm.baseline}
-            onChange={(e) => setKpiForm({ ...kpiForm, baseline: e.target.value })}
-            className="h-11"
-          />
-          <Input placeholder="Target" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
+          <div className="space-y-1">
+            <Label>Weight</Label>
+            <Input placeholder="Weight" value={kpiForm.weight} onChange={(e) => setKpiForm({ ...kpiForm, weight: e.target.value })} className="h-11" />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Baseline (Current Year)</Label>
+            <Input
+              placeholder="Baseline (Current Year)"
+              value={kpiForm.baseline}
+              onChange={(e) => setKpiForm({ ...kpiForm, baseline: e.target.value })}
+              className="h-11"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label>Target (Current Year)</Label>
+            <Input placeholder="Target (Current Year)" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
+          </div>
           
-          <div className="flex items-center gap-3 h-11 px-1">
+          <div className="space-y-1">
+            <Label>Lifecycle Type</Label>
+            <CustomSelect
+              placeholder="Lifecycle Type"
+              value={kpiForm.lifecycleType}
+              onChange={(value) => setKpiForm({ ...kpiForm, lifecycleType: value })}
+              options={['RECURRING', 'PROGRESSIVE', 'ONE_TIME']}
+            />
+          </div>
+
+          {kpiForm.lifecycleType === 'RECURRING' && (
+             <div className="space-y-1">
+               <Label>Default Baseline (for resets)</Label>
+               <Input
+                 placeholder="Default Baseline (for resets)"
+                 value={kpiForm.defaultBaseline}
+                 onChange={(e) => setKpiForm({ ...kpiForm, defaultBaseline: e.target.value })}
+                 className="h-11"
+               />
+             </div>
+          )}
+          
+          <div className="flex items-center gap-3 h-11 px-1 mt-6">
             <Checkbox
               id="isEvidenceRequired"
               checked={kpiForm.isEvidenceRequired}
@@ -260,18 +312,26 @@ function RegisterKpi({ setActiveTab, onSaved }) {
             </label>
           </div>
 
-          <Input
-            placeholder="Enter Description"
-            value={kpiForm.description}
-            onChange={(e) => setKpiForm({ ...kpiForm, description: e.target.value })}
-            className="h-11 md:col-span-2"
-          />
-          <Input
-            placeholder="Remark"
-            value={kpiForm.remark}
-            onChange={(e) => setKpiForm({ ...kpiForm, remark: e.target.value })}
-            className="h-11 md:col-span-2"
-          />
+          <div className="md:col-span-3 flex flex-col md:flex-row gap-4 mt-2">
+            <div className="flex-1 space-y-1">
+              <Label>Description</Label>
+              <textarea
+                placeholder="Enter Description"
+                value={kpiForm.description}
+                onChange={(e) => setKpiForm({ ...kpiForm, description: e.target.value })}
+                className="w-full min-h-[120px] border border-border rounded bg-background px-3 py-2 placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y"
+              />
+            </div>
+            <div className="flex-1 space-y-1">
+              <Label>Remark</Label>
+              <textarea
+                placeholder="Remark"
+                value={kpiForm.remark}
+                onChange={(e) => setKpiForm({ ...kpiForm, remark: e.target.value })}
+                className="w-full min-h-[120px] border border-border rounded bg-background px-3 py-2 placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="flex gap-3 pt-6">
@@ -289,6 +349,8 @@ function RegisterKpi({ setActiveTab, onSaved }) {
                 weight: '',
                 baseline: '',
                 target: '',
+                lifecycleType: 'RECURRING',
+                defaultBaseline: '0',
                 description: '',
                 remark: '',
                 isEvidenceRequired: false,

@@ -32,7 +32,7 @@ const getDerivedKpiLabel = (assignment) => {
   );
 };
 
-export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } = {}) => {
+export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cycleYear, focusedRoleId = '__ALL__' } = {}) => {
   const authUser = useSelector((state) => state.auth?.user);
   const [data, setData] = useState({ child: null, parentReceived: null, raw: null });
   const [loading, setLoading] = useState(true);
@@ -50,11 +50,11 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
       setLoading(true);
       setError('');
       try {
-        const fetchOptions = { params: { t: Date.now() } };
+        const fetchOptions = { params: { t: Date.now(), ...(cycleYear ? { cycleYear } : {}) } };
 
         // Essential data for all users
         const [parentReceivedRes, kpiRes, kpiTypeRes] = await Promise.all([
-          api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', t: Date.now() } }),
+          api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', t: Date.now(), ...(cycleYear ? { cycleYear } : {}) } }),
           api.get('/kpis', fetchOptions),
           api.get('/kpi-types', fetchOptions),
         ]);
@@ -118,7 +118,8 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
 
         const assignmentsForSubUnits = assignments.filter((a) => {
           const assignedUserId = String(a.UserId || a.User?.Id || '');
-          return childUserIds.has(assignedUserId);
+          const createdBy = String(a.CreatedBy || '');
+          return childUserIds.has(assignedUserId) && createdBy === currentUserId;
         });
 
         const assignmentsForBreakdown = assignmentsForSubUnits.length > 0 ? assignmentsForSubUnits : parentReceivedAssignments;
@@ -139,14 +140,21 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
           );
         }
 
+        const childRoleOptions = roles
+          .filter((role) => String(role?.ParentRoleId || '') === currentRoleId)
+          .map((role) => ({ value: String(role.Id), label: role.RoleName }));
+
         setData({
           child: childData,
           parentReceived: parentReceivedData,
+          childRoleOptions,
           raw: {
             parentReceivedAssignments,
             assignmentsForSubUnits,
             kpis,
             kpiTypes,
+            roles,
+            userRoles,
             roleNameByUserId,
             activeSubUnitNames,
           },
@@ -165,7 +173,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
     return () => {
       mounted = false;
     };
-  }, [currentUserId, currentRoleId]);
+  }, [currentUserId, currentRoleId, cycleYear]);
 
   const config = useMemo(() => {
     const normalizedRole = roleName.toLowerCase();
@@ -187,10 +195,27 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
       return out;
     })();
 
-    const applyDerivedFilter = (assignments) => {
-      const list = Array.isArray(assignments) ? assignments : [];
-      if (!derivedFilterId || derivedFilterId === DEFAULT_DERIVED_KPI_FILTER) return list;
-      return list.filter((a) => getAssignmentId(a) === derivedFilterId);
+    const applyFilters = (assignments) => {
+      let list = Array.isArray(assignments) ? assignments : [];
+      
+      // Filter by Derived KPI if requested
+      if (derivedFilterId && derivedFilterId !== DEFAULT_DERIVED_KPI_FILTER) {
+        list = list.filter((a) => getAssignmentId(a) === derivedFilterId);
+      }
+      
+      // Filter by Focused Role if requested
+      if (focusedRoleId && focusedRoleId !== '__ALL__') {
+        const targetRoleId = String(focusedRoleId);
+        // Find users in this role
+        const usersInRole = new Set(
+          (data.raw?.userRoles || [])
+            .filter(ur => String(ur.RoleId || ur.Role?.Id) === targetRoleId)
+            .map(ur => String(ur.UserId))
+        );
+        list = list.filter(a => usersInRole.has(String(a.UserId)));
+      }
+
+      return list;
     };
 
     const computed = (() => {
@@ -198,8 +223,8 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
         return { child: data.child, parentReceived: data.parentReceived };
       }
 
-      const parentReceivedAssignmentsFiltered = applyDerivedFilter(data.raw.parentReceivedAssignments);
-      const assignmentsForSubUnitsFiltered = applyDerivedFilter(data.raw.assignmentsForSubUnits);
+      const parentReceivedAssignmentsFiltered = applyFilters(data.raw.parentReceivedAssignments);
+      const assignmentsForSubUnitsFiltered = applyFilters(data.raw.assignmentsForSubUnits);
 
       const assignmentsForBreakdown = assignmentsForSubUnitsFiltered.length > 0 ? assignmentsForSubUnitsFiltered : parentReceivedAssignmentsFiltered;
 
@@ -235,6 +260,8 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
       isLoading: loading,
       loadError: error,
       hasData,
+      childRoleOptions: data.childRoleOptions || [],
+      focusedRoleId,
       derivedKpiOptions,
       isDistributable: !isStaffView,
       stats: [
@@ -278,7 +305,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER } =
       achievementGap: computed.child?.achievementGap || [],
       quarterlyComparison: computed.child?.quarterlyComparison || [],
     };
-  }, [roleName, data, loading, error, authUser, derivedKpiId]);
+  }, [roleName, data, loading, error, authUser, derivedKpiId, focusedRoleId]);
 
   return { config, rawData: data, loading, error };
 };

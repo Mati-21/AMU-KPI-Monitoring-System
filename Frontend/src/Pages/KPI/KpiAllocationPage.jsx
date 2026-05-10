@@ -598,9 +598,8 @@ const KpiAllocationPage = () => {
     const fromParentIds = new Set(allocatedAssignments.map((assignment) => assignment.Id));
 
     const activePerformanceAssignments = myAssignments.filter((assignment) => {
-      const passedFromParent = fromParentIds.has(assignment.Id);
-      if (passedFromParent) return !canCascadeKpis || Boolean(assignment.IncludeCurrentOffice) || isExtraMeasureRole;
-      return true;
+      // Only show KPIs that the office assigned to itself
+      return Boolean(assignment.IncludeCurrentOffice);
     });
 
     return activePerformanceAssignments
@@ -1068,8 +1067,9 @@ const KpiAllocationPage = () => {
                               {formatNumericPreview(kpiRecord.distributedTarget)}
                             </span>
                             <div className="flex items-center gap-2">
-                              <label className="flex items-center gap-2 text-sm text-foreground">
+                              <div className="flex items-center gap-2">
                                 <Checkbox
+                                  id={`target-individual-${kpiRecord.id}`}
                                   checked={Boolean(kpiAssignmentOptions[kpiRecord.id]?.targetIndividual)}
                                   onCheckedChange={(checked) =>
                                     setKpiAssignmentOptions((previous) => ({
@@ -1081,8 +1081,10 @@ const KpiAllocationPage = () => {
                                     }))
                                   }
                                 />
-                                KPI Target individual
-                              </label>
+                                <label htmlFor={`target-individual-${kpiRecord.id}`} className="text-sm text-foreground cursor-pointer select-none">
+                                  KPI Target individual
+                                </label>
+                              </div>
                               <Button
                                 type="button"
                                 variant="outline"
@@ -1093,8 +1095,9 @@ const KpiAllocationPage = () => {
                                 Create custom target
                               </Button>
                             </div>
-                            <label className="flex items-center gap-2 text-sm text-foreground">
+                            <div className="flex items-center gap-2">
                               <Checkbox
+                                id={`include-current-${kpiRecord.id}`}
                                 checked={Boolean(kpiAssignmentOptions[kpiRecord.id]?.includeCurrentRole)}
                                 onCheckedChange={(checked) =>
                                   setKpiAssignmentOptions((previous) => ({
@@ -1106,8 +1109,10 @@ const KpiAllocationPage = () => {
                                   }))
                                 }
                               />
-                              Include current Office
-                            </label>
+                              <label htmlFor={`include-current-${kpiRecord.id}`} className="text-sm text-foreground cursor-pointer select-none">
+                                Include current Office
+                              </label>
+                            </div>
                           </div>
 
                           <p className="mt-2 text-xs text-muted-foreground">
@@ -1317,7 +1322,7 @@ const KpiAllocationPage = () => {
 
                         {sentToChildrenRows.length === 0 && (
                           <TableRow>
-                            <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
                               {loading ? 'Loading sent KPI assignments...' : 'No KPI has been sent to child roles/users yet.'}
                             </TableCell>
                           </TableRow>
