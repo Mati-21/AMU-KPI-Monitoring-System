@@ -4,8 +4,10 @@ import { store } from '../app/store';
 import { queryClient } from '../app/queryClient';
 import { logout } from '../Features/authSlice';
 
+export const BASE_URL = 'http://localhost:5000';
+
 export const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: `${BASE_URL}/api`,
   withCredentials: true,
 });
 
@@ -37,6 +39,13 @@ api.interceptors.response.use(
     if (status === 401 && (isAuthFailureMessage || isAuthEndpoint)) {
       store.dispatch(logout());
       queryClient.clear();
+    }
+
+    const isStatusCheck = requestUrl.includes('/settings/status');
+    const isMaintenancePage = window.location.pathname === '/maintenance';
+
+    if (status === 503 && error?.response?.data?.maintenance && !isStatusCheck && !isMaintenancePage) {
+      window.location.href = '/maintenance';
     }
 
     return Promise.reject(error);

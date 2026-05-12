@@ -12,12 +12,15 @@ import RoleManagement from './Pages/Admin/RoleManagement/RoleManagement';
 import Configuration from './Pages/Admin/Configuration/Configuration';
 import AlertsNotifications from './Pages/Admin/Notification/AlertsNotification';
 import PermissionManagement from './Pages/Admin/Permissions/PermissonsManagement';
+import SystemLogs from './Pages/Admin/SystemLogs/SystemLogs';
+import Maintenance from './Pages/Common/Maintenance';
 import UserProfile from './Pages/Profile/UserProfile';
 
 import DashboardHome from './Pages/Common/DashboardHome';
 import OfficeReport from './Pages/Strategic/OfficeReport';
 import RegisteredKpis from './Pages/Strategic/RegisteredKpis';
 import AssignedKpisPage from './Pages/KPI/AssignedKpisPage';
+import KpiApprovalsPage from './Pages/KPI/KpiApprovalsPage';
 import SubUnitPage from './Pages/SubUnit/SubUnitPage';
 import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from './Components/Auth/RouteGuards';
 import { NotificationProvider } from './Context/NotificationContext';
@@ -36,7 +39,9 @@ function App() {
                 <Route path="/" element={<LandingPage />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/signin" element={<SignIn />} />
+                  <Route path="/login" element={<Navigate to="/signin" replace />} />
                 </Route>
+                <Route path="/maintenance" element={<Maintenance />} />
 
                 {/* Protected Routes */}
                 <Route element={<RequireAuth />}>
@@ -46,6 +51,10 @@ function App() {
 
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Assigned KPI')} />}>
                       <Route path="/assigned-kpis" element={<AssignedKpisPage />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'KPI Approvals')} />}>
+                      <Route path="/kpi-approvals" element={<KpiApprovalsPage />} />
                     </Route>
 
                     <Route
@@ -191,6 +200,16 @@ function App() {
 
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Alerts & Notifications')} />}>
                       <Route path="/alert-notification" element={<AlertsNotifications />} />
+                    </Route>
+
+                    <Route
+                      element={
+                        <RequirePermission
+                          permissions={[permissionUtils.permissionKey('view', 'Configuration'), permissionUtils.permissionKey('view', 'Role Management')]}
+                        />
+                      }
+                    >
+                      <Route path="/system-logs" element={<SystemLogs />} />
                     </Route>
 
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
