@@ -21,6 +21,7 @@ import { useNotification } from '../../../Context/NotificationContext';
 
 const MATRIX_ACTIONS = ['view', 'create', 'assign', 'edit', 'delete', 'approve'];
 const LEGACY_PERMISSION_RESOURCES = ['Performance', 'Assign KPI', 'KPI Evaluation', 'Audit Log', 'System Settings'];
+const KPI_APPROVAL_PERMISSION_RESOURCE = 'kpi_approvals';
 const EXTRA_PERMISSION_KEYS = [
   permissionUtils.permissionKey('create', 'Child Office Accounts'),
   permissionUtils.permissionKey('create', 'Sub Unit'),
@@ -102,13 +103,34 @@ const parsePermissionKey = (key) => {
   };
 };
 
-const buildPermissionRows = (roleName, rows) => {
+const getRoleAccessContext = (role, allRoles = []) => {
+  const roleId = String(role?.Id || '').trim();
+
+  return {
+    isDistributable: Boolean(role?.IsDistributable ?? role?.isDistributable ?? true),
+    hasChildRoles: allRoles.some((candidate) => String(candidate?.ParentRoleId || '') === roleId),
+  };
+};
+
+const getDefaultPermissionState = (resourceKey, roleContext = {}) => {
+  if (resourceKey !== KPI_APPROVAL_PERMISSION_RESOURCE) {
+    return null;
+  }
+
+  if (roleContext.isDistributable || roleContext.hasChildRoles) {
+    return { view: true, create: true };
+  }
+
+  return null;
+};
+
+const buildPermissionRows = (roleName, rows, roleContext = {}) => {
   void roleName;
   return rows.map(({ resourceKey, label }) => ({
     module: label,
     resourceKey,
-    view: false,
-    create: false,
+    view: Boolean(getDefaultPermissionState(resourceKey, roleContext)?.view),
+    create: Boolean(getDefaultPermissionState(resourceKey, roleContext)?.create),
     assign: false,
     edit: false,
     delete: false,
@@ -123,8 +145,8 @@ const isSystemAdminRoleName = (roleName) =>
       .toLowerCase()
   );
 
-const mergePermissions = (roleName, savedPermissions, rows) => {
-  const defaults = buildPermissionRows(roleName, rows);
+const mergePermissions = (roleName, savedPermissions, rows, roleContext = {}) => {
+  const defaults = buildPermissionRows(roleName, rows, roleContext);
   if (!Array.isArray(savedPermissions) || !savedPermissions.length) return defaults;
 
   const byScope = new Map(
@@ -138,11 +160,13 @@ const mergePermissions = (roleName, savedPermissions, rows) => {
     const saved = byScope.get(permission.resourceKey);
     if (!saved) return permission;
 
+    const defaultState = getDefaultPermissionState(permission.resourceKey, roleContext);
+
     return {
       module: permission.module,
       resourceKey: permission.resourceKey,
-      view: Boolean(saved.view),
-      create: Boolean(saved.create),
+      view: Boolean(saved.view ?? defaultState?.view),
+      create: Boolean(saved.create ?? defaultState?.create),
       assign: Boolean(saved.assign),
       edit: Boolean(saved.edit),
       delete: Boolean(saved.delete),
@@ -436,13 +460,15 @@ const PermissionManagement = () => {
               .trim()
               .toLowerCase()
         );
-        setPermissions(mergePermissions(firstRole, firstRoleRecord?.Permissions, permissionRows));
+        setPermissions(
+          mergePermissions(firstRole, firstRoleRecord?.Permissions, permissionRows, getRoleAccessContext(firstRoleRecord, fetchedRoles))
+        );
       } catch (loadErr) {
         if (!mounted) return;
         setRoleLoadError(loadErr?.response?.data?.message || 'Failed to load registered roles.');
         setRoles([]);
         setSelectedRole('');
-        setPermissions(buildPermissionRows('', permissionRows));
+        setPermissions(buildPermissionRows('', permissionRows, {}));
       } finally {
         if (mounted) setLoadingRoles(false);
       }
@@ -466,7 +492,7 @@ const PermissionManagement = () => {
           .trim()
           .toLowerCase()
     );
-    setPermissions(mergePermissions(role, roleRecord?.Permissions, permissionRows));
+    setPermissions(mergePermissions(role, roleRecord?.Permissions, permissionRows, getRoleAccessContext(roleRecord, roles)));
   };
 
   const handleToggleSidebarButton = (row) => {
@@ -509,7 +535,9 @@ const PermissionManagement = () => {
       setRoles(refreshedRoles);
 
       const refreshedSelected = refreshedRoles.find((role) => role.Id === selectedRoleRecord.Id);
-      setPermissions(mergePermissions(selectedRole, refreshedSelected?.Permissions, permissionRows));
+      setPermissions(
+        mergePermissions(selectedRole, refreshedSelected?.Permissions, permissionRows, getRoleAccessContext(refreshedSelected, refreshedRoles))
+      );
       notify('Permissions saved successfully.', 'success', 3000, { position: 'center' });
 
       // Keep current logged-in user permissions in sync if their role was edited.

@@ -10,6 +10,10 @@ const permissionRoutes = [
     route: '/kpi',
   },
   {
+    permissions: [permissionUtils.permissionKey('view', 'KPI Approvals')],
+    route: '/kpi-approvals',
+  },
+  {
     permissions: [
       permissionUtils.permissionKey('view', 'KPI Reporting'),
       permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),

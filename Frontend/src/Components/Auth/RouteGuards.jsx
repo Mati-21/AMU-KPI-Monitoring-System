@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../api/axios';
-import { logout, setAuthLoading, setUser } from '../../Features/authSlice';
+import { logout, setAuthLoading, setUser, setMaintenance, setSystemSettings } from '../../Features/authSlice';
 import { normalizeAuthUser } from '../../lib/authUser';
 import { getDefaultRouteByRole } from '../../lib/authRouting';
 import { useNotification } from '../../Context/NotificationContext';
@@ -17,9 +17,16 @@ const IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart'
 export const RequireAuth = () => {
   const location = useLocation();
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const isMaintenance = useSelector((state) => state.auth.isMaintenance);
+  const user = useSelector((state) => state.auth.user);
+  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(user?.roleName || user?.role);
 
   if (!isAuthenticated) {
     return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
+  }
+
+  if (isMaintenance && !isSystemAdmin) {
+    return <Navigate to="/maintenance" replace />;
   }
 
   return <Outlet />;
@@ -141,13 +148,31 @@ export const AuthBootstrap = ({ children }) => {
     const hydrate = async () => {
       try {
         dispatch(setAuthLoading());
-        const { data } = await api.get('/auth/me');
+        
+        // Parallel fetch for session and comprehensive system status
+        const [authRes, systemRes] = await Promise.all([
+          api.get('/auth/me'),
+          api.get('/settings/status')
+        ]);
+
         if (!mounted) return;
 
+        // Sync branding and maintenance state
+        const { maintenanceMode, displayName, orgName, systemLogo } = systemRes.data;
+        dispatch(setMaintenance(maintenanceMode));
+        dispatch(setSystemSettings({ displayName, orgName, systemLogo }));
+        
         hasLoggedOutRef.current = false;
-        dispatch(setUser(normalizeAuthUser(data.user, data.role)));
-      } catch {
+        dispatch(setUser(normalizeAuthUser(authRes.data.user, authRes.data.role)));
+      } catch (err) {
         if (!mounted) return;
+        
+        // Even if session fails, we might want to check maintenance
+        try {
+          const mRes = await api.get('/settings/status');
+          dispatch(setMaintenance(mRes.data.maintenanceMode));
+        } catch {}
+
         dispatch(logout());
         queryClient.clear();
       } finally {

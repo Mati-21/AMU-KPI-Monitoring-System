@@ -52,6 +52,10 @@ const User = sequelize.define('User', {
   IsArchived: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
+  },
+  LastActiveAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
 }, {
   timestamps: false,

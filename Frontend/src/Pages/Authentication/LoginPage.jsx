@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import kpiImage from '../../assets/images/kpi.jpeg';
@@ -6,12 +6,32 @@ import Navbar from '../../Components/UI/Navbar';
 import { Input } from '../../Components/UI/Input';
 import { useLogin } from '../../Hooks/Auth/useLogin';
 import { getDefaultRouteByRole } from '../../lib/authRouting';
+import { api, BASE_URL } from '../../api/axios';
+import { useSelector } from 'react-redux';
 
 const SignIn = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
+  const [isMaintenance, setIsMaintenance] = useState(false);
   const navigate = useNavigate();
+
+  const systemSettings = useSelector((state) => state.auth.systemSettings);
+  const logoUrl = systemSettings?.systemLogo 
+    ? `${BASE_URL}${systemSettings.systemLogo}` 
+    : null;
+
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await api.get('/settings/status');
+        setIsMaintenance(res.data.maintenanceMode);
+      } catch (err) {
+        console.error("Failed to check system status", err);
+      }
+    };
+    checkStatus();
+  }, []);
 
   // Use the custom hook
   const { mutate: loginMutate, isPending, error } = useLogin();
@@ -35,20 +55,46 @@ const SignIn = () => {
   return (
     <div className="flex-1 bg-background flex flex-col">
       <Navbar />
-      <div className="flex-1 flex items-center justify-center px-6 py-16 relative">
+      <div className="flex-1 flex items-center justify-center px-6 py-8 relative">
         <div className="absolute inset-0 opacity-[0.08] bg-white z-0" style={{ backgroundImage: `url(${kpiImage})` }} />
 
         <div className="w-full max-w-md animate-fade-in-up relative z-50">
-          <div className="bg-card rounded-2xl border border-border/60 shadow-xl shadow-primary/5 p-8 sm:p-10 space-y-8">
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">Sign In</h1>
-              <p className="text-sm text-muted-foreground">Access your KPI management dashboard</p>
+          <div className="bg-card rounded-2xl border border-border/60 shadow-xl shadow-primary/5 p-8 sm:p-10 space-y-6">
+            <div className="flex flex-col items-center text-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 p-2">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="System Logo" className="w-full h-full object-contain" />
+                ) : (
+                  <Mail className="w-8 h-8 text-primary" />
+                )}
+              </div>
+              <div>
+                <h2 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">
+                  {systemSettings?.orgName || 'ArbaMinch University'}
+                </h2>
+                <h1 className="text-lg font-black text-foreground tracking-tight mt-1">
+                  {systemSettings?.displayName || 'KPI Monitoring System'}
+                </h1>
+              </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="pt-2 border-t border-border/50 text-center">
+              <h3 className="text-xl font-bold text-foreground tracking-tight">Sign In</h3>
+            </div>
+
+            {isMaintenance && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center gap-3 animate-pulse">
+                <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                <p className="text-xs text-amber-700 font-semibold uppercase tracking-wider text-center w-full">
+                  System Maintenance Active: Administrative Access Only
+                </p>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email Input */}
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm font-medium">
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-xs font-semibold text-foreground/70 ml-1">
                   Username or Email
                 </label>
                 <div className="relative">
@@ -66,8 +112,8 @@ const SignIn = () => {
               </div>
 
               {/* Password Input */}
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium">
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="text-xs font-semibold text-foreground/70 ml-1">
                   Password
                 </label>
                 <div className="relative">

@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { registerUser, loginUser, getCurrentUser } = require('../controllers/authController');
+const { registerUser, loginUser, logoutUser, getCurrentUser } = require('../controllers/authController');
 const { protect, requirePermission, permissionKey } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -35,15 +35,6 @@ router.post(
 router.get('/me', protect, getCurrentUser);
 
 // Logout route to clear cookie
-router.post('/logout', (req, res) => {
-  res.cookie('token', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    expires: new Date(0), // Expire immediately
-    path: '/', // Ensure it matches the path the cookie was set on
-  });
-  res.json({ success: true, message: 'Logged out successfully' });
-});
+router.post('/logout', protect, logoutUser);
 
 module.exports = router;

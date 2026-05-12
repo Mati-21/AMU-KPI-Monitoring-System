@@ -15,6 +15,12 @@ const sanitizeAuthState = (rawAuth) => {
     status: rawAuth.status || 'idle',
     error: null,
     isAuthenticated: Boolean(token),
+    isMaintenance: rawAuth.isMaintenance || false,
+    systemSettings: rawAuth.systemSettings || {
+      displayName: 'AMU KPI Monitoring System',
+      orgName: 'ArbaMinch University',
+      systemLogo: null
+    },
   };
 };
 
@@ -47,6 +53,12 @@ const initialState = persistedAuth || {
   status: 'idle',
   error: null,
   isAuthenticated: false,
+  isMaintenance: false,
+  systemSettings: {
+    displayName: 'AMU KPI Monitoring System',
+    orgName: 'ArbaMinch University',
+    systemLogo: null
+  },
 };
 
 const persistAuth = (state) => {
@@ -63,6 +75,8 @@ const persistAuth = (state) => {
       status: state.status,
       error: state.error,
       isAuthenticated: Boolean(token),
+      isMaintenance: state.isMaintenance,
+      systemSettings: state.systemSettings,
     })
   );
 };
@@ -122,9 +136,20 @@ const authSlice = createSlice({
       state.isAuthenticated = hasValidToken(state.token);
       persistAuth(state);
     },
+    setMaintenance(state, action) {
+      state.isMaintenance = action.payload;
+      persistAuth(state);
+    },
+    setSystemSettings(state, action) {
+      state.systemSettings = {
+        ...state.systemSettings,
+        ...action.payload
+      };
+      persistAuth(state);
+    },
   },
 });
 
-export const { setAuthLoading, setCredentials, logout, setUser, setAuthError } = authSlice.actions;
+export const { setAuthLoading, setCredentials, logout, setUser, setAuthError, setMaintenance, setSystemSettings } = authSlice.actions;
 
 export default authSlice.reducer;

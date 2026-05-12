@@ -13,11 +13,14 @@ import AddRole from './AddRole';
 import AddCategory from './AddCategory';
 import TabButton from '../../../Components/UI/TabButton';
 import { api } from '../../../api/axios';
+import { useSearchParams } from 'react-router-dom';
 import permissionUtils from '../../../lib/permissionUtils';
 
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
 const RoleManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
   const authUser = useSelector((state) => state.auth?.user);
   const userPermissions = authUser?.permissions || [];
   const canCreateRole = permissionUtils.hasPermission(userPermissions, [
@@ -28,7 +31,16 @@ const RoleManagement = () => {
     permissionUtils.permissionKey('manage', 'Roles'),
     permissionUtils.permissionKey('manage', 'Permissions'),
   ]);
-  const [activeTab, setActiveTab] = useState('list');
+  const [activeTab, setActiveTab] = useState(requestedTab || 'list');
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'list') {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab }, { replace: true });
+    }
+  };
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -278,7 +290,7 @@ const RoleManagement = () => {
 
           <div className="flex gap-2">
             {tabs.map((tab) => (
-              <TabButton key={tab.key} label={tab.label} value={tab.key} activeValue={activeTab} onChange={setActiveTab} />
+              <TabButton key={tab.key} label={tab.label} value={tab.key} activeValue={activeTab} onChange={handleTabChange} />
             ))}
           </div>
 
@@ -414,11 +426,11 @@ const RoleManagement = () => {
           )}
 
           {activeTab === 'addRole' && canCreateRole ? (
-            <AddRole setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+            <AddRole setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />
           ) : null}
 
           {activeTab === 'addCategory' && canManageRoleCategories ? (
-            <AddCategory setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+            <AddCategory setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />
           ) : null}
 
           <Dialog open={Boolean(editingCategory)} onOpenChange={(open) => !open && setEditingCategory(null)}>

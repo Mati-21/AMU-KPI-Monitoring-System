@@ -25,6 +25,8 @@ const SYSTEM_ADMIN_FALLBACK_PERMISSIONS = [
   permissionUtils.permissionKey('manage', 'Roles'),
   permissionUtils.permissionKey('manage', 'Permissions'),
   permissionUtils.permissionKey('view', 'Assigned KPI'),
+  permissionUtils.permissionKey('view', 'KPI Approvals'),
+  permissionUtils.permissionKey('create', 'KPI Approvals'),
   permissionUtils.permissionKey('view', 'KPI Allocation'),
   permissionUtils.permissionKey('view', 'KPI Reporting'),
   permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),
@@ -73,7 +75,14 @@ export const normalizeAuthUser = (user, role) => {
     .trim()
     .toLowerCase();
   const isSystemAdmin = SYSTEM_ADMIN_ROLES.has(normalizedRoleName) || SYSTEM_ADMIN_ROLE_KEYS.has(normalizeRoleName(roleName));
-  const permissionKeys = isSystemAdmin ? [...new Set([...flattenedPermissions, ...SYSTEM_ADMIN_FALLBACK_PERMISSIONS])] : flattenedPermissions;
+  const hasChildRoles = Array.isArray(role?.ChildRoles) && role.ChildRoles.length > 0;
+  const autoApproveKpis = Boolean(role?.IsDistributable ?? role?.isDistributable ?? true) || hasChildRoles;
+  const approvalDefaults = autoApproveKpis
+    ? [permissionUtils.permissionKey('view', 'KPI Approvals'), permissionUtils.permissionKey('create', 'KPI Approvals')]
+    : [];
+  const permissionKeys = isSystemAdmin
+    ? [...new Set([...flattenedPermissions, ...SYSTEM_ADMIN_FALLBACK_PERMISSIONS, ...approvalDefaults])]
+    : [...new Set([...flattenedPermissions, ...approvalDefaults])];
   const hasExtraMeasures = Boolean(role?.HasExtraMeasures ?? role?.hasExtraMeasures);
   const parentHasExtraMeasures = Boolean(role?.ParentRole?.HasExtraMeasures ?? role?.ParentRole?.hasExtraMeasures);
 
@@ -89,6 +98,7 @@ export const normalizeAuthUser = (user, role) => {
     roleName,
     hasExtraMeasures,
     isDistributable: Boolean(role?.IsDistributable ?? role?.isDistributable ?? true),
+    hasChildRoles,
     parentRoleId: role?.ParentRoleId || role?.parentRoleId || user.parentRoleId || user.ParentRoleId || null,
     parentHasExtraMeasures,
     permissions: permissionKeys,

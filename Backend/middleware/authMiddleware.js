@@ -1,6 +1,39 @@
 const jwt = require('jsonwebtoken');
-const { User, UserRole, Role } = require('../models');
+const { User, UserRole, Role, UserActivityLog, SystemSetting, sequelize } = require('../models');
 const { Op } = require('sequelize');
+
+const checkMaintenance = async (user) => {
+  const setting = await SystemSetting.findOne({ where: { Key: 'maintenance_mode' } });
+  const isMaintenance = setting ? setting.Value === 'true' : false;
+  
+  if (isMaintenance) {
+    const isSystemAdmin = hasSystemAdminRole(user);
+    if (!isSystemAdmin) {
+      return true; // Is in maintenance and user is not admin
+    }
+  }
+  return false;
+};
+
+const trackActivity = async (userId) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 1. Update User LastActiveAt
+    await User.update({ LastActiveAt: new Date() }, { where: { Id: userId } });
+
+    // 2. Upsert Daily Activity Log
+    await UserActivityLog.upsert({
+      UserId: userId,
+      ActivityDate: today,
+      LastActiveAt: new Date()
+    }, {
+      conflictFields: ['UserId', 'ActivityDate']
+    });
+  } catch (err) {
+    console.error('Failed to track user activity:', err);
+  }
+};
 
 const normalizeToken = (value) =>
   String(value || '')
@@ -153,6 +186,8 @@ const SYSTEM_ADMIN_FALLBACK_PERMISSIONS = [
   permissionKey('manage', 'Roles'),
   permissionKey('manage', 'Permissions'),
   permissionKey('view', 'Assigned KPI'),
+  permissionKey('view', 'KPI Approvals'),
+  permissionKey('create', 'KPI Approvals'),
   permissionKey('view', 'KPI Allocation'),
   ...AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS,
   permissionKey('view', 'User Management'),
@@ -184,6 +219,8 @@ const ADMIN_PERMISSION_KEYS = [
   permissionKey('manage', 'Users'),
   permissionKey('manage', 'Roles'),
   permissionKey('manage', 'Permissions'),
+  permissionKey('view', 'KPI Approvals'),
+  permissionKey('create', 'KPI Approvals'),
   permissionKey('view', 'User Management'),
   permissionKey('create', 'User Management'),
   permissionKey('edit', 'User Management'),
@@ -232,7 +269,7 @@ const protect = async (req, res, next) => {
       if (Array.isArray(req.user.UserRoles) && req.user.UserRoles.length > 0) {
         const activeRole = selectPrimaryRole(req.user.UserRoles);
 
-        console.log(`[AUTH] User ${req.user.Id} has roles:`, req.user.UserRoles.map(ur => ur?.Role?.RoleName).filter(Boolean));
+        console.log(`[AUTH] User ${req.user.Id} has roles:`, req.user.UserRoles.map((ur) => ur?.Role?.RoleName).filter(Boolean));
         console.log(`[AUTH] Active Role:`, activeRole?.RoleName);
         console.log(`[AUTH] Is System Admin:`, hasSystemAdminRole(req.user));
 
@@ -250,6 +287,11 @@ const protect = async (req, res, next) => {
         }
       }
 
+      if (await checkMaintenance(req.user)) {
+        return res.status(503).json({ message: 'System is under maintenance', maintenance: true });
+      }
+
+      trackActivity(req.user.Id);
       next();
       return;
     } catch (error) {
@@ -303,6 +345,11 @@ const protect = async (req, res, next) => {
         }
       }
 
+      if (await checkMaintenance(req.user)) {
+        return res.status(503).json({ message: 'System is under maintenance', maintenance: true });
+      }
+
+      trackActivity(req.user.Id);
       next();
       return;
     } catch (error) {

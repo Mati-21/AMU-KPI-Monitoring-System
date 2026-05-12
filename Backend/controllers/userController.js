@@ -1,5 +1,6 @@
 const { Op, col, fn, where: sequelizeWhere } = require('sequelize');
 const { User, UserRole, Role, RoleCategory } = require('../models');
+const { logActivity } = require('../utils/auditLogger');
 const { hasPermission, permissionKey } = require('../middleware/authMiddleware');
 
 const normalizeToken = (value) =>
@@ -245,6 +246,14 @@ const updateUser = async (req, res) => {
       ],
     });
 
+    await logActivity({
+      userId: req.user.Id,
+      action: 'UPDATE_USER',
+      resource: 'User',
+      description: `Updated profile for user: ${updatedUser.FirstName} ${updatedUser.FatherName} (${updatedUser.UserName})`,
+      ipAddress: req.ip
+    });
+
     res.json({
       success: true,
       message: 'User updated successfully.',
@@ -285,6 +294,14 @@ const deleteUser = async (req, res) => {
       }
     );
 
+    await logActivity({
+      userId: req.user.Id,
+      action: 'DELETE_USER',
+      resource: 'User',
+      description: `Archived user account: ${user.FirstName} ${user.FatherName} (${user.UserName})`,
+      ipAddress: req.ip
+    });
+
     res.json({
       success: true,
       message: 'User archived successfully',
@@ -312,6 +329,14 @@ const resetUserPassword = async (req, res) => {
 
     user.password = nextPassword;
     await user.save();
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'RESET_PASSWORD',
+      resource: 'User',
+      description: `Reset password for user: ${user.FirstName} ${user.FatherName} (${user.UserName})`,
+      ipAddress: req.ip
+    });
 
     res.json({
       success: true,

@@ -1,5 +1,6 @@
 const { Op, col, fn, where: sequelizeWhere } = require('sequelize');
 const { Role, RoleCategory, UserRole } = require('../models');
+const { logActivity } = require('../utils/auditLogger');
 const { normalizeRolePermissions } = require('../utils/rolePermissions');
 const { hasPermission, permissionKey } = require('../middleware/authMiddleware');
 
@@ -143,6 +144,14 @@ const createRole = async (req, res) => {
       Permissions: normalizeRolePermissions(normalizedRoleName, Permissions),
       PermissionVersion: 1,
       CreatedBy: req.user?.Id,
+    });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'CREATE_ROLE',
+      resource: 'Role',
+      description: `Created new role: ${role.RoleName}`,
+      ipAddress: req.ip
     });
 
     res.status(201).json({
@@ -340,6 +349,14 @@ const deleteRole = async (req, res) => {
     const [reparentedChildren] = await Role.update({ ParentRoleId: role.ParentRoleId || null }, { where: { ParentRoleId: id, IsArchived: false } });
 
     await role.update({ IsArchived: true });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'DELETE_ROLE',
+      resource: 'Role',
+      description: `Archived role: ${role.RoleName}`,
+      ipAddress: req.ip
+    });
 
     res.json({
       success: true,
