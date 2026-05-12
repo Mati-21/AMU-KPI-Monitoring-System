@@ -1,4 +1,19 @@
-import { Bell, ClipboardList, FileText, GraduationCap, LayoutDashboard, Lock, Settings, Settings2, Shield, Target, User, Users } from 'lucide-react';
+import {
+  BadgeCheck,
+  Bell,
+  ClipboardList,
+  FileText,
+  GraduationCap,
+  LayoutDashboard,
+  Lock,
+  ScrollText,
+  Settings,
+  Settings2,
+  Shield,
+  Target,
+  User,
+  Users,
+} from 'lucide-react';
 import permissionUtils from '../lib/permissionUtils';
 
 export const navigationSections = [
@@ -39,6 +54,12 @@ export const navigationSections = [
         label: 'Performance',
         path: '/assigned-kpis',
         permissions: [permissionUtils.permissionKey('view', 'Assigned KPI')],
+      },
+      {
+        icon: BadgeCheck,
+        label: 'KPI Approvals',
+        path: '/kpi-approvals',
+        permissions: [permissionUtils.permissionKey('view', 'KPI Approvals'), permissionUtils.permissionKey('create', 'KPI Approvals')],
       },
       {
         icon: ClipboardList,
@@ -133,6 +154,12 @@ export const navigationSections = [
         label: 'Alerts',
         path: '/alert-notification',
         permissions: [permissionUtils.permissionKey('view', 'Alerts & Notifications')],
+      },
+      {
+        icon: ScrollText,
+        label: 'System Logs',
+        path: '/system-logs',
+        permissions: [permissionUtils.permissionKey('view', 'Configuration'), permissionUtils.permissionKey('view', 'Role Management')],
       },
     ],
   },

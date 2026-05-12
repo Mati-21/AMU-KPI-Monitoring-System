@@ -6,7 +6,7 @@ import useTheme from '../../Hooks/useTheme';
 
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../UI/DropDown';
 import { logout } from '../../Features/authSlice';
-import { api } from '../../api/axios';
+import { api, BASE_URL } from '../../api/axios';
 
 const navLinks = ['About', 'Features', 'Benefits', 'Contact'];
 
@@ -16,7 +16,13 @@ const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+  const systemSettings = useSelector((state) => state.auth.systemSettings);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  
+  const logoUrl = systemSettings?.systemLogo 
+    ? `${BASE_URL}${systemSettings.systemLogo}` 
+    : null;
+
   const location = useLocation();
   const profilePath = '/profile';
   const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
@@ -127,11 +133,22 @@ const Navbar = () => {
   ) : (
     <nav className="sticky top-0 z-50 bg-background border-b  border-border">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-6 h-16">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-            <Layers className="w-5 h-5 text-white" />
+        <Link to="/" className="flex items-center gap-2 group">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20 group-hover:border-primary/50 transition-colors">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+            ) : (
+              <Layers className="w-6 h-6 text-primary" />
+            )}
           </div>
-          <span className="font-bold">AMU KPI System</span>
+          <div className="flex flex-col -space-y-1">
+            <span className="font-extrabold text-foreground tracking-tight">
+              {systemSettings?.displayName || 'AMU KPI System'}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+              {systemSettings?.orgName || 'ArbaMinch University'}
+            </span>
+          </div>
         </Link>
 
         <div className="hidden md:flex items-center gap-2">

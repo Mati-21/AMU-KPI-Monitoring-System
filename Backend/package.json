@@ -11,6 +11,7 @@
     "db:fix:kpi-baseline": "node scripts/fixKpiBaseline.js",
     "db:fix:role-category-nullable": "node scripts/fixRoleCategoryNullable.js",
     "db:reset:system-admin": "node scripts/resetToSystemAdmin.js",
+    "db:clear:child-kpis": "node scripts/clearChildRoleKPIs.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed:admin": "node seeders/adminSeeder.js",
     "seed:admin:mule": "node seeders/adminSeeder.js"

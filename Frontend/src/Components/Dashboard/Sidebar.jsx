@@ -3,10 +3,17 @@ import { useSelector } from 'react-redux';
 import { GraduationCap } from 'lucide-react';
 import { navigationSections } from '../../Config/navigation';
 import permissionUtils from '../../lib/permissionUtils';
+import { BASE_URL } from '../../api/axios';
 
 const Sidebar = () => {
   const authUser = useSelector((state) => state.auth?.user);
+  const systemSettings = useSelector((state) => state.auth?.systemSettings);
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
+  
+  const logoUrl = systemSettings?.systemLogo 
+    ? `${BASE_URL}${systemSettings.systemLogo}` 
+    : null;
+
   const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
   const hiddenForAdminLabels = new Set(['Performance', 'KPI Allocation', 'Drived KPI Allocation', 'Sub Unit', 'Registered KPIs', 'Report']);
 
@@ -43,12 +50,20 @@ const Sidebar = () => {
         {/* Logo */}
         <div className="p-6 border-b border-border">
           <div className="flex flex-col items-center gap-2">
-            <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-primary" />
+            <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center overflow-hidden border border-border/50 shadow-sm">
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+              ) : (
+                <GraduationCap className="w-8 h-8 text-primary" />
+              )}
             </div>
             <div className="text-center">
-              <h2 className="font-bold text-foreground text-sm">ArbaMinch University</h2>
-              <p className="text-xs text-muted-foreground font-medium">AMU KPI SYSTEM</p>
+              <h2 className="font-bold text-foreground text-xs uppercase leading-tight max-w-[180px]">
+                {systemSettings?.orgName || 'ArbaMinch University'}
+              </h2>
+              <p className="text-[10px] text-muted-foreground font-bold tracking-tight mt-0.5">
+                {systemSettings?.displayName || 'AMU KPI SYSTEM'}
+              </p>
             </div>
           </div>
         </div>

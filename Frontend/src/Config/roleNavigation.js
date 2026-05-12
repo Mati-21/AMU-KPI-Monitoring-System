@@ -1,5 +1,6 @@
 // config/roleNavigation.js
 import {
+  BadgeCheck,
   LayoutDashboard,
   Target,
   Users,
@@ -75,6 +76,7 @@ export const roleNavigation = {
       label: 'DEPARTMENT',
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
+        { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
         { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: BarChart3, label: 'Dept. KPIs', path: 'dept-kpis' },
         { icon: Users, label: 'Staff Performance', path: 'staff-performance' },
@@ -113,6 +115,7 @@ export const roleNavigation = {
       label: 'INSTITUTION',
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
+        { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
         { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Award, label: 'Institution KPIs', path: 'institution-kpis' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
@@ -132,6 +135,7 @@ export const roleNavigation = {
       label: 'SECTOR MANAGEMENT',
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
+        { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
         { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
@@ -150,6 +154,7 @@ export const roleNavigation = {
       label: 'STRATEGIC PLANNING',
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
+        { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
         { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: FileText, label: 'Report', path: 'report' },

@@ -1,18 +1,55 @@
 import { Users, BarChart3, Palette, Shield, Activity } from "lucide-react";
 import StatCard from "../components/StatCard";
-import KpiChart from "../components/KpiChart";
+import UserStatsCharts from "../components/UserStatsCharts";
 import QuickActions from "../components/QuickActions";
 import ActivityLog from "../components/ActivityLog";
+import { useNavigate } from "react-router-dom";
+import { useAdminDashboard } from "../../../hooks/useAdminDashboard";
 
-const stats = [
-  { icon: Users, label: "Total Users", value: "1,250", change: "+12.5%" },
-  { icon: BarChart3, label: "Total KPIs", value: "1,250", change: "+12.5%" },
-  { icon: Palette, label: "Total Themes", value: "1,250", change: "+12.5%" },
-  { icon: Shield, label: "Total Roles", value: "1,250", change: "+12.5%" },
-  { icon: Activity, label: "Active KPIs", value: "1,250", change: "+12.5%" },
-];
+const iconMap = {
+  "Total Users": Users,
+  "Total KPIs": BarChart3,
+  "Total Themes": Palette,
+  "Total Roles": Shield,
+  "Active KPIs": Activity,
+};
 
 function AdminDashboard() {
+  const { data, loading, error } = useAdminDashboard();
+  const navigate = useNavigate();
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 p-6 flex items-center justify-center text-destructive">
+        <p>Error: {error}</p>
+      </div>
+    );
+  }
+
+  const getAddHandler = (label) => {
+    switch (label) {
+      case "Total Users": return () => navigate("/user-management?tab=add");
+      case "Total KPIs": return () => navigate("/kpi?tab=addKpi");
+      case "Total Themes": return () => navigate("/kpi?tab=addKpiCategory");
+      case "Total Roles": return () => navigate("/role-management?tab=addRole");
+      default: return null;
+    }
+  };
+
+  const stats = data?.stats?.map(s => ({
+    ...s,
+    icon: iconMap[s.label] || Activity,
+    onAdd: getAddHandler(s.label)
+  })) || [];
+
   return (
     <main className="flex-1 p-6 overflow-y-auto">
       {/* Title Row */}
@@ -42,9 +79,13 @@ function AdminDashboard() {
         ))}
       </div>
 
-      {/* KPI Chart */}
+      {/* User Stats Charts */}
       <div className="mb-6">
-        <KpiChart />
+        <UserStatsCharts 
+          activeUsersData={data?.activeUsersTrend} 
+          loginActivityData={data?.loginActivityData} 
+          statusData={data?.userStatusDistribution} 
+        />
       </div>
 
       {/* Quick Actions */}
@@ -53,16 +94,16 @@ function AdminDashboard() {
       </div>
 
       {/* Activity Logs */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActivityLog
           title="Recent System Activity"
-          actionLabel="Download Log"
-          actionVariant="outline"
+          activities={data?.systemActivities}
+          onViewAll={() => navigate('/system-logs?tab=system')}
         />
         <ActivityLog
-          title="Recent System Activity"
-          actionLabel="Review All"
-          actionVariant="destructive"
+          title="Administrator Log"
+          activities={data?.adminActivities}
+          onViewAll={() => navigate('/system-logs?tab=admin')}
         />
       </div>
     </main>

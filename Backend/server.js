@@ -23,6 +23,8 @@ const userKpiRoutes = require('./routes/userKpiRoutes');
 const userKpiResultRoutes = require('./routes/userKpiResultRoutes');
 const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
 const kpiYearPlanRoutes = require('./routes/kpiYearPlanRoutes');
+const adminDashboardRoutes = require('./routes/adminDashboardRoutes');
+const settingRoutes = require('./routes/settingRoutes');
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
@@ -34,7 +36,18 @@ const envOrigins = (process.env.CLIENT_URL || '')
   .filter(Boolean);
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "http://localhost:5000", "blob:"],
+      connectSrc: ["'self'", "http://localhost:5000"],
+    },
+  },
+}));
 app.use(
   cors({
     origin(origin, callback) {
@@ -80,6 +93,8 @@ app.use('/api/user-kpis', userKpiRoutes);
 app.use('/api/user-kpi-results', userKpiResultRoutes);
 app.use('/api/kpi-documents', kpiDocumentRoutes);
 app.use('/api/kpi-year-plans', kpiYearPlanRoutes);
+app.use('/api/admin-dashboard', adminDashboardRoutes);
+app.use('/api/settings', settingRoutes);
 
 app.get('/health', (req, res) => {
   res.json({

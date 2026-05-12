@@ -13,6 +13,9 @@ const UserKPIResult = require('./UserKPIResult');
 const KPIDocument = require('./KPIDocument');
 const OfficeReportSubmission = require('./OfficeReportSubmission');
 const KPIYearPlan = require('./KPIYearPlan');
+const UserActivityLog = require('./UserActivityLog');
+const SystemSetting = require('./SystemSetting');
+const AuditLog = require('./AuditLog');
 
 // Set up associations
 RoleCategory.hasMany(Role, { foreignKey: 'RoleCategoryId' });
@@ -63,6 +66,12 @@ KPIDocument.belongsTo(User, { foreignKey: 'UserId' });
 KPI.hasMany(KPIDocument, { foreignKey: 'KPIId' });
 KPIDocument.belongsTo(KPI, { foreignKey: 'KPIId' });
 
+User.hasMany(UserActivityLog, { foreignKey: 'UserId' });
+UserActivityLog.belongsTo(User, { foreignKey: 'UserId' });
+
+User.hasMany(AuditLog, { foreignKey: 'UserId' });
+AuditLog.belongsTo(User, { foreignKey: 'UserId' });
+
 // Export all models
 module.exports = {
   sequelize,
@@ -78,4 +87,7 @@ module.exports = {
   KPIDocument,
   OfficeReportSubmission,
   KPIYearPlan,
+  UserActivityLog,
+  SystemSetting,
+  AuditLog,
 };
