@@ -1,28 +1,14 @@
-const activities = [
-  {
-    user: 'Admin User',
-    action: 'Mark Moderate',
-    description: 'Updated permissions',
-    time: '2 mins ago',
-    status: 'Active',
-  },
-  {
-    user: 'Admin User',
-    action: 'Mark Moderate',
-    description: 'Created new KPI',
-    time: '15 mins ago',
-    status: 'Active',
-  },
-  {
-    user: 'Admin User',
-    action: 'Mark Moderate',
-    description: 'Modified role',
-    time: '1 hour ago',
-    status: 'Active',
-  },
-];
+const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download Log', actionVariant = 'outline', activities = [], onViewAll }) => {
+  const displayActivities = activities.length > 0 ? activities : [
+    {
+      user: 'No Activity',
+      action: 'N/A',
+      description: 'No recent activity found',
+      time: '-',
+      status: 'Inactive',
+    }
+  ];
 
-const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download Log', actionVariant = 'outline' }) => {
   return (
     <div className="bg-card rounded-xl border border-border p-6 animate-fade-in" style={{ animationDelay: '0.3s' }}>
       <div className="flex items-center justify-between mb-4">
@@ -30,15 +16,25 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
           <h3 className="text-base font-bold text-foreground">{title}</h3>
           <p className="text-sm text-muted-foreground">Real-time log of administrative changes</p>
         </div>
-        <button
-          className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${
-            actionVariant === 'destructive'
-              ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-              : 'border border-border text-foreground hover:bg-muted'
-          }`}
-        >
-          {actionLabel}
-        </button>
+        <div className="flex gap-2">
+          {onViewAll && (
+            <button
+              onClick={onViewAll}
+              className="text-sm px-4 py-2 rounded-lg font-medium border border-border text-foreground hover:bg-muted transition-colors"
+            >
+              View Detail
+            </button>
+          )}
+          <button
+            className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${
+              actionVariant === 'destructive'
+                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                : 'border border-border text-foreground hover:bg-muted'
+            }`}
+          >
+            {actionLabel}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-[theme(colors-border)] bg-[theme(colors-card)] shadow-sm">
@@ -52,7 +48,7 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
             </tr>
           </thead>
           <tbody>
-            {activities.map((a, i) => (
+            {displayActivities.map((a, i) => (
               <tr key={i} className="border-t border-border hover:bg-muted/50 transition-colors">
                 <td className="py-2.5 px-4">
                   <div>
