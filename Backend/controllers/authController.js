@@ -1,4 +1,5 @@
 const { User, UserRole, Role } = require('../models');
+const { logActivity } = require('../utils/auditLogger');
 const generateToken = require('../utils/generateToken');
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
@@ -16,6 +17,12 @@ const activeRoleInclude = {
       where: { IsArchived: false },
       required: false,
       include: [
+        {
+          model: Role,
+          as: 'ChildRoles',
+          attributes: ['Id'],
+          required: false,
+        },
         {
           model: Role,
           as: 'ParentRole',
@@ -128,6 +135,14 @@ const registerUser = async (req, res) => {
       });
     }
 
+    await logActivity({
+      userId: req.user?.Id || user.Id,
+      action: 'USER_REGISTRATION',
+      resource: 'User',
+      description: `Created user: ${FirstName} ${FatherName}`,
+      ipAddress: req.ip
+    });
+
     res.status(201).json({
       success: true,
       user: payload.user,
@@ -171,6 +186,14 @@ const loginUser = async (req, res) => {
       maxAge: 1000 * 60 * 60 * 24, // 1 day
     });
 
+    await logActivity({
+      userId: user.Id,
+      action: 'LOGIN',
+      resource: 'Auth',
+      description: `User logged in: ${user.UserName}`,
+      ipAddress: req.ip
+    });
+
     res.json({
       success: true,
       user: payload.user,
@@ -205,8 +228,27 @@ const getCurrentUser = async (req, res) => {
   }
 };
 
+const logoutUser = async (req, res) => {
+  if (req.user) {
+    await logActivity({
+      userId: req.user.Id,
+      action: 'LOGOUT',
+      resource: 'Auth',
+      description: `User logged out: ${req.user.UserName}`,
+      ipAddress: req.ip
+    });
+  }
+
+  res.cookie('token', '', {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  res.status(200).json({ success: true, message: 'Logged out successfully' });
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  logoutUser,
   getCurrentUser,
 };
