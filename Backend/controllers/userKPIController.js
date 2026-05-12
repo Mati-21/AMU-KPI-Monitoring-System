@@ -1,4 +1,4 @@
-const { UserKPI, User, KPI, UserKPIResult, UserRole } = require('../models');
+const { UserKPI, User, KPI, UserKPIResult, UserRole, OfficeReportSubmission } = require('../models');
 const { Op } = require('sequelize');
 const { getCurrentCycleYear, getPreviousCycleYear } = require('../utils/kpiCycle');
 const { hasModulePermission } = require('../middleware/authMiddleware');
@@ -82,7 +82,8 @@ const hasExtraMeasuresAccess = (req) =>
 
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
+    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } =
+      req.body;
     const cycleYear = CycleYear || getCurrentCycleYear();
     const assignmentBatchId = parseUuidValue(AssignmentBatchId);
 
@@ -241,7 +242,7 @@ const getUserKPIs = async (req, res) => {
       include: [
         { model: User, attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'] },
         { model: KPI, attributes: ['Id', 'Description', 'DefaultBaseline'] },
-        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false }
+        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false },
       ],
       order: [['CreatedAt', 'DESC']],
     });
@@ -294,7 +295,7 @@ const getUserKPIs = async (req, res) => {
         }
         const bucket = quarterlyResultsByLegacyKey.get(legacyKey);
         bucket.quarterlyResults.push(item);
-        
+
         const resultVal = parseNumericValue(result.KPIResult) || 0;
         if (normalizedQuarter === 'Q1') bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
         if (normalizedQuarter === 'Q2') bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
@@ -306,7 +307,7 @@ const getUserKPIs = async (req, res) => {
     const userKpisWithQuarterlyResults = userKpis.map((assignment) => {
       const assignmentIdKey = String(assignment.Id);
       const legacyKey = `${String(assignment.UserId || '')}::${String(assignment.KPIId || '')}`;
-      
+
       const bucket = quarterlyResultsByAssignmentId.get(assignmentIdKey) || quarterlyResultsByLegacyKey.get(legacyKey);
 
       return {
@@ -333,7 +334,7 @@ const getUserKPIById = async (req, res) => {
       include: [
         { model: User, attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'] },
         { model: KPI, attributes: ['Id', 'Description', 'DefaultBaseline'] },
-        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false }
+        { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false },
       ],
     });
 
@@ -351,7 +352,8 @@ const getUserKPIById = async (req, res) => {
 const updateUserKPI = async (req, res) => {
   try {
     const { id } = req.params;
-    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
+    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } =
+      req.body;
 
     const userKPI = await UserKPI.findByPk(id);
     if (!userKPI) {
@@ -452,20 +454,36 @@ const deleteUserKPI = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this KPI allocation item' });
     }
 
-    await userKPI.update({ IsArchived: true });
+    // Permanently delete the performance results associated with this specific assignment ID
+    await UserKPIResult.destroy({
+      where: {
+        UserKPIId: userKPI.Id,
+      },
+    });
 
-    // Reset/Archive performance results associated with this specific assignment ID
-    await UserKPIResult.update(
-      { IsArchived: true },
-      {
+    // Find the user's role so we can clear their report submission
+    const userRole = await UserRole.findOne({
+      where: {
+        UserId: userKPI.UserId,
+        IsArchived: false,
+      },
+      attributes: ['RoleId'],
+    });
+
+    // If this user belongs to a child role, clear any office report submission for that role
+    if (userRole) {
+      await OfficeReportSubmission.destroy({
         where: {
-          UserKPIId: userKPI.Id,
-          IsArchived: false,
+          SourceRoleId: userRole.RoleId,
         },
-      }
-    );
+      });
+      console.log(`[DELETE_KPI] Cleared report submission for role: ${userRole.RoleId} (user: ${userKPI.UserId})`);
+    }
 
-    res.json({ success: true, message: 'User KPI archived successfully' });
+    // Permanently delete the KPI allocation item
+    await userKPI.destroy();
+
+    res.json({ success: true, message: 'User KPI and associated results deleted successfully' });
   } catch (error) {
     console.error('Delete user KPI error:', error);
     res.status(500).json({ message: 'Server error' });

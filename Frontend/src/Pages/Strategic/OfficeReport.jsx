@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Clock3 } from 'lucide-react';
 
 import Button from '../../Components/UI/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
@@ -20,12 +20,14 @@ const REPORT_PERMISSION_KEYS = [
 ].filter(Boolean);
 
 const formatCellValue = (value) => {
-  if (value === 'N/A') return 'N/A';
-  if (value === null || value === undefined || value === '' || value === '—') {
+  const rawValue = value && typeof value === 'object' ? value.value : value;
+
+  if (rawValue === 'N/A') return 'N/A';
+  if (rawValue === null || rawValue === undefined || rawValue === '' || rawValue === '—') {
     return '-';
   }
 
-  return value;
+  return rawValue;
 };
 
 const MAX_COLUMN_NAME_LENGTH = 35;
@@ -50,6 +52,18 @@ const getRowLabelClassName = (rowType) => {
   if (rowType === 'subTheme') return 'pl-8';
   if (rowType === 'subTotal') return 'pl-8 uppercase tracking-wide';
   return 'pl-10';
+};
+
+const emitReportDataChanged = () => {
+  const timestamp = String(Date.now());
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('amu:report-data-changed', { detail: { timestamp } }));
+  }
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('amu:report-data-changed', timestamp);
+  }
 };
 
 const OfficeReport = () => {
@@ -132,14 +146,16 @@ const OfficeReport = () => {
         const res = await api.get('/kpi-year-plans');
         if (!mounted) return;
         const plans = res.data?.data || [];
-        const years = [...new Set(plans.map(p => p.CycleYear))].sort((a, b) => b.localeCompare(a));
+        const years = [...new Set(plans.map((p) => p.CycleYear))].sort((a, b) => b.localeCompare(a));
         setAvailableYears(years);
       } catch (err) {
         console.error('Failed to load cycle years', err);
       }
     };
     fetchYears();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -179,16 +195,17 @@ const OfficeReport = () => {
 
   const hasOriginal = reportData?.hasOriginal ?? false;
   const hasDerived = reportData?.hasDerived ?? false;
-  
+
   // Show Original/Derived dropdown if role has extra measures OR if both types exist in data
-  const showReportTypeSelector = (reportData?.scopeRoleHasExtraMeasures) || (hasOriginal && hasDerived);
-  
+  const showReportTypeSelector = reportData?.scopeRoleHasExtraMeasures || (hasOriginal && hasDerived);
+
   // Show Individual/Combined dropdown if role is distributable OR if it has multiple columns (children)
-  const showReportModeSelector = (reportData?.scopeRoleIsDistributable) || (columns.length > 1 && !reportData?.reportMode === 'combined');
+  const showReportModeSelector = reportData?.scopeRoleIsDistributable || (columns.length > 1 && !reportData?.reportMode === 'combined');
 
   const isDerivedView = selectedReportType === 'derived';
 
-  // Removed automatic report type switching to respect user's manual selection even if data is empty.
+  // Calculate if the entire view has pending items
+  const hasPendingItems = rows.some((row) => columns.some((col) => row.values?.[col.id]?.isApproved === false));
 
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
@@ -270,14 +287,22 @@ const OfficeReport = () => {
                 >
                   <option value="">Current Cycle</option>
                   {availableYears.map((year) => (
-                    <option key={year} value={year}>{year}</option>
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
                   ))}
                 </select>
               </>
             )}
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
+            {hasPendingItems && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 animate-pulse">
+                <Clock3 className="mr-1 h-3 w-3" />
+                Pending Approval
+              </Badge>
+            )}
             {loading ? <Badge variant="secondary">Loading...</Badge> : null}
             <Button
               type="button"
@@ -328,7 +353,9 @@ const OfficeReport = () => {
                         <div className="flex flex-col items-center justify-center gap-0.5">
                           <div className="flex items-center justify-center gap-1">
                             {isSubmitted && !reportData?.reportMode === 'combined' && (
-                              <span className="text-emerald-500 font-bold" title="Report Submitted">✓ </span>
+                              <span className="text-emerald-500 font-bold" title="Report Submitted">
+                                ✓{' '}
+                              </span>
                             )}
                             <span>{displayName}</span>
                           </div>
@@ -397,7 +424,14 @@ const OfficeReport = () => {
                               style={compactPad}
                               className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
                             >
-                              {formatCellValue(cellValue)}
+                              <div className="flex flex-col items-center gap-1">
+                                <span>{formatCellValue(cellValue)}</span>
+                                {cellValue && typeof cellValue === 'object' && cellValue.isApproved === false && (
+                                  <Badge variant="outline" className="text-[10px] py-0 px-1 border-amber-200 bg-amber-50 text-amber-600 font-normal">
+                                    Pending
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                           );
                         })}
@@ -412,15 +446,15 @@ const OfficeReport = () => {
                     <TableCell colSpan={7 + columns.length} className="py-20 text-center">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <p className="text-base font-medium text-muted-foreground">
-                          {selectedReportType === 'derived' 
-                            ? 'No Derived KPIs found for this office.' 
+                          {selectedReportType === 'derived'
+                            ? 'No Derived KPIs found for this office.'
                             : selectedReportType === 'original'
-                            ? 'No Original KPIs found for this office.'
-                            : 'No report data available for this office.'}
+                              ? 'No Original KPIs found for this office.'
+                              : 'No report data available for this office.'}
                         </p>
                         <p className="text-sm text-muted-foreground/60">
-                          {selectedReportType === 'derived' 
-                            ? 'Try switching to "Original" or "All KPIs" to see standard metrics.' 
+                          {selectedReportType === 'derived'
+                            ? 'Try switching to "Original" or "All KPIs" to see standard metrics.'
                             : 'Ensure KPIs have been allocated and performance has been submitted.'}
                         </p>
                       </div>
@@ -433,14 +467,15 @@ const OfficeReport = () => {
         </CardContent>
       </Card>
       <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-106.25">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary">
               <AlertCircle className="h-5 w-5 text-amber-500" />
               Confirm Report Submission
             </DialogTitle>
             <DialogDescription className="pt-2 text-foreground/80">
-              Are you sure you want to submit your finalized performance report to <strong>{reportData?.parentRole?.name || 'your parent office'}</strong>?
+              Are you sure you want to submit your finalized performance report to{' '}
+              <strong>{reportData?.parentRole?.name || 'your parent office'}</strong>?
               <p className="mt-2 text-xs text-muted-foreground">
                 Once submitted, your data will become visible in their comparative reports and used for higher-level performance tracking.
               </p>
@@ -450,7 +485,7 @@ const OfficeReport = () => {
             <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={submittingReport}
               onClick={async () => {
@@ -461,8 +496,9 @@ const OfficeReport = () => {
                     year: reportData?.year,
                   });
                   const parentRoleName = response.data?.data?.parentRole?.name || reportData?.parentRole?.name || 'parent role';
+                  emitReportDataChanged();
                   notify(`Report successfully submitted to ${parentRoleName}.`, 'success');
-                  setRefreshToken(prev => prev + 1); // Refresh to show checkmarks
+                  setRefreshToken((prev) => prev + 1); // Refresh to show checkmarks
                 } catch (submitErr) {
                   notify(submitErr?.response?.data?.message || 'Failed to submit report. Please try again.', 'error');
                 } finally {

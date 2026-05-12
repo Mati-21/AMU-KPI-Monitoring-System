@@ -240,10 +240,21 @@ function AssignedKpisPage() {
 
   const countThemeKpis = (themeBlock) => themeBlock.subThemes.reduce((sum, subTheme) => sum + subTheme.kpis.length, 0);
 
-  const themeOptions = useMemo(() => ['All Themes', ...allocatedThemes.map((item) => item.theme)], [allocatedThemes]);
+  const themeOptions = useMemo(() => ['All Themes', 'Evidence Based', ...allocatedThemes.map((item) => item.theme)], [allocatedThemes]);
 
   const visibleThemes = useMemo(() => {
     if (themeFilter === 'All Themes') return allocatedThemes;
+    
+    if (themeFilter === 'Evidence Based') {
+      return allocatedThemes.map(themeBlock => ({
+        ...themeBlock,
+        subThemes: themeBlock.subThemes.map(subTheme => ({
+          ...subTheme,
+          kpis: subTheme.kpis.filter(kpi => kpi.evidenceRequired)
+        })).filter(subTheme => subTheme.kpis.length > 0)
+      })).filter(themeBlock => themeBlock.subThemes.length > 0);
+    }
+    
     return allocatedThemes.filter((item) => item.theme === themeFilter);
   }, [allocatedThemes, themeFilter]);
 

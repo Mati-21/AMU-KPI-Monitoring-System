@@ -48,6 +48,15 @@ const UserKPIResult = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    Status: {
+      type: DataTypes.ENUM('pending', 'approved', 'adjusted'),
+      allowNull: false,
+      defaultValue: 'pending',
+    },
+    AdjustedResult: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,

@@ -1,4 +1,5 @@
-const { UserKPIResult, User, KPI, KPIType, Unit, Role, UserRole, UserKPI, OfficeReportSubmission } = require('../models');
+const { UserKPIResult, User, KPI, KPIType, Unit, Role, UserRole, UserKPI, OfficeReportSubmission, KPIYearPlan } = require('../models');
+const { logActivity } = require('../utils/auditLogger');
 const { hasPermission, permissionKey } = require('../middleware/authMiddleware');
 const { getCurrentCycleYear, getCurrentQuarter, normalizeQuarter, QUARTERS } = require('../utils/kpiCycle');
 const { Op, Sequelize } = require('sequelize');
@@ -225,7 +226,7 @@ const buildStructuredReportRows = ({ kpiRows, columns }) => {
         const subThemeNo = `${themeNo}.${subThemeCounter}`;
         let subThemeWeightTotal = 0;
 
-        // Redundancy Check: If a sub-theme contains only one KPI and has the exact same name, 
+        // Redundancy Check: If a sub-theme contains only one KPI and has the exact same name,
         // we suppress the header to avoid a "Double Row" effect.
         const isRedundantSubTheme = subThemeRows.length === 1 && String(subThemeRows[0].kpi || '').trim() === String(subThemeName || '').trim();
 
@@ -329,62 +330,86 @@ const sumUserKpiPerformance = (results) => {
   const groupedResults = new Map();
 
   results.forEach((result) => {
-    const numeric = parseNumericValue(result.KPIResult);
+    const numeric = parseNumericValue(result.AdjustedResult ?? result.KPIResult);
     const quarter = normalizeQuarter(result.Quarter);
 
     if (numeric === null || !quarter) {
       return;
     }
 
-    const key = result.UserKPIId ? String(result.UserKPIId) : `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
-    if (!groupedResults.has(key)) {
-      groupedResults.set(key, []);
+    const assignmentKey = result.UserKPIId ? String(result.UserKPIId) : null;
+    const userKpiKey = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
+
+    if (assignmentKey) {
+      if (!groupedResults.has(assignmentKey)) groupedResults.set(assignmentKey, []);
+      groupedResults
+        .get(assignmentKey)
+        .push({ quarter, numeric, status: result.Status || 'pending', createdAt: result.CreatedAt ? new Date(result.CreatedAt) : null });
     }
 
-    groupedResults.get(key).push({
-      quarter,
-      numeric,
-      createdAt: result.CreatedAt ? new Date(result.CreatedAt) : null,
-    });
+    if (!groupedResults.has(userKpiKey)) groupedResults.set(userKpiKey, []);
+    groupedResults
+      .get(userKpiKey)
+      .push({ quarter, numeric, status: result.Status || 'pending', createdAt: result.CreatedAt ? new Date(result.CreatedAt) : null });
   });
 
-  const sums = new Map();
+  const resultDetails = new Map();
 
   groupedResults.forEach((items, key) => {
     const latestByQuarter = new Map();
-
     items.forEach((item) => {
-      const existing = latestByQuarter.get(item.quarter);
-      if (!existing) {
-        latestByQuarter.set(item.quarter, item);
-        return;
-      }
+      // Normalize quarter name: e.g., "Quarter 1" -> "Q1"
+      let q = String(item.quarter || '').toUpperCase();
+      if (q.includes('1')) q = 'Q1';
+      else if (q.includes('2')) q = 'Q2';
+      else if (q.includes('3')) q = 'Q3';
+      else if (q.includes('4')) q = 'Q4';
 
-      const existingTime = existing.createdAt ? existing.createdAt.getTime() : 0;
-      const nextTime = item.createdAt ? item.createdAt.getTime() : 0;
-      if (nextTime >= existingTime) {
-        latestByQuarter.set(item.quarter, item);
+      const existing = latestByQuarter.get(q);
+      const isApproved = String(item.status || '').toLowerCase() === 'approved';
+      const existingIsApproved = existing ? String(existing.status || '').toLowerCase() === 'approved' : false;
+
+      if (!existing || (isApproved && !existingIsApproved) || (isApproved === existingIsApproved && item.createdAt > existing.createdAt)) {
+        latestByQuarter.set(q, { ...item, normalizedQuarter: q });
       }
     });
 
-    let previousQuarterValue = 0;
+    const sortedQuarters = Array.from(latestByQuarter.values()).sort(
+      (a, b) => QUARTERS.indexOf(a.normalizedQuarter) - QUARTERS.indexOf(b.normalizedQuarter)
+    );
+
+    if (key.includes('3f9585e1') || key.includes('c635ff93')) {
+      console.log(`[SUM_TRACE] Key: ${key}, Found Items: ${items.length}, Grouped Quarters: ${latestByQuarter.size}`);
+      items.forEach((it) => console.log(`  - Item: Q=${it.quarter}, Val=${it.numeric}, Status=${it.status}`));
+    }
+
     let cumulativeTotal = 0;
+    let isAllApproved = true;
 
-    QUARTERS.forEach((quarter) => {
-      const quarterItem = latestByQuarter.get(quarter);
-      if (!quarterItem) {
-        return;
+    sortedQuarters.forEach((quarterItem) => {
+      const status = String(quarterItem.status || 'pending').toLowerCase();
+      if (status === 'pending' || status === 'submitted' || status === 'review') {
+        isAllApproved = false;
       }
-
-      const quarterDelta = quarterItem.numeric - previousQuarterValue;
-      cumulativeTotal += Number.isFinite(quarterDelta) ? quarterDelta : 0;
-      previousQuarterValue = quarterItem.numeric;
+      // Simple incremental sum: Treat each quarter as a new addition to the total
+      cumulativeTotal += Number.isFinite(quarterItem.numeric) ? quarterItem.numeric : 0;
     });
 
-    sums.set(key, cumulativeTotal);
+    if (key.includes('3f9585e1') || key.includes('c635ff93') || key.includes('15ded5f3')) {
+      console.log(`[DEEP_STATUS_TRACE] Key: ${key}, Total: ${cumulativeTotal}, AllApproved: ${isAllApproved}, Quarters: ${sortedQuarters.length}`);
+      sortedQuarters.forEach((q) => {
+        console.log(`  -> Quarter: ${q.normalizedQuarter}, Value: ${q.numeric}, Status: ${q.status}`);
+      });
+    }
+
+    resultDetails.set(key, {
+      performance: cumulativeTotal,
+      isApproved: isAllApproved && sortedQuarters.length > 0,
+      hasPending: !isAllApproved,
+    });
   });
 
-  return sums;
+  return resultDetails;
 };
 
 const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds, userKpiSums, scopeRoleId }) => {
@@ -413,6 +438,7 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
       groupedAssignments.set(key, {
         isTargetIndividual: Boolean(assignment.IsTargetIndividual),
         assignedUsers: new Set(),
+        isEvidenceRequired: !!(assignment.KPI?.IsEvedenceRequired || assignment.KPI?.IsEvidenceRequired || assignment.KPI?.isEvidenceRequired),
       });
     }
 
@@ -430,16 +456,27 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
     const cumulativeValues = [...grouped.assignedUsers].map((userId) => {
       // Find the specific assignment ID for this user/kpi combo to ensure isolated performance tracking
       const specificAssignment = assignments.find((a) => String(a.UserId) === userId && String(a.KPIId) === kpiId);
-      const userKpiKey = specificAssignment ? String(specificAssignment.Id) : `${String(userId)}::${kpiId}`;
+      const assignmentKey = specificAssignment ? String(specificAssignment.Id) : null;
+      const userKpiKey = `${String(userId)}::${kpiId}`;
 
-      if (userKpiSums.has(userKpiKey)) {
+      const userMetrics = (assignmentKey ? userKpiSums.get(assignmentKey) : null) || userKpiSums.get(userKpiKey);
+      if (userMetrics) {
         hasAnySubmission = true;
       }
 
-      return userKpiSums.get(userKpiKey) || 0;
+      return userMetrics || { performance: 0, isApproved: false };
     });
 
-    const cumulativeTotal = cumulativeValues.reduce((sum, value) => sum + value, 0);
+    const cumulativeTotal = cumulativeValues.reduce((sum, v) => {
+      const isApproved = v.isApproved;
+      const isEvidenceReq = grouped.isEvidenceRequired;
+
+      if (!isEvidenceReq || isApproved) {
+        return sum + v.performance;
+      }
+      return sum;
+    }, 0);
+    const allApproved = cumulativeValues.length > 0 && cumulativeValues.every((v) => v.isApproved);
     const receiverCount = cumulativeValues.length;
     const aggregatedPerformance = grouped.isTargetIndividual ? (receiverCount > 0 ? cumulativeTotal / receiverCount : 0) : cumulativeTotal;
 
@@ -448,6 +485,7 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
       receiverCount,
       aggregatedPerformance,
       hasAnySubmission,
+      isApproved: allApproved,
     });
   });
 
@@ -496,7 +534,14 @@ const buildAnnualSummary = (results) => {
   });
 };
 
-const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId, viewerUserId, viewerRoleId, reportType, reportMode = 'individual' }) => {
+const buildAffiliatedOfficeReportDataForScope = async ({
+  cycleYear,
+  scopeRoleId,
+  viewerUserId,
+  viewerRoleId,
+  reportType,
+  reportMode = 'individual',
+}) => {
   const roles = await Role.findAll({
     where: { IsArchived: false },
     attributes: ['Id', 'RoleName', 'ParentRoleId', 'IsDistributable', 'HasExtraMeasures'],
@@ -601,7 +646,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
   const kpiInclude = [
     {
       model: KPI,
-      attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark'],
+      attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark', 'IsEvedenceRequired'],
       include: [
         {
           model: KPIType,
@@ -646,7 +691,20 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
       })
     : [];
 
-  const allAssignments = officialParentAssignments.length > 0 ? officialParentAssignments : childAssignments;
+  const allAssignments = [];
+  const seenAssignmentKeys = new Set();
+
+  [...officialParentAssignments, ...childAssignments].forEach((assignment) => {
+    const leafType = assignment.KPI?.KPIType || null;
+    const assignmentKey = `${String(assignment.KPIId)}::${(leafType?.KPIName || '').trim()}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
+    if (seenAssignmentKeys.has(assignmentKey)) {
+      return;
+    }
+
+    seenAssignmentKeys.add(assignmentKey);
+    allAssignments.push(assignment);
+  });
+
   const isTopLevelFallback = officialParentAssignments.length === 0;
 
   // Split into original vs derived
@@ -662,37 +720,36 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
         ? allAssignments.filter((a) => !isDerivedAssignment(a))
         : allAssignments;
 
-  const submissions = await OfficeReportSubmission.findAll({
-    where: {
-      CycleYear: cycleYear,
-      [Op.or]: [
-        { ParentRoleId: scopeRoleId },
-        { SourceRoleId: scopeRoleId }
-      ],
-      IsArchived: false,
-    },
-    attributes: ['SourceRoleId', 'ParentRoleId'],
-  });
-  const submittedRoleIds = new Set(submissions.map((s) => String(s.SourceRoleId)));
+  // 4. Check for official report submissions (to handle the "Submit Report" gate)
+  const [childSubmissions, ownSubmissions] = await Promise.all([
+    OfficeReportSubmission.findAll({
+      where: { CycleYear: cycleYear, ParentRoleId: scopeRoleId, IsArchived: false },
+      attributes: ['SourceRoleId', 'ParentRoleId', 'ReportPayload', 'SubmittedAt'],
+      order: [['SubmittedAt', 'DESC']],
+    }),
+    OfficeReportSubmission.findAll({
+      where: { CycleYear: cycleYear, SourceRoleId: scopeRoleId, IsArchived: false },
+      attributes: ['SourceRoleId', 'ParentRoleId', 'SubmittedAt'],
+      order: [['SubmittedAt', 'DESC']],
+    }),
+  ]);
 
-  const kpiById = new Map();
-  assignments.forEach((assignment) => {
-    if (assignment.KPI && !kpiById.has(String(assignment.KPIId))) {
-      kpiById.set(String(assignment.KPIId), assignment.KPI);
-    }
-  });
+  const submittedRoleIds = new Set(childSubmissions.map((s) => String(s.SourceRoleId)));
+  const parentHasSubmitted = ownSubmissions.length > 0;
 
-  const kpiIds = [...kpiById.keys()];
+  const relevantAssignmentIds = assignments.map((a) => a.Id).filter(Boolean);
+  const kpiIds = [...new Set(assignments.map((a) => String(a.KPIId)).filter(Boolean))];
+
   const results =
     uniqueVisibleUserIds.length && kpiIds.length
       ? await UserKPIResult.findAll({
           where: {
             IsArchived: false,
-            CycleYear: cycleYear,
+            CycleYear: { [Op.like]: `%${cycleYear.substring(0, 4)}%` },
             UserId: { [Op.in]: uniqueVisibleUserIds },
             KPIId: { [Op.in]: kpiIds },
           },
-          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
+          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt'],
         })
       : [];
 
@@ -716,7 +773,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
     childRoles.forEach((role) => {
       const roleId = String(role.Id);
       const isSubmitted = submittedRoleIds.has(roleId);
-      
+
       if (role.IsDistributable === true) {
         reportColumns.push({
           id: role.Id,
@@ -770,23 +827,31 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
 
   const resultsWithAssignmentIds = results
     .filter((r) => {
-      const roleId = userRoleByUserId.get(String(r.UserId));
-      const targetColumnId = String(roleId) === String(selectedScopeRole.Id) ? String(selectedScopeRole.Id) : roleToChildColumn.get(String(roleId));
+      // Find the specific assignment for this result to know which role it belongs to
+      const assignment = assignments.find((a) => String(a.Id) === String(r.UserKPIId));
+      if (!assignment) return false;
 
-      const isSelf = viewerRoleId && String(roleId) === String(viewerRoleId);
-      const isSubmitted = targetColumnId && submittedRoleIds.has(String(targetColumnId));
+      // UserKPI has UserId, not RoleId — look up the role from the user-role map
+      const roleId = userRoleByUserId.get(String(assignment.UserId));
+      if (!roleId) return false;
 
-      return isSelf || isSubmitted;
+      // Always show own data to the viewer (current office column)
+      if (viewerRoleId && String(roleId) === String(viewerRoleId)) return true;
+
+      // For child columns, strictly only show if that child role has submitted their office report
+      const targetColumnId = roleToChildColumn.get(String(roleId));
+      if (!targetColumnId) return false;
+
+      const isSubmitted = submittedRoleIds.has(String(targetColumnId));
+      return isSubmitted;
     })
     .map((r) => {
-      const raw = (r.toJSON ? r.toJSON() : r);
+      const raw = r.toJSON ? r.toJSON() : r;
       return {
         ...raw,
         UserKPIId: raw.UserKPIId || null,
       };
     });
-
-
 
   const userChildColumnByUserId = new Map();
   userRoleByUserId.forEach((roleId, userId) => {
@@ -834,21 +899,24 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
       weight: isDerived ? '' : formatNumericValue(kpi?.Weight),
       weightNumeric: isDerived ? 0 : (parseNumericValue(kpi?.Weight) ?? 0),
       baseline: formatNumericValue(
-        isTopLevelFallback 
-          ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline)
-          : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline)
+        isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline)
       ),
-      baselineNumeric: parseNumericValue(
-        isTopLevelFallback 
-          ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline)
-          : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline)
-      ) ?? 0,
+      baselineNumeric:
+        parseNumericValue(
+          isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline)
+        ) ?? 0,
       target: formatNumericValue(
         isTopLevelFallback
           ? (assignment.KPIYearPlan?.Target ?? assignment.AssignedTarget)
           : (assignment.AssignedTarget ?? assignment.KPIYearPlan?.Target)
       ),
-      remark: (String(assignment.Remark || '').trim().toLowerCase() === 'null' ? '' : assignment.Remark) || (isDerived ? '—' : (kpi?.Remark || kpi?.Description || '—')),
+      remark:
+        (String(assignment.Remark || '')
+          .trim()
+          .toLowerCase() === 'null'
+          ? ''
+          : assignment.Remark) || (isDerived ? '—' : kpi?.Remark || kpi?.Description || '—'),
+      isEvidenceRequired: !!(kpi?.isEvidenceRequired || kpi?.IsEvidenceRequired || kpi?.IsEvedenceRequired),
       values: {},
     });
 
@@ -866,14 +934,25 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
       } else if (column.isUserColumn) {
         const userKey = `${String(column.id)}::${String(row.id)}`;
         const assignmentId = userAssignmentMap.get(userKey);
-        const performance = assignmentId ? userKpiSums.get(assignmentId) : undefined;
+        const details = assignmentId ? userKpiSums.get(assignmentId) : undefined;
 
-        if (!assignmentId) {
-          row.values[String(column.id)] = 'N/A';
-        } else if (performance === undefined) {
+        if (column.isCurrentOffice) {
+          // For the parent's own column, use the aggregated total from all children
+          const metrics = aggregation.get(`${String(column.id)}::${String(row.kpiId)}`);
+          row.values[String(column.id)] = metrics && metrics.hasAnySubmission ? formatNumericValue(metrics.aggregatedPerformance) : '—';
+        } else if (details === undefined) {
           row.values[String(column.id)] = '—';
         } else {
-          row.values[String(column.id)] = formatNumericValue(performance);
+          // Check both User and Role column logic for pending status
+          const isPending = row.isEvidenceRequired && !details.isApproved;
+          row.values[String(column.id)] = {
+            value: isPending ? '—' : formatNumericValue(details.performance),
+            isApproved: details.isApproved,
+          };
+
+          if (column.name && column.name.includes('Engineering')) {
+            console.log(`[USER_COL_TRACE] KPI: ${row.kpi}, Value: ${row.values[String(column.id)].value}, Approved: ${details.isApproved}`);
+          }
         }
       } else {
         // For child role columns, check live aggregation first
@@ -883,29 +962,26 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
         } else if (!metrics.hasAnySubmission) {
           row.values[String(column.id)] = '—';
         } else {
-          row.values[String(column.id)] = formatNumericValue(metrics.aggregatedPerformance);
+          const isPending = row.isEvidenceRequired && !metrics.isApproved;
+
+          row.values[String(column.id)] = {
+            value: isPending ? '—' : formatNumericValue(metrics.aggregatedPerformance),
+            isApproved: metrics.isApproved,
+          };
+
+          if (column.name && column.name.includes('Engineering')) {
+            console.log(`[ROLE_COL_TRACE] KPI: ${row.kpi}, Value: ${row.values[String(column.id)].value}, Approved: ${metrics.isApproved}`);
+          }
         }
       }
     });
   });
 
   // Second pass: Overlay submitted payload values for child columns
-  // This is the key mechanism that makes "Submit Report" work across hierarchy levels.
-  // When a child submits, their verified payload values replace the live aggregation.
-  if (submittedRoleIds.size > 0) {
-    const submittedPayloads = await OfficeReportSubmission.findAll({
-      where: {
-        CycleYear: cycleYear,
-        ParentRoleId: scopeRoleId,
-        IsArchived: false,
-      },
-      attributes: ['SourceRoleId', 'ReportPayload', 'SubmittedAt'],
-      order: [['SubmittedAt', 'DESC']],
-    });
-
+  if (childSubmissions.length > 0) {
     // Group by SourceRoleId and keep only the latest submission per child
     const latestByChild = new Map();
-    submittedPayloads.forEach((sub) => {
+    childSubmissions.forEach((sub) => {
       const srcId = String(sub.SourceRoleId);
       if (!latestByChild.has(srcId)) {
         latestByChild.set(srcId, sub);
@@ -915,21 +991,67 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
     // For each submitted child, overlay their payload values onto the report rows
     latestByChild.forEach((submission, childRoleId) => {
       const payload = submission.ReportPayload;
-      if (!payload || !payload.rows || !Array.isArray(payload.rows)) return;
+      const childColumnIds = reportColumns
+        .filter((column) => String(column.id) === String(childRoleId) || String(column.roleId || '') === String(childRoleId))
+        .map((column) => String(column.id));
 
-      // Build a lookup: KPI name → submitted value
+      // Build lookups using both KPI identifiers and display names.
       const submittedValuesByKpi = new Map();
-      payload.rows.forEach((payloadRow) => {
-        if (payloadRow.kpi && payloadRow.value !== undefined) {
-          submittedValuesByKpi.set(String(payloadRow.kpi).trim(), payloadRow.value);
-        }
-      });
+      if (payload && payload.rows && Array.isArray(payload.rows)) {
+        payload.rows.forEach((payloadRow) => {
+          if (payloadRow.value === undefined) {
+            return;
+          }
+
+          const lookupKeys = [payloadRow.kpiId, payloadRow.assignmentId, payloadRow.no, payloadRow.kpi, payloadRow.label]
+            .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+            .map((value) => String(value).trim());
+
+          lookupKeys.forEach((key) => {
+            if (!submittedValuesByKpi.has(key)) {
+              submittedValuesByKpi.set(key, payloadRow.value);
+            }
+          });
+        });
+      }
 
       // Match against report rows and overlay
       reportRows.forEach((row) => {
-        const kpiName = String(row.kpi || '').trim();
-        if (submittedValuesByKpi.has(kpiName)) {
-          row.values[childRoleId] = submittedValuesByKpi.get(kpiName);
+        const lookupKeys = [row.kpiId, row.assignmentId, row.no, row.kpi]
+          .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+          .map((value) => String(value).trim());
+
+        const matchedValue = lookupKeys.find((key) => submittedValuesByKpi.has(key));
+        if (matchedValue) {
+          const submittedValue = submittedValuesByKpi.get(matchedValue);
+          console.log(`[OVERLAY_MATCH] Child: ${childRoleId}, KPI: ${row.kpi}, Matched Key: ${matchedValue}, Value: ${submittedValue}`);
+          childColumnIds.forEach((childColId) => {
+            // Preserve object structure if the initial value was an object, otherwise just store the value
+            if (typeof row.values[childColId] === 'object' && row.values[childColId] !== null && !Array.isArray(row.values[childColId])) {
+              row.values[childColId].value = submittedValue;
+              // Non-evidence KPIs should display immediately in the parent report.
+              // Evidence-required KPIs stay pending until the parent approves them.
+              row.values[childColId].isApproved = !row.isEvidenceRequired;
+            } else {
+              row.values[childColId] = row.isEvidenceRequired ? { value: submittedValue, isApproved: false } : submittedValue;
+            }
+          });
+        } else {
+          console.log(
+            `[OVERLAY_NOMATCH] Child: ${childRoleId}, KPI: ${row.kpi}, Available Keys: ${Array.from(submittedValuesByKpi.keys()).join('|')}, Row Keys: ${lookupKeys.join('|')}`
+          );
+          // Keep the live aggregation for non-evidence KPIs so they remain visible even if the
+          // submitted payload key does not match perfectly. Evidence-required KPIs still show pending.
+          childColumnIds.forEach((childColId) => {
+            if (row.isEvidenceRequired) {
+              if (typeof row.values[childColId] === 'object' && row.values[childColId] !== null && !Array.isArray(row.values[childColId])) {
+                row.values[childColId].value = '—';
+                row.values[childColId].isApproved = false;
+              } else {
+                row.values[childColId] = { value: '—', isApproved: false };
+              }
+            }
+          });
         }
       });
     });
@@ -937,7 +1059,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
     // Recalculate combined column if present
     if (reportMode === 'combined') {
       reportRows.forEach((row) => {
-        const combinedCol = reportColumns.find(c => c.isCombined);
+        const combinedCol = reportColumns.find((c) => c.isCombined);
         if (!combinedCol) return;
 
         let total = 0;
@@ -977,9 +1099,9 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
     (left, right) => compareKpiNumbers(left.no, right.no) || String(left.kpi || '').localeCompare(String(right.kpi || ''))
   );
 
-  const parentScopeRole = selectedScopeRole.ParentRoleId
-    ? roleById.get(String(selectedScopeRole.ParentRoleId)) || null
-    : null;
+  const parentScopeRole = selectedScopeRole.ParentRoleId ? roleById.get(String(selectedScopeRole.ParentRoleId)) || null : null;
+
+  console.log('[GLOBAL_REPORT_TRACE] Sample Rows:', JSON.stringify(flatRows.slice(0, 5), null, 2));
 
   return {
     year: cycleYear,
@@ -987,9 +1109,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({ cycleYear, scopeRoleId,
       id: selectedScopeRole.Id,
       name: selectedScopeRole.RoleName,
     },
-    parentRole: parentScopeRole
-      ? { id: parentScopeRole.Id, name: parentScopeRole.RoleName }
-      : null,
+    parentRole: parentScopeRole ? { id: parentScopeRole.Id, name: parentScopeRole.RoleName } : null,
     columns: reportColumns,
     rows: buildStructuredReportRows({
       kpiRows: flatRows,
@@ -1155,7 +1275,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
         include: [
           {
             model: KPI,
-            attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark'],
+            attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark', 'IsEvedenceRequired'],
             include: [
               {
                 model: KPIType,
@@ -1190,6 +1310,8 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
         ? allAssignments.filter((a) => !isDerivedAssignment(a))
         : allAssignments;
 
+  const relevantAssignmentIds = assignments.map((a) => a.Id).filter(Boolean);
+
   const kpiById = new Map();
   assignments.forEach((assignment) => {
     if (assignment.KPI && !kpiById.has(String(assignment.KPIId))) {
@@ -1205,15 +1327,14 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
 
   const kpiIds = [...kpiById.keys()];
   const results =
-    uniqueVisibleUserIds.length && kpiIds.length
+    uniqueVisibleUserIds.length && relevantAssignmentIds.length
       ? await UserKPIResult.findAll({
           where: {
             IsArchived: false,
             CycleYear: cycleYear,
-            UserId: { [Op.in]: uniqueVisibleUserIds },
-            KPIId: { [Op.in]: kpiIds },
+            UserKPIId: { [Op.in]: relevantAssignmentIds },
           },
-          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
+          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt'],
         })
       : [];
 
@@ -1269,7 +1390,10 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
     } else if (!metrics.hasAnySubmission) {
       row.values[String(currentRoleId)] = '—';
     } else {
-      row.values[String(currentRoleId)] = formatNumericValue(metrics.aggregatedPerformance);
+      row.values[String(currentRoleId)] = {
+        value: formatNumericValue(metrics.aggregatedPerformance),
+        isApproved: metrics.isApproved,
+      };
     }
     delete row.kpiId;
     delete row.assignmentId;
@@ -1477,9 +1601,7 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
         attributes: ['SourceRoleId'],
       });
 
-      const reportKpiIds = [...new Set(reportData.rows
-        .filter(r => String(r.rowType || 'kpi') === 'kpi' && r.kpiId)
-        .map(r => String(r.kpiId)))];
+      const reportKpiIds = [...new Set(reportData.rows.filter((r) => String(r.rowType || 'kpi') === 'kpi' && r.kpiId).map((r) => String(r.kpiId)))];
 
       const submittedRoleIds = new Set(submissions.map((s) => String(s.SourceRoleId)));
       const potentialMissingRoles = childRoles.filter((role) => !submittedRoleIds.has(String(role.Id)));
@@ -1489,12 +1611,12 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
         // Only block if the missing role actually has KPIs assigned to it that are part of this report
         for (const role of potentialMissingRoles) {
           const roleId = String(role.Id);
-          
+
           const userRoles = await UserRole.findAll({
             where: { RoleId: roleId, IsArchived: false },
-            attributes: ['UserId']
+            attributes: ['UserId'],
           });
-          const userIds = userRoles.map(ur => ur.UserId);
+          const userIds = userRoles.map((ur) => ur.UserId);
 
           if (userIds.length > 0) {
             const assignmentCount = await UserKPI.count({
@@ -1502,8 +1624,8 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
                 CycleYear: cycleYear,
                 IsArchived: false,
                 UserId: { [Op.in]: userIds },
-                KPIId: { [Op.in]: reportKpiIds }
-              }
+                KPIId: { [Op.in]: reportKpiIds },
+              },
             });
 
             if (assignmentCount > 0) {
@@ -1528,12 +1650,18 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
         // In combined mode, the value is in the 'combined' column.
         // In individual mode (current office only), the value is in the office's own ID column.
         const columnId = hasChildren ? 'combined' : String(reportData.scopeRole.id);
-        return {
+        const cellValue = row.values?.[columnId];
+        const finalRow = {
           id: row.id,
+          assignmentId: row.assignmentId || null,
+          kpiId: row.kpiId || null,
           no: row.no,
           kpi: row.kpi,
-          value: row.values?.[columnId] || '0',
+          value: cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue || '0',
+          isEvidenceRequired: Boolean(row.isEvidenceRequired),
         };
+        console.log(`[SUBMIT_PAYLOAD] Role: ${reportData.scopeRole.id}, KPI: ${row.kpi}, KPIId: ${row.kpiId}, Value: ${finalRow.value}`);
+        return finalRow;
       });
 
     const submission = await OfficeReportSubmission.create({
@@ -1548,6 +1676,14 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
       },
       SubmittedBy: req.user?.Id || null,
       SubmittedAt: new Date(),
+    });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'SUBMIT_OFFICE_REPORT',
+      resource: 'OfficeReportSubmission',
+      description: `Submitted office report for ${reportData.scopeRole.name} to ${reportData.parentRole.name} (${cycleYear})`,
+      ipAddress: req.ip
     });
 
     res.status(201).json({
@@ -1626,6 +1762,7 @@ const createUserKPIResult = async (req, res) => {
       PerformanceTitle: PerformanceTitle || kpi.Description || null,
       EvidenceURL: evidenceUrl || existingResult?.EvidenceURL || null,
       CreatedBy: req.user?.Id,
+      Status: kpi.IsEvedenceRequired ? 'pending' : 'approved',
     };
 
     if (existingResult) {
@@ -1635,10 +1772,214 @@ const createUserKPIResult = async (req, res) => {
 
     const result = await UserKPIResult.create(payload);
 
+    await logActivity({
+      userId: userId,
+      action: 'KPI_REPORTING',
+      resource: 'UserKPIResult',
+      description: `Reported KPI performance: ${PerformanceTitle || kpi.Description}`,
+      ipAddress: req.ip
+    });
+
     res.status(201).json({ success: true, data: result });
   } catch (error) {
     console.error('Create user KPI result error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+const getKPIApprovals = async (req, res) => {
+  try {
+    const userRoleId = req.user?.currentRole?.Id;
+
+    if (!userRoleId) {
+      return res.status(403).json({ message: 'User role context not found.' });
+    }
+
+    const allRoles = await Role.findAll({ where: { IsArchived: false } });
+    const childRoleIds = [];
+    const queue = [userRoleId];
+
+    while (queue.length) {
+      const parentId = queue.shift();
+      const children = allRoles.filter((r) => String(r.ParentRoleId) === String(parentId));
+      children.forEach((c) => {
+        childRoleIds.push(c.Id);
+        queue.push(c.Id);
+      });
+    }
+
+    if (!childRoleIds.length) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const childUserRoles = await UserRole.findAll({
+      where: {
+        RoleId: { [Op.in]: childRoleIds },
+        IsArchived: false,
+        [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+      },
+      attributes: ['UserId', 'RoleId'],
+      include: [{ model: Role, attributes: ['RoleName'] }],
+    });
+
+    const userToRoleName = new Map();
+    childUserRoles.forEach((ur) => {
+      userToRoleName.set(String(ur.UserId), ur.Role?.RoleName || 'Unknown Unit');
+    });
+
+    const childUserIds = Array.from(userToRoleName.keys());
+
+    if (!childUserIds.length) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // 2. Fetch official submissions to identify which offices have actually submitted their reports
+    const officialSubmissions = await require('../models').OfficeReportSubmission.findAll({
+      where: {
+        ParentRoleId: userRoleId,
+        IsArchived: false,
+      },
+    });
+    const submittedSourceRoleIds = new Set(officialSubmissions.map((s) => String(s.SourceRoleId)));
+
+    // Map child users to their role IDs for submission filtering
+    const userToRoleMap = new Map();
+    childUserRoles.forEach((ur) => {
+      userToRoleMap.set(String(ur.UserId), String(ur.RoleId));
+    });
+
+    const results = await UserKPIResult.findAll({
+      where: {
+        UserId: { [Op.in]: childUserIds },
+        IsArchived: false,
+        Status: { [Op.in]: ['pending', 'adjusted', 'approved'] },
+      },
+      include: [
+        { model: User, attributes: ['FirstName', 'FatherName', 'GrandFatherName'] },
+        {
+          model: KPI,
+          required: true,
+          where: { IsEvedenceRequired: true },
+          include: [{ model: KPIType }, { model: Unit }, { model: KPIYearPlan }],
+        },
+        {
+          model: UserKPI,
+          as: 'Assignment',
+          include: [{ model: KPIYearPlan }],
+        },
+      ],
+      order: [['CreatedAt', 'DESC']],
+    });
+
+    // 3. Filter results: only show those whose office has submitted
+    const filteredResults = results.filter((r) => {
+      const roleId = userToRoleMap.get(String(r.UserId));
+      return roleId && submittedSourceRoleIds.has(roleId);
+    });
+
+    const kpiTypes = await KPIType.findAll({ where: { IsArchived: false } });
+    const typeById = new Map(kpiTypes.map((t) => [String(t.Id), t]));
+
+    const mappedResults = filteredResults.map((r) => {
+      const leafType = r.KPI?.KPIType;
+      const lineage = leafType ? getTypeLineage(leafType.Id, typeById) : [];
+      const category = lineage
+        .slice(0, -1)
+        .map((t) => t.KPIName)
+        .join(' · ');
+
+      const assignment = r.Assignment;
+      const kpiRecord = r.KPI;
+
+      const baseline = assignment?.Baseline ?? kpiRecord?.KPIYearPlans?.[0]?.Baseline ?? kpiRecord?.DefaultBaseline ?? 0;
+      const target = assignment?.AssignedTarget ?? kpiRecord?.KPIYearPlans?.[0]?.Target ?? kpiRecord?.Target ?? 0;
+
+      return {
+        id: r.Id,
+        category: category || 'General',
+        title: r.PerformanceTitle || kpiRecord?.Description || leafType?.KPIName || 'Untitled KPI',
+        submitter: `${r.User?.FirstName} ${r.User?.FatherName || ''}`.trim(),
+        unit: userToRoleName.get(String(r.UserId)) || 'Unknown Unit',
+        period: r.Quarter ? `${r.Quarter} ${r.CycleYear}` : r.CycleYear,
+        submittedAt: new Date(r.CreatedAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+        baseline,
+        target,
+        reported: parseNumericValue(r.KPIResult),
+        adjustedReported: parseNumericValue(r.AdjustedResult),
+        status: r.Status,
+        cycleYear: r.CycleYear,
+        note: r.Description || 'No description provided.',
+        evidence: r.EvidenceURL
+          ? [
+              {
+                name: r.EvidenceURL.split('/').pop(),
+                size: 'Unknown',
+                url: r.EvidenceURL,
+              },
+            ]
+          : [],
+        evidenceRequired: !!kpiRecord?.IsEvedenceRequired,
+      };
+    });
+
+    res.json({ success: true, data: mappedResults });
+  } catch (error) {
+    console.error('Get KPI approvals error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const approveKPIResult = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await UserKPIResult.findByPk(id);
+
+    if (!result) {
+      return res.status(404).json({ message: 'KPI result not found.' });
+    }
+
+    await result.update({ Status: 'approved', AdjustedResult: null });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'APPROVE_KPI',
+      resource: 'UserKPIResult',
+      description: `Approved KPI result for user ID: ${result.UserId}`,
+      ipAddress: req.ip
+    });
+
+    res.json({ success: true, message: 'KPI result approved successfully.' });
+  } catch (error) {
+    console.error('Approve KPI result error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const adjustKPIResult = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adjustedValue } = req.body;
+
+    const result = await UserKPIResult.findByPk(id);
+
+    if (!result) {
+      return res.status(404).json({ message: 'KPI result not found.' });
+    }
+
+    await result.update({ Status: 'adjusted', AdjustedResult: String(adjustedValue) });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'ADJUST_KPI',
+      resource: 'UserKPIResult',
+      description: `Adjusted KPI result for user ID: ${result.UserId} to ${adjustedValue}`,
+      ipAddress: req.ip
+    });
+
+    res.json({ success: true, message: 'KPI result adjusted and approved.' });
+  } catch (error) {
+    console.error('Adjust KPI result error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -1765,7 +2106,16 @@ const updateUserKPIResult = async (req, res) => {
       CycleYear: CycleYear || result.CycleYear,
       PerformanceTitle: PerformanceTitle !== undefined ? PerformanceTitle : result.PerformanceTitle,
       EvidenceURL: evidenceUrl !== undefined ? evidenceUrl : result.EvidenceURL,
+      Status: result.Status === 'pending' || !result.Status ? 'pending' : result.Status,
     });
+
+    // If it's a new update and we know the KPI, we can check evidence requirement
+    if (result.KPIId || KPIId) {
+      const kpi = await KPI.findByPk(KPIId || result.KPIId);
+      if (kpi && !kpi.IsEvedenceRequired) {
+        await result.update({ Status: 'approved' });
+      }
+    }
 
     res.json({ success: true, data: result });
   } catch (error) {
@@ -1803,4 +2153,7 @@ module.exports = {
   getUserKPIResultById,
   updateUserKPIResult,
   deleteUserKPIResult,
+  getKPIApprovals,
+  approveKPIResult,
+  adjustKPIResult,
 };

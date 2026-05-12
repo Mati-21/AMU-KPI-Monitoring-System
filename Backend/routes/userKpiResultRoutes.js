@@ -13,6 +13,9 @@ const {
   getUserKPIResultById,
   updateUserKPIResult,
   deleteUserKPIResult,
+  getKPIApprovals,
+  approveKPIResult,
+  adjustKPIResult,
 } = require('../controllers/userKPIResultController');
 
 const router = express.Router();
@@ -67,6 +70,10 @@ router.route('/report/submit').post(protect, requirePermission(AFFILIATED_OFFICE
 router.route('/affiliated-office-report').get(protect, requirePermission(AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS), getAffiliatedOfficeReport);
 
 router.route('/role-report').get(protect, requirePermission(AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS), getAffiliatedOfficeReport);
+
+router.route('/approvals').get(protect, getKPIApprovals);
+router.route('/:id/approve').patch(protect, approveKPIResult);
+router.route('/:id/adjust').patch(protect, adjustKPIResult);
 
 router
   .route('/:id')

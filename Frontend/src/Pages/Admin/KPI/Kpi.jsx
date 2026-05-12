@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import TabButton from '../../../Components/UI/TabButton';
 import KpiList from './KpiList';
 import RegisterKpi from './RegisterKpi';
@@ -6,8 +7,19 @@ import RegisterUnit from './RegisterUnit';
 import RegisterCategory from './RegisterCategory';
 
 const KpiManagement = () => {
-  const [activeTab, setActiveTab] = useState('list');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(requestedTab || 'list');
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'list') {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab }, { replace: true });
+    }
+  };
 
   const tabs = [
     { key: 'list', label: 'Lists' },
@@ -25,14 +37,14 @@ const KpiManagement = () => {
           {/* Tabs */}
           <div className="flex gap-2">
             {tabs.map((tab) => (
-              <TabButton key={tab.key} label={tab.label} value={tab.key} activeValue={activeTab} onChange={setActiveTab} />
+              <TabButton key={tab.key} label={tab.label} value={tab.key} activeValue={activeTab} onChange={handleTabChange} />
             ))}
           </div>
 
           {activeTab === 'list' && <KpiList refreshKey={refreshKey} />}
-          {activeTab === 'addKpi' && <RegisterKpi setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
-          {activeTab === 'addKpiCategory' && <RegisterCategory setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
-          {activeTab === 'addKpiUnit' && <RegisterUnit setActiveTab={setActiveTab} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addKpi' && <RegisterKpi setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addKpiCategory' && <RegisterCategory setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'addKpiUnit' && <RegisterUnit setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
         </main>
       </div>
     </div>
