@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, CheckCheck, Calendar, Search, Filter, Check, ChevronDown } from 'lucide-react';
 import { Badge } from '../../../Components/UI/Badge';
+import { api } from '../../../api/axios';
+import { useNotification } from '../../../Context/NotificationContext';
+import { useSocket } from '../../../Context/SocketContext';
 
 /* -------------------- Custom Select -------------------- */
 const CustomSelect = ({ options = [], value, onChange, placeholder = 'Select...', className = '' }) => {
@@ -39,7 +42,6 @@ const CustomSelect = ({ options = [], value, onChange, placeholder = 'Select...'
   );
 };
 
-
 /* -------------------- Simple Button -------------------- */
 const Button = ({ children, className = '', ...props }) => {
   return (
@@ -54,25 +56,26 @@ const Input = ({ className = '', ...props }) => {
   return <input className={`border border-border rounded-md px-3 py-2 text-sm ${className}`} {...props} />;
 };
 
-/* -------------------- Data -------------------- */
-const initialNotifications = [
-  {
-    id: 1,
-    title: 'KPI Submitted for Approval',
-    description: 'Dr. Tesfaye submitted "Research Publication Q1" for review.',
-    date: 'Feb 26, 2026 – 10:45 AM',
-    priority: 'High Priority',
-    read: false,
-  },
-  {
-    id: 2,
-    title: 'New Member Onboarding',
-    description: 'Sarah Johnson completed onboarding.',
-    date: 'Feb 26, 2026 – 09:12 AM',
-    priority: 'Medium Priority',
-    read: false,
-  },
-];
+/* -------------------- Helpers -------------------- */
+const toPriorityLabel = (value) => {
+  const normalized = String(value || '').toLowerCase();
+  if (normalized === 'high') return 'High Priority';
+  if (normalized === 'low') return 'Low Priority';
+  return 'Medium Priority';
+};
+
+const formatDateLabel = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 const priorityColor = {
   'High Priority': 'border-red-500 text-red-600 bg-red-50',
@@ -88,22 +91,198 @@ const borderColor = {
 
 /* -------------------- Main Component -------------------- */
 const AlertsNotifications = () => {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const { notify } = useNotification();
+
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
   const [priority, setPriority] = useState('all');
   const [date, setDate] = useState('all');
   const [type, setType] = useState('7days');
+  const [sortBy, setSortBy] = useState('newest');
 
-  const markAllRead = () => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/notifications/my', { params: { limit: 200 } });
+      const rows = response?.data?.data || [];
+
+      setNotifications(
+        rows.map((row) => ({
+          id: row.Id,
+          title: row.Title || 'Notification',
+          description: row.Message || '',
+          date: formatDateLabel(row.CreatedAt),
+          createdAt: row.CreatedAt,
+          priority: toPriorityLabel(row.Priority),
+          read: Boolean(row.IsRead),
+          type: row.Type || null,
+          data: row.Data || null,
+        }))
+      );
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to load notifications.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const socket = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('notifications:new', (row) => {
+      if (!row?.Id) return;
+
+      setNotifications((prev) => {
+        const exists = Array.isArray(prev) && prev.some((n) => String(n.id) === String(row.Id));
+        if (exists) return prev;
+
+        const next = {
+          id: row.Id,
+          title: row.Title || 'Notification',
+          description: row.Message || '',
+          date: formatDateLabel(row.CreatedAt),
+          createdAt: row.CreatedAt,
+          priority: toPriorityLabel(row.Priority),
+          read: Boolean(row.IsRead),
+          type: row.Type || null,
+          data: row.Data || null,
+        };
+
+        return [next, ...(Array.isArray(prev) ? prev : [])];
+      });
+    });
+
+    return () => {
+      socket.off('notifications:new');
+    };
+  }, [socket]);
+
+  const markAllRead = async () => {
+    try {
+      await api.patch('/notifications/my/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to mark all as read.', 'error');
+    }
+  };
+
+  const markOneRead = async (id) => {
+    try {
+      await api.patch(`/notifications/${id}/read`);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to mark notification as read.', 'error');
+    }
+  };
+
+  const now = useMemo(() => new Date(), []);
+
+  const passesDateFilter = (createdAt) => {
+    if (!createdAt) return true;
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+
+    if (date === 'today') {
+      return created.toDateString() === now.toDateString();
+    }
+
+    if (date === 'week') {
+      const diffDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 7;
+    }
+
+    if (date === 'month') {
+      const diffDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 30;
+    }
+
+    return true;
+  };
+
+  const passesTypeFilter = (createdAt) => {
+    if (type === 'all') return true;
+    const created = new Date(createdAt);
+    if (Number.isNaN(created.getTime())) return true;
+    const diffDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+    if (type === '7days') return diffDays >= 0 && diffDays <= 7;
+    if (type === '30days') return diffDays >= 0 && diffDays <= 30;
+    return true;
+  };
 
   const filtered = notifications.filter((n) => {
-    const matchesSearch = n.title.toLowerCase().includes(search.toLowerCase()) || n.description.toLowerCase().includes(search.toLowerCase());
+    const query = String(search || '')
+      .trim()
+      .toLowerCase();
+    const title = String(n.title || '');
+    const description = String(n.description || '');
+    const priorityText = String(n.priority || '');
+    const typeText = String(n.type || '');
+    const matchesSearch =
+      !query ||
+      title.toLowerCase().includes(query) ||
+      description.toLowerCase().includes(query) ||
+      priorityText.toLowerCase().includes(query) ||
+      typeText.toLowerCase().includes(query);
 
     const matchesPriority = priority === 'all' || n.priority === priority;
+    const matchesDate = passesDateFilter(n.createdAt);
+    const matchesType = passesTypeFilter(n.createdAt);
 
-    return matchesSearch && matchesPriority;
+    return matchesSearch && matchesPriority && matchesDate && matchesType;
   });
+
+  const sorted = useMemo(() => {
+    const rows = [...filtered];
+
+    const priorityRank = {
+      'High Priority': 3,
+      'Medium Priority': 2,
+      'Low Priority': 1,
+    };
+
+    const getTime = (value) => {
+      const time = new Date(value || 0).getTime();
+      return Number.isFinite(time) ? time : 0;
+    };
+
+    if (sortBy === 'oldest') {
+      rows.sort((a, b) => getTime(a.createdAt) - getTime(b.createdAt));
+      return rows;
+    }
+
+    if (sortBy === 'unread') {
+      rows.sort((a, b) => {
+        const leftUnread = a.read ? 0 : 1;
+        const rightUnread = b.read ? 0 : 1;
+        if (leftUnread !== rightUnread) return rightUnread - leftUnread;
+        return getTime(b.createdAt) - getTime(a.createdAt);
+      });
+      return rows;
+    }
+
+    if (sortBy === 'priority') {
+      rows.sort((a, b) => {
+        const left = priorityRank[a.priority] || 0;
+        const right = priorityRank[b.priority] || 0;
+        if (left !== right) return right - left;
+        return getTime(b.createdAt) - getTime(a.createdAt);
+      });
+      return rows;
+    }
+
+    // newest (default)
+    rows.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+    return rows;
+  }, [filtered, sortBy]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -116,7 +295,7 @@ const AlertsNotifications = () => {
           </div>
 
           <div className="flex gap-3">
-            <Button className="border flex items-center gap-2">
+            <Button className="border flex items-center gap-2" onClick={fetchNotifications} disabled={loading}>
               <RefreshCw className="w-4 h-4" /> Refresh
             </Button>
 
@@ -183,15 +362,32 @@ const AlertsNotifications = () => {
           {/* Search */}
           <div className="relative ml-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input placeholder="Search" className="pl-9 h-9 w-36 text-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input placeholder="Search" className="pl-9 h-10 w-64 text-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
 
         {/* List */}
-        <div>
-          {filtered.map((n) => (
-            <div key={n.id} className={`flex justify-between border-l-4 ${borderColor[n.priority]} border-b px-4 py-3`}>
-              <div>
+        <div className="space-y-3">
+          {sorted.map((n) => (
+            <div
+              key={n.id}
+              role="button"
+              tabIndex={0}
+              className={`flex justify-between rounded-md bg-card shadow-sm border border-border border-l-4 ${borderColor[n.priority]} px-4 py-3 cursor-pointer hover:bg-accent/20 ${
+                n.read ? 'opacity-80' : ''
+              }`}
+              onClick={() => {
+                if (!n.read) {
+                  markOneRead(n.id);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !n.read) {
+                  markOneRead(n.id);
+                }
+              }}
+            >
+              <div className="min-w-0">
                 <h3 className="font-semibold text-sm">{n.title}</h3>
                 <p className="text-xs text-gray-500">{n.description}</p>
 
@@ -203,19 +399,9 @@ const AlertsNotifications = () => {
                   <Badge className={`text-[10px] ${priorityColor[n.priority]}`}>{n.priority}</Badge>
                 </div>
               </div>
-
-              <Badge
-                onClick={() => setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))}
-                className={`cursor-pointer w- ${n.read ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'}`}
-              >
-                {n.read ? 'Read' : 'Unread'}
-              </Badge>
             </div>
           ))}
         </div>
-
-
-
       </main>
     </div>
   );
