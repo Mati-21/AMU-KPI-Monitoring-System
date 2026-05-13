@@ -1,36 +1,24 @@
-import PerformanceDashboard from '../../Components/Dashboard/PerformanceDashboard';
+import { useState, useEffect, useMemo } from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
-import { useState, useEffect } from 'react';
-import { api } from '../../api/axios';
+import PerformanceDashboard from '../../Components/Dashboard/PerformanceDashboard';
+import { useKpiYearPlansQuery } from '../../Hooks/Queries/useKpis';
 
 function UnifiedDashboard() {
   const [derivedKpiId, setDerivedKpiId] = useState('__ALL__');
   const [selectedRoleId, setSelectedRoleId] = useState('__ALL__');
-  const [availableYears, setAvailableYears] = useState([]);
   const [selectedCycleYear, setSelectedCycleYear] = useState('');
-  
-  useEffect(() => {
-    const fetchYears = async () => {
-      try {
-        const res = await api.get('/kpi-year-plans');
-        const plans = res.data?.data || [];
-        // Extract distinct years and sort descending
-        const years = [...new Set(plans.map(p => p.CycleYear))].sort((a, b) => b.localeCompare(a));
-        setAvailableYears(years);
-        if (years.length > 0 && !selectedCycleYear) {
-            setSelectedCycleYear(''); 
-        }
-      } catch (err) {
-        console.error('Failed to load cycle years', err);
-      }
-    };
-    fetchYears();
-  }, []);
 
-  const { config } = useDashboardData({ 
-    derivedKpiId, 
+  // Queries
+  const { data: yearPlans = [] } = useKpiYearPlansQuery();
+
+  const availableYears = useMemo(() => {
+    return [...new Set(yearPlans.map((p) => p.CycleYear))].sort((a, b) => b.localeCompare(a));
+  }, [yearPlans]);
+
+  const { config } = useDashboardData({
+    derivedKpiId,
     cycleYear: selectedCycleYear,
-    focusedRoleId: selectedRoleId
+    focusedRoleId: selectedRoleId,
   });
 
   if (config.isLoading) {
@@ -54,9 +42,9 @@ function UnifiedDashboard() {
   }
 
   return (
-    <PerformanceDashboard 
-      config={{...config, yearOptions: availableYears.length > 0 ? availableYears : ['Current Cycle']}} 
-      derivedKpiId={derivedKpiId} 
+    <PerformanceDashboard
+      config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : ['Current Cycle'] }}
+      derivedKpiId={derivedKpiId}
       onDerivedKpiChange={setDerivedKpiId}
       focusedRoleId={selectedRoleId}
       onRoleChange={setSelectedRoleId}

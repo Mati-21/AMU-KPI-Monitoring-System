@@ -15,6 +15,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { api } from '../../api/axios';
 import permissionUtils, { hasPermission } from '../../lib/permissionUtils';
 import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
+import { useRolesQuery } from '../../Hooks/Queries/useRoles';
+import { useUserRolesQuery } from '../../Hooks/Queries/useUsers';
+import { 
+  useKpisQuery, 
+  useUserKpisQuery,
+  useCreateUserKpiMutation,
+  useUpdateUserKpiMutation,
+  useDeleteUserKpiMutation
+} from '../../Hooks/Queries/useKpis';
 
 const tableHeaders = ['Parent KPI', 'Drived Kpi', 'Unit', 'Baseline', 'Target', 'Remark'];
 
@@ -36,6 +45,10 @@ const createDrivenKpiRow = () => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   value: '',
 });
+
+const EMPTY_ARRAY = [];
+const SENT_DERIVED_PARAMS = { scope: 'sent', isDerived: 'true' };
+const MINE_PARAMS = { scope: 'mine' };
 
 const DrivedKpiAllocationPage = () => {
   const authUser = useSelector((state) => state.auth?.user);
@@ -72,28 +85,65 @@ const DrivedKpiAllocationPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
   const [includeCurrentOfficeDrafts, setIncludeCurrentOfficeDrafts] = useState({});
-  const [drivedKpis, setDrivedKpis] = useState([]);
-  const [sentDrivedKpis, setSentDrivedKpis] = useState([]);
-  const [assigning, setAssigning] = useState(false);
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
-  const [catalogError, setCatalogError] = useState('');
-  const [roles, setRoles] = useState([]);
-  const [userRoles, setUserRoles] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [assignedKpis, setAssignedKpis] = useState([]);
-  const [deletingDrivedKpi, setDeletingDrivedKpi] = useState(null);
-  const [deleting, setDeleting] = useState(false);
   const [selectedDrivedKpi, setSelectedDrivedKpi] = useState(null);
   const [drivedKpiModalMode, setDrivedKpiModalMode] = useState('view');
   const [drivedTargetDraft, setDrivedTargetDraft] = useState('');
-  const [savingDrivedTarget, setSavingDrivedTarget] = useState(false);
   const [assignmentTargetDrafts, setAssignmentTargetDrafts] = useState({});
   const [targetIndividualDrafts, setTargetIndividualDrafts] = useState({});
   const [customTargetDrafts, setCustomTargetDrafts] = useState({});
   const [customTargetModalState, setCustomTargetModalState] = useState({ open: false, kpiId: null });
   const [customTargetEditors, setCustomTargetEditors] = useState({});
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingDrivedKpi, setDeletingDrivedKpi] = useState(null);
+  const [assigning, setAssigning] = useState(false);
+  const [savingDrivedTarget, setSavingDrivedTarget] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+
+  // Mutations
+  const createUserKpiMutation = useCreateUserKpiMutation();
+  const updateUserKpiMutation = useUpdateUserKpiMutation();
+  const deleteUserKpiMutation = useDeleteUserKpiMutation();
+
+  const deleting = deleteUserKpiMutation.isPending;
+
+  // Queries
+  const { data: roles = EMPTY_ARRAY, isLoading: loadingRoles, error: rolesError } = useRolesQuery();
+  const { data: userRoles = EMPTY_ARRAY, isLoading: loadingUserRoles, error: userRolesError } = useUserRolesQuery();
+  const { data: myAssignments = EMPTY_ARRAY, isLoading: loadingMy, error: myError } = useUserKpisQuery(MINE_PARAMS);
+  const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery(SENT_DERIVED_PARAMS);
+  const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
+
+  const loadingCatalog = loadingRoles || loadingUserRoles || loadingMy || loadingSent || loadingKpis;
+  const catalogError = 
+    rolesError?.response?.data?.message || 
+    userRolesError?.response?.data?.message || 
+    myError?.response?.data?.message || 
+    sentError?.response?.data?.message || 
+    kpiError?.response?.data?.message || '';
+  const units = []; // Placeholder for now
+
+  const assignedKpis = useMemo(() => {
+    const kpiById = new Map(kpis.map((kpi) => [String(kpi.Id), kpi]));
+    return myAssignments.map((assignment) => {
+      const kpi = kpiById.get(String(assignment.KPIId));
+      if (!kpi) return null;
+      return {
+        id: assignment.Id,
+        kpiId: kpi.Id,
+        label: `${kpi.KPIType?.KPIName || kpi.KPIName || 'Unnamed KPI'}${kpi.Unit?.Code || kpi.Unit?.Name ? ` (${kpi.Unit?.Code || kpi.Unit?.Name})` : ''}`,
+        remark: assignment.Remark || '',
+        name: assignment.Name || '',
+        assignedTarget: assignment.AssignedTarget ?? null,
+        originalTarget: kpi.Target ?? null,
+        hasDerivedRemark: !!assignment.Remark,
+        unit: kpi.Unit?.Code || kpi.Unit?.Name || 'null',
+        baseline: assignment.Baseline ?? kpi.Baseline ?? 'null',
+        target: assignment.AssignedTarget ?? kpi.Target ?? 'null',
+        isAssigned: String(assignment.CreatedBy) !== String(authUser?.Id || authUser?.id),
+      };
+    }).filter(Boolean);
+  }, [myAssignments, kpis, authUser]);
+
   const mainKpiOptions = useMemo(
     () =>
       assignedKpis
@@ -104,6 +154,33 @@ const DrivedKpiAllocationPage = () => {
         .filter((item, index, items) => items.findIndex((entry) => String(entry.value) === String(item.value)) === index),
     [assignedKpis]
   );
+
+  const drivedKpis = useMemo(() => {
+    const myCreatedDrived = assignedKpis
+      .filter((item) => item.name && !item.isAssigned)
+      .map((item) => ({ ...item, mainKpiId: item.kpiId, parent: item.label, drived: item.name }));
+    
+    const parentAssignedDrived = assignedKpis
+      .filter((item) => item.name && item.isAssigned)
+      .map((item) => ({ ...item, mainKpiId: item.kpiId, parent: item.label, drived: item.name }));
+
+    return [...myCreatedDrived, ...parentAssignedDrived].sort((a, b) => (a.parent || "").localeCompare(b.parent || ""));
+  }, [assignedKpis]);
+
+  const sentDrivedKpis = useMemo(() => {
+    return sentAssignments.map((assignment) => ({
+      id: assignment.Id,
+      targetUser: assignment.User?.FirstName || assignment.User?.UserName || 'Unknown',
+      targetRole: roles.find((r) => String(r.Id) === String(userRoles.find((ur) => ur.UserId === assignment.UserId)?.RoleId))?.RoleName || 'Target Role',
+      drivedKpi: assignment.Name || assignment.Remark || 'null',
+      recipients: 1,
+      includeCurrentRole: assignment.IncludeCurrentOffice,
+      mainKpiId: assignment.KPIId,
+      unit: assignment.KPI?.Unit?.Code || 'null',
+      baseline: assignment.Baseline,
+      target: assignment.AssignedTarget,
+    }));
+  }, [sentAssignments, roles, userRoles]);
 
   const canModifyAssignedTarget = canEdit || canAssign || canCreate || hasExtraMeasures;
 
@@ -123,20 +200,22 @@ const DrivedKpiAllocationPage = () => {
   const handleSaveDrivedTarget = async () => {
     if (!selectedDrivedKpi?.id) return;
 
-    try {
-      setSavingDrivedTarget(true);
-      await api.put(`/user-kpis/${selectedDrivedKpi.id}`, {
-        AssignedTarget: parseNumericValue(drivedTargetDraft),
-      });
-
-      notify('Drived KPI target updated successfully.', 'success');
-      setRefreshToken((previous) => previous + 1);
-      closeDrivedKpiModal();
-    } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to update Drived KPI target.', 'error');
-    } finally {
-      setSavingDrivedTarget(false);
-    }
+    setSavingDrivedTarget(true);
+    updateUserKpiMutation.mutate({
+      id: selectedDrivedKpi.id,
+      data: { AssignedTarget: parseNumericValue(drivedTargetDraft) }
+    }, {
+      onSuccess: () => {
+        notify('Drived KPI target updated successfully.', 'success');
+        closeDrivedKpiModal();
+      },
+      onError: (err) => {
+        notify(err?.response?.data?.message || 'Failed to update Drived KPI target.', 'error');
+      },
+      onSettled: () => {
+        setSavingDrivedTarget(false);
+      }
+    });
   };
 
   // Restore handleAssignDrivedKpi
@@ -156,6 +235,8 @@ const DrivedKpiAllocationPage = () => {
       return;
     }
 
+    try {
+      setAssigning(true);
       const selectedDrivenKpis = drivedKpis.filter((item) => selectedDrivenKpiIds.includes(String(item.id)));
       if (selectedDrivenKpis.length === 0) {
         notify('The selected Drived KPI items could not be found.', 'error');
@@ -174,46 +255,43 @@ const DrivedKpiAllocationPage = () => {
 
       const assignmentBatchId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
 
-      setAssigning(true);
+      const assignmentBatchData = kpisWithRecipients.flatMap(({ kpi: selectedDrivenKpi, recipientUserIds }) => {
+        const baselineNumber = Number(selectedDrivenKpi.baseline);
+        const targetDraft = assignmentTargetDrafts[String(selectedDrivenKpi.id)];
+        const targetNumber = Number(targetDraft ?? selectedDrivenKpi.assignedTarget ?? selectedDrivenKpi.target);
+        const remarkText = Array.isArray(selectedDrivenKpi.drived) ? selectedDrivenKpi.drived.join(' | ') : selectedDrivenKpi.drived;
+        const kpiIncludeCurrentRole = !!includeCurrentOfficeDrafts[String(selectedDrivenKpi.id)];
 
-      try {
-        const requests = kpisWithRecipients.flatMap(({ kpi: selectedDrivenKpi, recipientUserIds }) => {
-          const baselineNumber = Number(selectedDrivenKpi.baseline);
-          const targetDraft = assignmentTargetDrafts[String(selectedDrivenKpi.id)];
-          const targetNumber = Number(targetDraft ?? selectedDrivenKpi.assignedTarget ?? selectedDrivenKpi.target);
-          const remarkText = Array.isArray(selectedDrivenKpi.drived) ? selectedDrivenKpi.drived.join(' | ') : selectedDrivenKpi.drived;
-          const kpiIncludeCurrentRole = !!includeCurrentOfficeDrafts[String(selectedDrivenKpi.id)];
+        const perUserTarget =
+          targetIndividualDrafts[String(selectedDrivenKpi.id)]
+            ? targetNumber
+            : recipientUserIds.length > 0
+              ? Number((targetNumber / recipientUserIds.length).toFixed(2))
+              : targetNumber;
 
-          const perUserTarget =
-            targetIndividualDrafts[String(selectedDrivenKpi.id)]
-              ? targetNumber
-              : recipientUserIds.length > 0
-                ? Number((targetNumber / recipientUserIds.length).toFixed(2))
-                : targetNumber;
+        return recipientUserIds.map((userId) => {
+          const customTarget = customTargetDrafts[String(selectedDrivenKpi.id)]?.[userId];
+          const finalTarget = customTarget !== undefined ? Number(customTarget) : perUserTarget;
 
-          return recipientUserIds.map((userId) => {
-            const customTarget = customTargetDrafts[String(selectedDrivenKpi.id)]?.[userId];
-            const finalTarget = customTarget !== undefined ? Number(customTarget) : perUserTarget;
-
-            return api.post('/user-kpis', {
-              KPIId: selectedDrivenKpi.mainKpiId,
-              UserId: userId,
-              Baseline: (isDistributable && formState.distributionMethod === 'equal') ? 0 : (Number.isFinite(baselineNumber) ? baselineNumber : null),
-              AssignedTarget: Number.isFinite(finalTarget) ? finalTarget : null,
-              IsTargetIndividual: !!targetIndividualDrafts[String(selectedDrivenKpi.id)],
-              IncludeCurrentOffice: kpiIncludeCurrentRole && userRoles.some(ur => String(ur.UserId) === String(userId) && String(ur.RoleId) === String(currentRoleId)),
-              AssignmentBatchId: assignmentBatchId,
-              Name: selectedDrivenKpi.name || remarkText,
-              Remark: '',
-            });
-          });
+          return {
+            KPIId: selectedDrivenKpi.mainKpiId,
+            UserId: userId,
+            Baseline: (isDistributable && formState.distributionMethod === 'equal') ? 0 : (Number.isFinite(baselineNumber) ? baselineNumber : null),
+            AssignedTarget: Number.isFinite(finalTarget) ? finalTarget : null,
+            IsTargetIndividual: !!targetIndividualDrafts[String(selectedDrivenKpi.id)],
+            IncludeCurrentOffice: kpiIncludeCurrentRole && userRoles.some(ur => String(ur.UserId) === String(userId) && String(ur.RoleId) === String(currentRoleId)),
+            AssignmentBatchId: assignmentBatchId,
+            Name: selectedDrivenKpi.name || remarkText,
+            Remark: '',
+          };
         });
+      });
 
-      await Promise.all(requests);
+      await Promise.all(assignmentBatchData.map(data => createUserKpiMutation.mutateAsync(data)));
 
       const totalUniqueRecipients = new Set(kpisWithRecipients.flatMap(item => item.recipientUserIds)).size;
       notify(`Assigned ${selectedDrivenKpis.length} Drived KPI item(s) to ${totalUniqueRecipients} user(s).`, 'success');
-      setRefreshToken((prev) => prev + 1);
+      
       setFormState((previous) => ({
         ...previous,
         staff: '',
@@ -365,124 +443,7 @@ const DrivedKpiAllocationPage = () => {
     });
   }, [selectedDrivedKpiRecords, formState.drivedKpiAssignment]);
 
-  useEffect(() => {
-    let mounted = true;
 
-    const loadCatalog = async () => {
-      setLoadingCatalog(true);
-      setCatalogError('');
-
-      try {
-        const [rolesRes, userRolesRes, unitsRes, mineRes, sentRes, kpisRes] = await Promise.all([
-          api.get('/roles', { params: { t: Date.now() } }),
-          api.get('/user-roles', { params: { t: Date.now() } }),
-          api.get('/units', { params: { t: Date.now() } }),
-          api.get('/user-kpis', { params: { scope: 'mine', t: Date.now() } }),
-          api.get('/user-kpis', { params: { scope: 'sent', isDerived: 'true', t: Date.now() } }),
-          api.get('/kpis', { params: { t: Date.now() } }),
-        ]);
-
-        if (!mounted) return;
-
-        setRoles(rolesRes.data?.data || []);
-        setUserRoles(userRolesRes.data?.data || []);
-        setUnits(unitsRes.data?.data || []);
-
-        const kpis = kpisRes.data?.data || [];
-        const myAssignments = mineRes.data?.data || [];
-        const sentAssignments = sentRes.data?.data || [];
-        const kpiById = new Map(kpis.map((kpi) => [String(kpi.Id), kpi]));
-
-        const formattedSent = sentAssignments.map((assignment) => ({
-          id: assignment.Id,
-          targetUser: assignment.User?.FirstName || assignment.User?.UserName || 'Unknown',
-          targetRole:
-            roles.find((r) => String(r.Id) === String(userRoles.find((ur) => ur.UserId === assignment.UserId)?.RoleId))?.RoleName || 'Target Role',
-          drivedKpi: assignment.Name || assignment.Remark || 'null',
-          recipients: 1,
-          includeCurrentRole: assignment.IncludeCurrentOffice,
-          mainKpiId: assignment.KPIId,
-          unit: assignment.KPI?.Unit?.Code || 'null',
-          baseline: assignment.Baseline,
-          target: assignment.AssignedTarget,
-        }));
-        setSentDrivedKpis(formattedSent);
-
-        const assigned = myAssignments
-          .map((assignment) => {
-            const kpi = kpiById.get(String(assignment.KPIId));
-            if (!kpi) return null;
-
-            return {
-              id: assignment.Id, // Use Assignment ID instead of KPI ID for uniqueness
-              kpiId: kpi.Id,
-              label: `${kpi.KPIType?.KPIName || kpi.KPIName || 'Unnamed KPI'}${kpi.Unit?.Code || kpi.Unit?.Name ? ` (${kpi.Unit?.Code || kpi.Unit?.Name})` : ''}`,
-              remark: assignment.Remark || '',
-              name: assignment.Name || '',
-              assignedTarget: assignment.AssignedTarget ?? null,
-              originalTarget: kpi.Target ?? null,
-              hasDerivedRemark: !!assignment.Remark, // Specifically track if THIS assignment is derived
-              unit: kpi.Unit?.Code || kpi.Unit?.Name || 'null',
-              baseline: assignment.Baseline ?? kpi.Baseline ?? 'null',
-              target: assignment.AssignedTarget ?? kpi.Target ?? 'null',
-              isAssigned: String(assignment.CreatedBy) !== String(authUser?.Id || authUser?.id),
-            };
-          })
-          .filter(Boolean);
-
-        setAssignedKpis(assigned);
-
-        // If manager, drivedKpis are their "Created" ones (own assignments with remarks)
-        // If subordinate, drivedKpis are parent assignments
-        const myCreatedDrived = assigned
-          .filter((item) => item.name && !item.isAssigned)
-          .map((item) => ({
-            id: item.id,
-            mainKpiId: item.kpiId,
-            parent: item.label,
-            drived: item.name,
-            unit: item.unit,
-            baseline: item.baseline,
-            target: item.target,
-            assignedTarget: item.assignedTarget,
-            originalTarget: item.originalTarget,
-            remark: item.remark || 'null',
-            name: item.name || '',
-            isAssigned: false,
-          }));
-
-        const parentAssignedDrived = assigned
-          .filter((item) => item.name && item.isAssigned)
-          .map((item) => ({
-            id: item.id,
-            mainKpiId: item.kpiId,
-            parent: item.label,
-            drived: item.name,
-            unit: item.unit,
-            baseline: item.baseline,
-            target: item.target,
-            assignedTarget: item.assignedTarget,
-            originalTarget: item.originalTarget,
-            remark: item.remark || 'null',
-            name: item.name || '',
-            isAssigned: true,
-          }));
-
-        setDrivedKpis([...myCreatedDrived, ...parentAssignedDrived].sort((a, b) => (a.parent || "").localeCompare(b.parent || "")));
-      } catch (loadErr) {
-        if (!mounted) return;
-        setCatalogError(loadErr?.response?.data?.message || 'Failed to load driven KPI catalog.');
-      } finally {
-        if (mounted) setLoadingCatalog(false);
-      }
-    };
-
-    loadCatalog();
-
-    return () => {
-      mounted = false;
-    };
-  }, [refreshToken]);
 
   const childRoleOptions = useMemo(() => {
     if (!currentRoleId) return [];
@@ -530,7 +491,7 @@ const DrivedKpiAllocationPage = () => {
 
     try {
       setAssigning(true);
-      await api.post('/user-kpis', {
+      await createUserKpiMutation.mutateAsync({
         KPIId: formState.mainKpi,
         UserId: authUser?.Id || authUser?.id,
         Baseline: parseNumericValue(formState.baseline),
@@ -541,7 +502,6 @@ const DrivedKpiAllocationPage = () => {
       });
 
       notify('Drived KPI created and saved successfully.', 'success');
-      setRefreshToken((prev) => prev + 1); // We need a refresh token
       setActiveTab('view-drived');
       setFormState((previous) => ({
         ...previous,
@@ -651,7 +611,7 @@ const DrivedKpiAllocationPage = () => {
           }
 
           try {
-            await api.post('/user-kpis', {
+            await createUserKpiMutation.mutateAsync({
               KPIId: match.value,
               UserId: authUser?.Id || authUser?.id,
               Baseline: parseNumericValue(baseline),
@@ -726,31 +686,25 @@ const DrivedKpiAllocationPage = () => {
   const confirmDeleteDrivedKpi = async () => {
     if (!deletingDrivedKpi?.id) return;
 
-    setDeleting(true);
-    try {
-      await api.delete(`/user-kpis/${deletingDrivedKpi.id}`);
-      notify('Drived KPI deleted successfully.', 'success');
-      setDeletingDrivedKpi(null);
-      setRefreshToken((prev) => prev + 1);
-    } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to delete Drived KPI.', 'error');
-    } finally {
-      setDeleting(false);
-    }
+    deleteUserKpiMutation.mutate(deletingDrivedKpi.id, {
+      onSuccess: () => {
+        notify('Drived KPI deleted successfully.', 'success');
+        setDeletingDrivedKpi(null);
+      },
+      onError: (err) => {
+        notify(err?.response?.data?.message || 'Failed to delete Drived KPI.', 'error');
+      }
+    });
   };
 
   const handleDeleteAllDrivedKpis = async () => {
     if (drivedKpis.length === 0) return;
     
-    setDeletingAll(true);
     try {
-      // Delete all KPIs currently in the list
-      const deleteRequests = drivedKpis.map(kpi => api.delete(`/user-kpis/${kpi.id}`));
-      await Promise.all(deleteRequests);
-      
+      setDeletingAll(true);
+      await Promise.all(drivedKpis.map(kpi => deleteUserKpiMutation.mutateAsync(kpi.id)));
       notify(`Successfully deleted all ${drivedKpis.length} Drived KPI(s).`, 'success');
       setConfirmDeleteAll(false);
-      setRefreshToken(prev => prev + 1);
     } catch (error) {
       notify(error?.response?.data?.message || 'Failed to delete all Drived KPIs.', 'error');
     } finally {

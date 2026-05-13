@@ -5,6 +5,7 @@ import { Input } from '../../Components/UI/Input';
 import CustomSelect from '../../Components/UI/CustomSelect';
 import AssignedKpiList from '../../Components/KPI/AssignedKpiList';
 import { api } from '../../api/axios';
+import { useKpisQuery, useKpiTypesQuery } from '../../Hooks/Queries/useKpis';
 
 const ALL_THEMES_OPTION = 'All Themes';
 const ALL_SUB_THEMES_OPTION = 'All Sub-Themes';
@@ -34,40 +35,18 @@ const compareCodes = (leftCode, rightCode) => {
 };
 
 const RegisteredKpis = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [kpis, setKpis] = useState([]);
-  const [kpiTypes, setKpiTypes] = useState([]);
   const [search, setSearch] = useState('');
   const [themeFilter, setThemeFilter] = useState(ALL_THEMES_OPTION);
   const [subThemeFilter, setSubThemeFilter] = useState(ALL_SUB_THEMES_OPTION);
 
-  useEffect(() => {
-    let mounted = true;
+  // Queries
+  const { data: kpis = [], isLoading: loadingKpis, error: kpiError } = useKpisQuery();
+  const { data: kpiTypes = [], isLoading: loadingTypes, error: typeError } = useKpiTypesQuery();
 
-    const loadKpis = async () => {
-      setLoading(true);
-      setError('');
+  const loading = loadingKpis || loadingTypes;
+  const error = kpiError?.response?.data?.message || typeError?.response?.data?.message || '';
 
-      try {
-        const [kpiRes, typeRes] = await Promise.all([api.get('/kpis', { params: { t: Date.now() } }), api.get('/kpi-types')]);
-        if (!mounted) return;
-        setKpis(kpiRes.data?.data || []);
-        setKpiTypes(typeRes.data?.data || []);
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load registered KPIs.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
 
-    loadKpis();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const typeById = useMemo(() => new Map(kpiTypes.map((type) => [type.Id, type])), [kpiTypes]);
 

@@ -3,10 +3,12 @@
  * Custom hook for fetching and processing KPI performance data for dashboards.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useSelector } from 'react-redux';
+import { useQueries } from '@tanstack/react-query';
 import { api } from '../api/axios';
 import { buildDashboardData, safePercent } from '../lib/dashboardUtils';
+import { queryKeys } from '../Config/queryKeys';
 
 const DEFAULT_DERIVED_KPI_FILTER = '__ALL__';
 
@@ -34,146 +36,132 @@ const getDerivedKpiLabel = (assignment) => {
 
 export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cycleYear, focusedRoleId = '__ALL__' } = {}) => {
   const authUser = useSelector((state) => state.auth?.user);
-  const [data, setData] = useState({ child: null, parentReceived: null, raw: null });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
   const currentUserId = String(authUser?.id || authUser?.Id || '');
   const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
   const roleName = authUser?.roleName || authUser?.role || 'User';
 
-  useEffect(() => {
-    let mounted = true;
+  const fetchOptions = { params: { ...(cycleYear ? { cycleYear } : {}) } };
 
-    const fetchData = async () => {
-      if (!currentUserId) return;
-      setLoading(true);
-      setError('');
-      try {
-        const fetchOptions = { params: { t: Date.now(), ...(cycleYear ? { cycleYear } : {}) } };
-
-        // Essential data for all users
-        const [parentReceivedRes, kpiRes, kpiTypeRes] = await Promise.all([
-          api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', t: Date.now(), ...(cycleYear ? { cycleYear } : {}) } }),
-          api.get('/kpis', fetchOptions),
-          api.get('/kpi-types', fetchOptions),
-        ]);
-
-        if (!mounted) return;
-
-        // Optional data (may fail if user lacks managerial permission)
-        let assignments = [];
-        let userRoles = [];
-        let roles = [];
-        try {
-          const [assignmentsRes, userRolesRes, rolesRes] = await Promise.all([
-            api.get('/user-kpis', fetchOptions),
-            api.get('/user-roles', fetchOptions),
-            api.get('/roles', fetchOptions),
-          ]).catch(() => [[], [], []]); // Silently handle 403s
-
-          assignments = assignmentsRes?.data?.data || [];
-          userRoles = userRolesRes?.data?.data || [];
-          roles = rolesRes?.data?.data || [];
-        } catch (adminErr) {
-          console.warn('Managerial data could not be loaded.', adminErr);
-        }
-
-        let parentReceivedAssignments = parentReceivedRes?.data?.data || [];
-        const kpis = kpiRes?.data?.data || [];
-        const kpiTypes = kpiTypeRes?.data?.data || [];
-
-        // Map child roles
-        const childRoleIds = new Set(
-          roles.filter((role) => String(role?.ParentRoleId || '') === currentRoleId).map((role) => String(role?.Id || ''))
-        );
-
-        const roleNameByUserId = new Map();
-        const roleMap = new Map(roles.map((r) => [String(r.Id), r]));
-
-        userRoles.forEach((ur) => {
-          const roleId = String(ur.RoleId || ur.Role?.Id || '');
-          if (!childRoleIds.has(roleId)) return;
-          const userId = String(ur.UserId || ur.User?.Id || '');
-          const rName = roleMap.get(roleId)?.RoleName || ur.Role?.RoleName;
-          if (rName) roleNameByUserId.set(userId, rName);
-        });
-
-        const activeSubUnitNames = [...new Set([...roleNameByUserId.values()])];
-        const childUserIds = new Set([...roleNameByUserId.keys()]);
-
-        const currentRole = roleMap.get(currentRoleId);
-        const parentRole = currentRole?.ParentRoleId ? roleMap.get(String(currentRole.ParentRoleId)) : null;
-        const isChildOfExtraMeasure = parentRole?.IsExtraMeasure === true || currentRole?.IsExtraMeasure === true;
-
-        // If the role is in an "Extra Measure" context, only show Derived KPIs (those with a Remark/link)
-        if (isChildOfExtraMeasure) {
-          const totalBefore = parentReceivedAssignments.length;
-          parentReceivedAssignments = parentReceivedAssignments.filter((a) => isDerivedAssignment(a));
-          console.log(`[Dashboard Context] Role: ${roleName} | Extra Measure Context: YES`);
-          console.log(`[Filtering] Found ${totalBefore} total KPIs. Kept ${parentReceivedAssignments.length} Derived KPIs.`);
-        } else {
-          console.log(`[Dashboard Context] Role: ${roleName} | Extra Measure Context: NO (Standard KPIs)`);
-        }
-
-        const assignmentsForSubUnits = assignments.filter((a) => {
-          const assignedUserId = String(a.UserId || a.User?.Id || '');
-          const createdBy = String(a.CreatedBy || '');
-          return childUserIds.has(assignedUserId) && createdBy === currentUserId;
-        });
-
-        const assignmentsForBreakdown = assignmentsForSubUnits.length > 0 ? assignmentsForSubUnits : parentReceivedAssignments;
-
-        const childData = buildDashboardData(assignmentsForBreakdown, kpis, kpiTypes, roleNameByUserId, activeSubUnitNames);
-        const parentReceivedData = buildDashboardData(parentReceivedAssignments, kpis, kpiTypes, roleNameByUserId);
-
-        if (parentReceivedAssignments.length > 0) {
-          console.log(`--- KPI Assignments for ${roleName} ---`);
-          console.table(
-            parentReceivedAssignments.map((a) => ({
-              id: a.Id,
-              type: a.Remark ? 'DERIVED' : 'ORIGINAL',
-              name: a.KPI?.Description || a.KPI?.KPIType?.KPIName || 'Unknown',
-              target: a.AssignedTarget || a.KPI?.Target,
-              remark: a.Remark,
-            }))
-          );
-        }
-
-        const childRoleOptions = roles
-          .filter((role) => String(role?.ParentRoleId || '') === currentRoleId)
-          .map((role) => ({ value: String(role.Id), label: role.RoleName }));
-
-        setData({
-          child: childData,
-          parentReceived: parentReceivedData,
-          childRoleOptions,
-          raw: {
-            parentReceivedAssignments,
-            assignmentsForSubUnits,
-            kpis,
-            kpiTypes,
-            roles,
-            userRoles,
-            roleNameByUserId,
-            activeSubUnitNames,
-          },
-        });
-      } catch (err) {
-        if (!mounted) return;
-        const msg = err?.response?.data?.message || err.message || 'Failed to load dashboard data.';
-        setError(msg);
-        console.error('Dashboard Data Fetch Error:', err);
-      } finally {
-        if (mounted) setLoading(false);
+  // Use useQueries for parallel fetching
+  const results = useQueries({
+    queries: [
+      {
+        queryKey: [...queryKeys.kpis.assignments({ scope: 'mine', fromParent: 'true' }), cycleYear],
+        queryFn: () => api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', ...(cycleYear ? { cycleYear } : {}) } }).then(res => res.data?.data || []),
+        staleTime: 1000 * 60, // 1 minute
+        gcTime: 1000 * 60 * 5, // 5 minutes
+      },
+      {
+        queryKey: [...queryKeys.kpis.list({}), cycleYear],
+        queryFn: () => api.get('/kpis', fetchOptions).then(res => res.data?.data || []),
+        staleTime: 1000 * 60,
+        gcTime: 1000 * 60 * 5,
+      },
+      {
+        queryKey: [...queryKeys.kpis.types, cycleYear],
+        queryFn: () => api.get('/kpi-types', fetchOptions).then(res => res.data?.data || []),
+        staleTime: 1000 * 60 * 5, // Types change rarely
+        gcTime: 1000 * 60 * 30,
+      },
+      {
+        queryKey: [...queryKeys.kpis.assignments({}), cycleYear],
+        queryFn: () => api.get('/user-kpis', fetchOptions).then(res => res.data?.data || []),
+        retry: false,
+        staleTime: 1000 * 60,
+        gcTime: 1000 * 60 * 5,
+      },
+      {
+        queryKey: ['user-roles', cycleYear],
+        queryFn: () => api.get('/user-roles', fetchOptions).then(res => res.data?.data || []),
+        retry: false,
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 10,
+      },
+      {
+        queryKey: [...queryKeys.roles.all, cycleYear],
+        queryFn: () => api.get('/roles', fetchOptions).then(res => res.data?.data || []),
+        retry: false,
+        staleTime: 1000 * 60 * 5, // Roles change rarely
+        gcTime: 1000 * 60 * 30,
       }
-    };
+    ]
+  });
 
-    fetchData();
-    return () => {
-      mounted = false;
+  const [parentReceivedAssignmentsRes, kpisRes, kpiTypesRes, assignmentsRes, userRolesRes, rolesRes] = results;
+
+  const loading = results.some(r => r.isLoading);
+  const error = results.find(r => r.error)?.error?.message || '';
+
+  const data = useMemo(() => {
+    if (loading || error || !results.every(r => r.data)) return { child: null, parentReceived: null, raw: null };
+
+    const parentReceivedAssignmentsRaw = parentReceivedAssignmentsRes.data || [];
+    const kpis = kpisRes.data || [];
+    const kpiTypes = kpiTypesRes.data || [];
+    const assignments = assignmentsRes.data || [];
+    const userRoles = userRolesRes.data || [];
+    const roles = rolesRes.data || [];
+
+    // Map child roles
+    const childRoleIds = new Set(
+      roles.filter((role) => String(role?.ParentRoleId || '') === currentRoleId).map((role) => String(role?.Id || ''))
+    );
+
+    const roleNameByUserId = new Map();
+    const roleMap = new Map(roles.map((r) => [String(r.Id), r]));
+
+    userRoles.forEach((ur) => {
+      const roleId = String(ur.RoleId || ur.Role?.Id || '');
+      if (!childRoleIds.has(roleId)) return;
+      const userId = String(ur.UserId || ur.User?.Id || '');
+      const rName = roleMap.get(roleId)?.RoleName || ur.Role?.RoleName;
+      if (rName) roleNameByUserId.set(userId, rName);
+    });
+
+    const activeSubUnitNames = [...new Set([...roleNameByUserId.values()])];
+    const childUserIds = new Set([...roleNameByUserId.keys()]);
+
+    const currentRole = roleMap.get(currentRoleId);
+    const parentRole = currentRole?.ParentRoleId ? roleMap.get(String(currentRole.ParentRoleId)) : null;
+    const isChildOfExtraMeasure = parentRole?.IsExtraMeasure === true || currentRole?.IsExtraMeasure === true;
+
+    let parentReceivedAssignments = [...parentReceivedAssignmentsRaw];
+
+    if (isChildOfExtraMeasure) {
+      parentReceivedAssignments = parentReceivedAssignments.filter((a) => isDerivedAssignment(a));
+    }
+
+    const assignmentsForSubUnits = assignments.filter((a) => {
+      const assignedUserId = String(a.UserId || a.User?.Id || '');
+      const createdBy = String(a.CreatedBy || '');
+      return childUserIds.has(assignedUserId) && createdBy === currentUserId;
+    });
+
+    const assignmentsForBreakdown = assignmentsForSubUnits.length > 0 ? assignmentsForSubUnits : parentReceivedAssignments;
+
+    const childData = buildDashboardData(assignmentsForBreakdown, kpis, kpiTypes, roleNameByUserId, activeSubUnitNames);
+    const parentReceivedData = buildDashboardData(parentReceivedAssignments, kpis, kpiTypes, roleNameByUserId);
+
+    const childRoleOptions = roles
+      .filter((role) => String(role?.ParentRoleId || '') === currentRoleId)
+      .map((role) => ({ value: String(role.Id), label: role.RoleName }));
+
+    return {
+      child: childData,
+      parentReceived: parentReceivedData,
+      childRoleOptions,
+      raw: {
+        parentReceivedAssignments,
+        assignmentsForSubUnits,
+        kpis,
+        kpiTypes,
+        roles,
+        userRoles,
+        roleNameByUserId,
+        activeSubUnitNames,
+      },
     };
-  }, [currentUserId, currentRoleId, cycleYear]);
+  }, [results, currentUserId, currentRoleId, loading, error]);
 
   const config = useMemo(() => {
     const normalizedRole = roleName.toLowerCase();

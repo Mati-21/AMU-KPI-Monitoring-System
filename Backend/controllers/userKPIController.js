@@ -2,6 +2,7 @@ const { UserKPI, User, KPI, UserKPIResult, UserRole, OfficeReportSubmission } = 
 const { Op } = require('sequelize');
 const { getCurrentCycleYear, getPreviousCycleYear } = require('../utils/kpiCycle');
 const { hasModulePermission } = require('../middleware/authMiddleware');
+const { createNotification } = require('../services/notificationService');
 
 const parseNumericValue = (value) => {
   if (value === null || value === undefined || value === '') return null;
@@ -134,6 +135,8 @@ const createUserKPI = async (req, res) => {
         return res.status(409).json({ message: 'This specific KPI assignment already exists.' });
       }
 
+      const previousIncludeCurrentOffice = Boolean(existingAssignment.IncludeCurrentOffice);
+
       await existingAssignment.update({
         Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : existingAssignment.Baseline,
         AssignedTarget: AssignedTarget !== undefined ? parseNumericValue(AssignedTarget) : existingAssignment.AssignedTarget,
@@ -142,6 +145,32 @@ const createUserKPI = async (req, res) => {
         AssignmentBatchId: AssignmentBatchId !== undefined ? assignmentBatchId : existingAssignment.AssignmentBatchId,
         Remark: Remark !== undefined ? Remark : existingAssignment.Remark,
       });
+
+      try {
+        const nextIncludeCurrentOffice = Boolean(existingAssignment.IncludeCurrentOffice);
+        const includeChanged = IncludeCurrentOffice !== undefined && previousIncludeCurrentOffice !== nextIncludeCurrentOffice;
+
+        await createNotification({
+          recipientUserId: UserId,
+          actorUserId: req.user?.Id || null,
+          type: includeChanged && !nextIncludeCurrentOffice ? 'kpi_unallocated' : 'kpi_assigned',
+          title: includeChanged ? (nextIncludeCurrentOffice ? 'KPI allocated' : 'KPI unallocated') : 'KPI assignment updated',
+          message: includeChanged
+            ? nextIncludeCurrentOffice
+              ? `A KPI has been allocated to your home office for ${cycleYear}.`
+              : `A KPI was unallocated from your home office for ${cycleYear}.`
+            : `Your KPI assignment was updated for ${cycleYear}.`,
+          priority: 'low',
+          data: {
+            UserKPIId: existingAssignment.Id,
+            KPIId,
+            CycleYear: cycleYear,
+            ...(includeChanged ? { IncludeCurrentOffice: nextIncludeCurrentOffice } : {}),
+          },
+        });
+      } catch (notifErr) {
+        console.warn('Failed to create KPI update notification:', notifErr.message);
+      }
 
       return res.status(200).json({
         success: true,
@@ -172,6 +201,24 @@ const createUserKPI = async (req, res) => {
       Name,
       CreatedBy: req.user?.Id,
     });
+
+    try {
+      await createNotification({
+        recipientUserId: UserId,
+        actorUserId: req.user?.Id || null,
+        type: 'kpi_assigned',
+        title: 'New KPI assignment',
+        message: `A KPI has been assigned to you for ${cycleYear}.`,
+        priority: 'medium',
+        data: {
+          UserKPIId: userKPI.Id,
+          KPIId,
+          CycleYear: cycleYear,
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Failed to create KPI assignment notification:', notifErr.message);
+    }
 
     res.status(201).json({ success: true, data: userKPI });
   } catch (error) {
@@ -360,6 +407,8 @@ const updateUserKPI = async (req, res) => {
       return res.status(404).json({ message: 'User KPI not found' });
     }
 
+    const previousIncludeCurrentOffice = Boolean(userKPI.IncludeCurrentOffice);
+
     const canEditAny =
       hasModulePermission(req, 'KPI Allocation', 'edit') ||
       hasModulePermission(req, 'Drived KPI', 'edit') ||
@@ -423,6 +472,45 @@ const updateUserKPI = async (req, res) => {
       CreatedBy: nextCreatedBy,
     });
 
+    if (IncludeCurrentOffice !== undefined && previousIncludeCurrentOffice !== Boolean(includeCurrentOfficeBoolean)) {
+      try {
+        const cycleYear = userKPI.CycleYear || getCurrentCycleYear();
+        if (Boolean(includeCurrentOfficeBoolean)) {
+          await createNotification({
+            recipientUserId: userKPI.UserId,
+            actorUserId: req.user?.Id || null,
+            type: 'kpi_assigned',
+            title: 'KPI allocated',
+            message: `A KPI has been allocated to your home office for ${cycleYear}.`,
+            priority: 'low',
+            data: {
+              UserKPIId: userKPI.Id,
+              KPIId: userKPI.KPIId,
+              CycleYear: cycleYear,
+              IncludeCurrentOffice: true,
+            },
+          });
+        } else {
+          await createNotification({
+            recipientUserId: userKPI.UserId,
+            actorUserId: req.user?.Id || null,
+            type: 'kpi_unallocated',
+            title: 'KPI unallocated',
+            message: `A KPI was unallocated from your home office for ${cycleYear}.`,
+            priority: 'low',
+            data: {
+              UserKPIId: userKPI.Id,
+              KPIId: userKPI.KPIId,
+              CycleYear: cycleYear,
+              IncludeCurrentOffice: false,
+            },
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Failed to create home office allocation notification:', notifErr.message);
+      }
+    }
+
     res.json({ success: true, data: userKPI });
   } catch (error) {
     console.error('Update user KPI error:', error);
@@ -460,6 +548,28 @@ const deleteUserKPI = async (req, res) => {
         UserKPIId: userKPI.Id,
       },
     });
+
+    try {
+      const kpi = userKPI.KPIId ? await KPI.findByPk(userKPI.KPIId, { attributes: ['Id', 'Description'] }) : null;
+      const cycleYear = userKPI.CycleYear || getCurrentCycleYear();
+      const desc = String(kpi?.Description || '').trim();
+
+      await createNotification({
+        recipientUserId: userKPI.UserId,
+        actorUserId: req.user?.Id || null,
+        type: 'kpi_unallocated',
+        title: 'KPI unallocated',
+        message: desc ? `A KPI assignment was unallocated: ${desc} (${cycleYear}).` : `A KPI assignment was unallocated for ${cycleYear}.`,
+        priority: 'medium',
+        data: {
+          UserKPIId: userKPI.Id,
+          KPIId: userKPI.KPIId,
+          CycleYear: cycleYear,
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Failed to create KPI unallocation notification:', notifErr.message);
+    }
 
     // Find the user's role so we can clear their report submission
     const userRole = await UserRole.findOne({

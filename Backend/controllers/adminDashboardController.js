@@ -87,7 +87,7 @@ const getAdminSummary = async (req, res) => {
     };
 
     const auditLogs = await AuditLog.findAll({
-      limit: 20,
+      limit: 1000,
       order: [['createdAt', 'DESC']],
       include: [{ model: User, attributes: ['FirstName', 'FatherName'] }]
     });
@@ -103,8 +103,8 @@ const getAdminSummary = async (req, res) => {
     }));
 
     // Separate into System vs Admin Activities for the Dashboard columns
-    const systemActivities = mappedActivities.filter(a => a.type === 'system' || a.type === 'auth').slice(0, 5);
-    const adminActivities = mappedActivities.filter(a => a.type === 'admin').slice(0, 5);
+    const systemActivities = mappedActivities.filter(a => a.type === 'system' || a.type === 'auth');
+    const adminActivities = mappedActivities.filter(a => a.type === 'admin');
 
     // If AuditLog is empty, provide some synthetic data so the dashboard doesn't look empty during first run
     if (mappedActivities.length === 0) {

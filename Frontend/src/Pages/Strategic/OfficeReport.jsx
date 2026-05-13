@@ -12,6 +12,7 @@ import permissionUtils from '../../lib/permissionUtils';
 import { useNotification } from '../../Context/NotificationContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../Components/UI/dialog';
 import { AlertCircle } from 'lucide-react';
+import { useReportQuery, useSubmitReportMutation } from '../../Hooks/Queries/useKpis';
 
 const REPORT_PERMISSION_KEYS = [
   permissionUtils.permissionKey('view', 'KPI Reporting'),
@@ -29,6 +30,9 @@ const formatCellValue = (value) => {
 
   return rawValue;
 };
+
+const isPendingDisplayCell = (value) =>
+  Boolean(value && typeof value === 'object' && (value.approved === false || value.isApproved === false) && value.showPendingValue !== false);
 
 const MAX_COLUMN_NAME_LENGTH = 35;
 
@@ -54,29 +58,12 @@ const getRowLabelClassName = (rowType) => {
   return 'pl-10';
 };
 
-const emitReportDataChanged = () => {
-  const timestamp = String(Date.now());
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('amu:report-data-changed', { detail: { timestamp } }));
-  }
-
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('amu:report-data-changed', timestamp);
-  }
-};
-
 const OfficeReport = () => {
   const { notify } = useNotification();
   const authUser = useSelector((state) => state.auth?.user);
   const userPermissions = authUser?.permissions || [];
   const canViewReport = permissionUtils.hasPermission(userPermissions, REPORT_PERMISSION_KEYS);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [reportData, setReportData] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [submittingReport, setSubmittingReport] = useState(false);
   const [selectedScopeRoleId, setSelectedScopeRoleId] = useState('');
   const [expandedColumns, setExpandedColumns] = useState({});
   const [selectedReportType, setSelectedReportType] = useState('all');
@@ -85,59 +72,30 @@ const OfficeReport = () => {
   const [selectedReportMode, setSelectedReportMode] = useState('individual');
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
 
+  // Queries
+  const reportParams = {
+    reportType: selectedReportType,
+    roleId: selectedScopeRoleId,
+    cycleYear: selectedCycleYear,
+    reportMode: selectedReportMode,
+  };
+
+  const { data: reportData, isLoading: loading, error: queryError } = useReportQuery(reportParams);
+  const error = queryError?.response?.data?.message || '';
+
+  // Mutations
+  const submitReportMutation = useSubmitReportMutation();
+  const submittingReport = submitReportMutation.isPending;
+
   const toggleColumnExpand = (columnId) => {
     setExpandedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const loadReport = async () => {
-      if (!canViewReport) {
-        setReportData(null);
-        return;
-      }
-
-      setLoading(true);
-      setError('');
-
-      try {
-        const params = { t: Date.now(), reportType: selectedReportType };
-        if (selectedScopeRoleId) {
-          params.roleId = selectedScopeRoleId;
-        }
-        if (selectedCycleYear) {
-          params.cycleYear = selectedCycleYear;
-        }
-        if (selectedReportMode) {
-          params.reportMode = selectedReportMode;
-        }
-
-        const response = await api.get('/user-kpi-results/report', { params });
-        if (!mounted) return;
-
-        const nextReportData = response.data?.data || null;
-        setReportData(nextReportData);
-
-        if (!selectedScopeRoleId && nextReportData?.availableScopeRoles?.length) {
-          setSelectedScopeRoleId(String(nextReportData.scopeRole?.id || nextReportData.availableScopeRoles[0].id));
-        }
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load report.');
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadReport();
-
-    return () => {
-      mounted = false;
-    };
-  }, [canViewReport, refreshToken, selectedScopeRoleId, selectedReportType, selectedCycleYear, selectedReportMode]);
+    if (!selectedScopeRoleId && reportData?.availableScopeRoles?.length) {
+      setSelectedScopeRoleId(String(reportData.scopeRole?.id || reportData.availableScopeRoles[0].id));
+    }
+  }, [reportData, selectedScopeRoleId]);
 
   useEffect(() => {
     let mounted = true;
@@ -155,30 +113,6 @@ const OfficeReport = () => {
     fetchYears();
     return () => {
       mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
-
-    const triggerRefresh = () => {
-      setRefreshToken((previous) => previous + 1);
-    };
-
-    const handleStorage = (event) => {
-      if (event.key === 'amu:report-data-changed') {
-        triggerRefresh();
-      }
-    };
-
-    window.addEventListener('amu:report-data-changed', triggerRefresh);
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      window.removeEventListener('amu:report-data-changed', triggerRefresh);
-      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -205,7 +139,9 @@ const OfficeReport = () => {
   const isDerivedView = selectedReportType === 'derived';
 
   // Calculate if the entire view has pending items
-  const hasPendingItems = rows.some((row) => columns.some((col) => row.values?.[col.id]?.isApproved === false));
+  const hasPendingItems = rows.some((row) =>
+    columns.some((col) => row.values?.[col.id]?.approved === false || row.values?.[col.id]?.isApproved === false)
+  );
 
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
@@ -215,13 +151,13 @@ const OfficeReport = () => {
           <p className="text-sm text-muted-foreground">KPI report by office scope with child and sub-child performance roll-up</p>
           <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2 py-1 font-semibold text-slate-700">
+              <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-1 font-semibold text-foreground">
                 -
               </span>
               <span>means no performance submitted yet</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2 py-1 font-semibold text-slate-700">
+              <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-1 font-semibold text-foreground">
                 N/A
               </span>
               <span>means not allocated</span>
@@ -313,7 +249,7 @@ const OfficeReport = () => {
             >
               {submittingReport ? 'Submitting...' : 'Submit Report'}
             </Button>
-            <Button type="button" variant="outline" size="sm" className="flex items-center gap-2" onClick={() => setRefreshToken((prev) => prev + 1)}>
+            <Button type="button" variant="outline" size="sm" className="flex items-center gap-2" onClick={() => {}}>
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
@@ -323,7 +259,7 @@ const OfficeReport = () => {
 
       {error ? <p className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-      <Card className="border-border bg-white shadow-sm">
+      <Card className="border-border shadow-sm">
         <CardHeader className="shrink-0 space-y-2">
           <CardTitle className="text-lg">
             {isDerivedView ? 'Derived KPI Report' : 'Report'} for {currentOfficeName}
@@ -332,6 +268,7 @@ const OfficeReport = () => {
 
         <CardContent className="p-0">
           <div className="overflow-hidden rounded-b-lg border-t border-border">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -414,9 +351,14 @@ const OfficeReport = () => {
                           {row.target}
                         </TableCell>
                         {columns.map((column) => {
-                          const cellValue = row.values?.[column.id];
+                        const cellValue = row.values?.[column.id];
                           const isMissingValue =
-                            cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A';
+                            cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A'
+                            || (typeof cellValue === 'object' && cellValue?.value === '—');
+                          const showPendingValue = isPendingDisplayCell(cellValue);
+                          // When some quarters approved + some pending: value = approved total, pendingTotal = full total
+                          const hasMixedApproval = showPendingValue && cellValue?.value && cellValue.value !== '-' && cellValue.value !== '—';
+                          const displayValue = formatCellValue(cellValue);
 
                           return (
                             <TableCell
@@ -425,10 +367,26 @@ const OfficeReport = () => {
                               className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
                             >
                               <div className="flex flex-col items-center gap-1">
-                                <span>{formatCellValue(cellValue)}</span>
-                                {cellValue && typeof cellValue === 'object' && cellValue.isApproved === false && (
+                                {hasMixedApproval ? (
+                                  // Has some approved quarters AND some pending (parent report view)
+                                  <span>
+                                    {displayValue}
+                                    <span className="text-amber-500 text-xs ml-1">
+                                      ({cellValue?.pendingTotal ?? displayValue} Pending)
+                                    </span>
+                                  </span>
+                                ) : showPendingValue ? (
+                                  // All pending OR own-report pending (show value with tag)
+                                  <span>
+                                    {displayValue !== '-' ? displayValue : ''}
+                                    <span className="text-amber-500 text-xs ml-1">(Pending)</span>
+                                  </span>
+                                ) : (
+                                  <span>{displayValue}</span>
+                                )}
+                                {showPendingValue && (
                                   <Badge variant="outline" className="text-[10px] py-0 px-1 border-amber-200 bg-amber-50 text-amber-600 font-normal">
-                                    Pending
+                                    Awaiting Approval
                                   </Badge>
                                 )}
                               </div>
@@ -463,6 +421,7 @@ const OfficeReport = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -489,21 +448,21 @@ const OfficeReport = () => {
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={submittingReport}
               onClick={async () => {
-                try {
-                  setIsSubmitDialogOpen(false);
-                  setSubmittingReport(true);
-                  const response = await api.post('/user-kpi-results/report/submit', {
+                setIsSubmitDialogOpen(false);
+                submitReportMutation.mutate(
+                  {
                     year: reportData?.year,
-                  });
-                  const parentRoleName = response.data?.data?.parentRole?.name || reportData?.parentRole?.name || 'parent role';
-                  emitReportDataChanged();
-                  notify(`Report successfully submitted to ${parentRoleName}.`, 'success');
-                  setRefreshToken((prev) => prev + 1); // Refresh to show checkmarks
-                } catch (submitErr) {
-                  notify(submitErr?.response?.data?.message || 'Failed to submit report. Please try again.', 'error');
-                } finally {
-                  setSubmittingReport(false);
-                }
+                  },
+                  {
+                    onSuccess: (data) => {
+                      const parentRoleName = data?.parentRole?.name || reportData?.parentRole?.name || 'parent office';
+                      notify(`Report successfully submitted to ${parentRoleName}.`, 'success');
+                    },
+                    onError: (err) => {
+                      notify(err?.response?.data?.message || 'Failed to submit report. Please try again.', 'error');
+                    },
+                  }
+                );
               }}
             >
               {submittingReport ? 'Submitting...' : 'Yes, Submit Report'}

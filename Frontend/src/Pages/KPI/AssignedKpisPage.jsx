@@ -7,6 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Ta
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
 import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
 import permissionUtils from '../../lib/permissionUtils';
+import { useRolesQuery } from '../../Hooks/Queries/useRoles';
+import { 
+  useKpisQuery, 
+  useKpiTypesQuery, 
+  useUserKpisQuery,
+  useSubmitPerformanceMutation
+} from '../../Hooks/Queries/useKpis';
 
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
@@ -14,24 +21,36 @@ const formatValue = (value) => {
   return Number.isNaN(numeric) ? String(value) : numeric.toString();
 };
 
+const EMPTY_ARRAY = [];
+const MINE_PARAMS = { scope: 'mine' };
+const MINE_PARENT_PARAMS = { scope: 'mine', fromParent: true };
+
 function AssignedKpisPage() {
   const { notify } = useNotification();
   const authUser = useSelector((state) => state.auth?.user);
   const userPermissions = authUser?.permissions || [];
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [themeFilter, setThemeFilter] = useState('All Themes');
-  const [allocatedThemes, setAllocatedThemes] = useState([]);
   const [expandedThemes, setExpandedThemes] = useState({});
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
-  const [savingSubmission, setSavingSubmission] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(0);
   const [activePerformanceTab, setActivePerformanceTab] = useState('original');
   const [showPerformanceTabs, setShowPerformanceTabs] = useState(false);
   const isDerivedView = activePerformanceTab === 'derived';
+
+  // Queries
+  const { data: roles = EMPTY_ARRAY, isLoading: loadingRoles, error: errorRoles } = useRolesQuery();
+  const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: errorKpis } = useKpisQuery();
+  const { data: kpiTypes = EMPTY_ARRAY, isLoading: loadingTypes, error: errorTypes } = useKpiTypesQuery();
+  const { data: allAssignments = EMPTY_ARRAY, isLoading: loadingAll, error: errorAll } = useUserKpisQuery(MINE_PARAMS);
+  const { data: fromParentAssignments = EMPTY_ARRAY, isLoading: loadingParent, error: errorParent } = useUserKpisQuery(MINE_PARENT_PARAMS);
+
+  const queryLoading = loadingRoles || loadingKpis || loadingTypes || loadingAll || loadingParent;
+  const queryError = errorRoles || errorKpis || errorTypes || errorAll || errorParent;
+
+  // Mutations
+  const submitPerformanceMutation = useSubmitPerformanceMutation();
 
   const canCascadeKpis = useMemo(
     () =>
@@ -42,201 +61,163 @@ function AssignedKpisPage() {
     [userPermissions]
   );
 
-  useEffect(() => {
-    let mounted = true;
+  const { allocatedThemes, loading, error } = useMemo(() => {
+    const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
+    const currentRole = roles.find((r) => String(r.Id || r.id || '').toLowerCase() === String(currentRoleId || '').toLowerCase());
+    const hasExtraMeasures = Boolean(currentRole?.HasExtraMeasures ?? currentRole?.hasExtraMeasures ?? authUser?.hasExtraMeasures);
+    const isDistributable = Boolean(currentRole?.IsDistributable ?? currentRole?.isDistributable ?? authUser?.isDistributable ?? canCascadeKpis ?? true);
 
-    const loadAllocatedKpis = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [allMineRes, fromParentRes, kpiRes, kpiTypeRes, rolesRes] = await Promise.all([
-          api.get('/user-kpis', {
-            params: {
-              scope: 'mine',
-              t: Date.now(),
-            },
-          }),
-          api.get('/user-kpis', {
-            params: {
-              scope: 'mine',
-              fromParent: true,
-              t: Date.now(),
-            },
-          }),
-          api.get('/kpis', { params: { t: Date.now() } }),
-          api.get('/kpi-types', { params: { t: Date.now() } }),
-          api.get('/roles', { params: { t: Date.now() } }),
-        ]);
-
-        if (!mounted) return;
-
-        const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
-        const roles = rolesRes.data?.data || [];
-        const currentRole = roles.find((r) => String(r.Id || r.id || '').toLowerCase() === String(currentRoleId || '').toLowerCase());
-        const hasExtraMeasures = Boolean(currentRole?.HasExtraMeasures ?? currentRole?.hasExtraMeasures ?? authUser?.hasExtraMeasures);
-        const isDistributable = Boolean(currentRole?.IsDistributable ?? currentRole?.isDistributable ?? authUser?.isDistributable ?? canCascadeKpis ?? true);
-
-        // Calculate lineage for extra measures
-        let isDescendantOfExtraMeasureRole = false;
-        let parentId = currentRole?.ParentRoleId;
-        while (parentId) {
-          const parent = roles.find((r) => String(r.Id) === String(parentId));
-          if (parent?.HasExtraMeasures) {
-            isDescendantOfExtraMeasureRole = true;
-            break;
-          }
-          parentId = parent?.ParentRoleId;
-        }
-
-        setShowPerformanceTabs(hasExtraMeasures);
-        if (!hasExtraMeasures) {
-          setActivePerformanceTab(isDescendantOfExtraMeasureRole ? 'derived' : 'original');
-        }
-
-        const allAssignments = allMineRes.data?.data || [];
-        const fromParentAssignments = fromParentRes.data?.data || [];
-        const assignmentById = new Map();
-
-        [...allAssignments, ...fromParentAssignments].forEach((assignment) => {
-          if (!assignment?.Id) return;
-          if (!assignmentById.has(assignment.Id)) {
-            assignmentById.set(assignment.Id, assignment);
-          }
-        });
-
-        const combinedAssignments = [...assignmentById.values()];
-        const fromParentAssignmentIds = new Set(fromParentAssignments.map((assignment) => assignment.Id));
-
-        const assignments = combinedAssignments.filter((assignment) => {
-          const remark = String(assignment?.Remark || assignment?.KPI?.Remark || '').trim();
-          const name = String(assignment?.Name || '').trim();
-          const isDerived = (remark.length > 0 && remark.toLowerCase() !== 'null') || (name.length > 0);
-          const isFromParent = fromParentAssignmentIds.has(assignment.Id);
-
-          // Original KPIs: If from parent, only show if 'IncludeCurrentOffice' is true (self-assignment)
-          if (!isDerived && isFromParent && !Boolean(assignment?.IncludeCurrentOffice)) {
-            return false;
-          }
-
-          // Derived KPIs: Hidden if the role is distributable, unless explicitly marked for current office.
-          if (isDerived && isDistributable && !Boolean(assignment?.IncludeCurrentOffice)) {
-            return false;
-          }
-
-          if (!showPerformanceTabs) {
-            return true;
-          }
-
-          if (activePerformanceTab === 'derived') {
-            return isDerived;
-          }
-
-          // In the tabbed view, original tab should strictly show only non-derived KPIs.
-          return !isDerived;
-        });
-        const kpis = kpiRes.data?.data || [];
-        const kpiTypes = kpiTypeRes.data?.data || [];
-
-        const typeById = new Map(kpiTypes.map((type) => [type.Id, type]));
-        const kpiById = new Map(kpis.map((kpi) => [kpi.Id, kpi]));
-        const groupedThemes = new Map();
-
-        assignments.forEach((assignment) => {
-          const kpiRecord = kpiById.get(assignment.KPIId);
-          if (!kpiRecord) return;
-
-          const isFromParent = fromParentAssignmentIds.has(assignment.Id);
-          const isDerived = Boolean(assignment.Name || (assignment.Remark && assignment.Remark.toLowerCase() !== 'null'));
-          const targetValue = assignment.AssignedTarget ?? kpiRecord.Target;
-
-          const quarterlyResults = Array.isArray(assignment.quarterlyResults) ? assignment.quarterlyResults : [];
-          const quarterValues = quarterlyResults.reduce(
-            (accumulator, result) => {
-              const quarterKey = String(result.quarter || '').toUpperCase();
-              if (quarterKey === 'Q1' && accumulator.q1 === '-') accumulator.q1 = result.result || '-';
-              if (quarterKey === 'Q2' && accumulator.q2 === '-') accumulator.q2 = result.result || '-';
-              if (quarterKey === 'Q3' && accumulator.q3 === '-') accumulator.q3 = result.result || '-';
-              if (quarterKey === 'Q4' && accumulator.q4 === '-') accumulator.q4 = result.result || '-';
-              return accumulator;
-            },
-            { q1: assignment.q1 || '-', q2: assignment.q2 || '-', q3: assignment.q3 || '-', q4: assignment.q4 || '-' }
-          );
-
-          const leaf = typeById.get(kpiRecord.KPITypeId);
-          const subTheme = leaf?.ParentKPIID ? typeById.get(leaf.ParentKPIID) : null;
-          const theme = subTheme?.ParentKPIID ? typeById.get(subTheme.ParentKPIID) : null;
-
-          // For derived KPI performance view, we intentionally avoid Theme/Sub-theme grouping in the UI.
-          // We still store them on each KPI row, but group everything under one bucket for simplicity.
-          const themeName = isDerivedView ? 'Drived KPI' : theme?.KPIName || 'Uncategorized Theme';
-          const subThemeName = isDerivedView ? 'Drived KPI' : subTheme?.KPIName || 'Uncategorized Sub-Theme';
-
-          if (!groupedThemes.has(themeName)) {
-            groupedThemes.set(themeName, new Map());
-          }
-
-          const subThemeMap = groupedThemes.get(themeName);
-          if (!subThemeMap.has(subThemeName)) {
-            subThemeMap.set(subThemeName, []);
-          }
-
-          subThemeMap.get(subThemeName).push({
-            id: assignment.Id,
-            kpiId: kpiRecord.Id,
-            name: (assignment.Name || assignment.Remark || leaf?.KPIName || kpiRecord.KPIType?.KPIName || '—').trim(),
-            baseline: formatValue(assignment.Baseline ?? kpiRecord.Baseline),
-            target: formatValue(targetValue),
-            theme: themeName,
-            subTheme: subThemeName,
-            isDerived,
-            unit: kpiRecord.Unit?.Code || kpiRecord.Unit?.Name || '—',
-            remark: assignment.Remark || kpiRecord.Description || '—',
-            evidenceRequired: Boolean(kpiRecord.IsEvedenceRequired || kpiRecord.IsEvidenceRequired),
-            q1: quarterValues.q1,
-            q2: quarterValues.q2,
-            q3: quarterValues.q3,
-            q4: quarterValues.q4,
-            quarterlyResults: quarterlyResults,
-          });
-        });
-
-        const normalized = Array.from(groupedThemes.entries())
-          .sort(([leftTheme], [rightTheme]) => leftTheme.localeCompare(rightTheme))
-          .map(([theme, subThemeMap]) => ({
-            theme,
-            subThemes: Array.from(subThemeMap.entries())
-              .sort(([leftSubTheme], [rightSubTheme]) => leftSubTheme.localeCompare(rightSubTheme))
-              .map(([name, kpisList]) => ({
-                name,
-                kpis: kpisList,
-              })),
-          }));
-
-        setAllocatedThemes(normalized);
-        setExpandedThemes(
-          normalized.reduce(
-            (accumulator, item) => ({
-              ...accumulator,
-              [item.theme]: true,
-            }),
-            {}
-          )
-        );
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load allocated KPIs.');
-      } finally {
-        if (mounted) setLoading(false);
+    // Calculate lineage for extra measures
+    let isDescendantOfExtraMeasureRole = false;
+    let parentId = currentRole?.ParentRoleId;
+    while (parentId) {
+      const parent = roles.find((r) => String(r.Id) === String(parentId));
+      if (parent?.HasExtraMeasures) {
+        isDescendantOfExtraMeasureRole = true;
+        break;
       }
-    };
+      parentId = parent?.ParentRoleId;
+    }
 
-    loadAllocatedKpis();
+    // This logic runs during render, so it shouldn't call state setters directly
+    // but the original code did it in useEffect. We'll handle showPerformanceTabs separately or keep it as is.
+    
+    const assignmentById = new Map();
+    [...allAssignments, ...fromParentAssignments].forEach((assignment) => {
+      if (!assignment?.Id) return;
+      if (!assignmentById.has(assignment.Id)) {
+        assignmentById.set(assignment.Id, assignment);
+      }
+    });
 
-    return () => {
-      mounted = false;
+    const combinedAssignments = [...assignmentById.values()];
+    const fromParentAssignmentIds = new Set(fromParentAssignments.map((assignment) => assignment.Id));
+
+    const assignments = combinedAssignments.filter((assignment) => {
+      const remark = String(assignment?.Remark || assignment?.KPI?.Remark || '').trim();
+      const name = String(assignment?.Name || '').trim();
+      const isDerived = (remark.length > 0 && remark.toLowerCase() !== 'null') || (name.length > 0);
+      const isFromParent = fromParentAssignmentIds.has(assignment.Id);
+
+      if (!isDerived && isFromParent && !Boolean(assignment?.IncludeCurrentOffice)) {
+        return false;
+      }
+
+      if (isDerived && isDistributable && !Boolean(assignment?.IncludeCurrentOffice)) {
+        return false;
+      }
+
+      if (!hasExtraMeasures) {
+        return true;
+      }
+
+      if (activePerformanceTab === 'derived') {
+        return isDerived;
+      }
+
+      return !isDerived;
+    });
+
+    const typeById = new Map(kpiTypes.map((type) => [type.Id, type]));
+    const kpiById = new Map(kpis.map((kpi) => [kpi.Id, kpi]));
+    const groupedThemes = new Map();
+
+    assignments.forEach((assignment) => {
+      const kpiRecord = kpiById.get(assignment.KPIId);
+      if (!kpiRecord) return;
+
+      const isDerived = Boolean(assignment.Name || (assignment.Remark && assignment.Remark.toLowerCase() !== 'null'));
+      const targetValue = assignment.AssignedTarget ?? kpiRecord.Target;
+
+      const quarterlyResults = Array.isArray(assignment.quarterlyResults) ? assignment.quarterlyResults : [];
+      const quarterValues = quarterlyResults.reduce(
+        (accumulator, result) => {
+          const quarterKey = String(result.quarter || '').toUpperCase();
+          if (quarterKey === 'Q1' && accumulator.q1 === '-') accumulator.q1 = result.result || '-';
+          if (quarterKey === 'Q2' && accumulator.q2 === '-') accumulator.q2 = result.result || '-';
+          if (quarterKey === 'Q3' && accumulator.q3 === '-') accumulator.q3 = result.result || '-';
+          if (quarterKey === 'Q4' && accumulator.q4 === '-') accumulator.q4 = result.result || '-';
+          return accumulator;
+        },
+        { q1: assignment.q1 || '-', q2: assignment.q2 || '-', q3: assignment.q3 || '-', q4: assignment.q4 || '-' }
+      );
+
+      const leaf = typeById.get(kpiRecord.KPITypeId);
+      const subTheme = leaf?.ParentKPIID ? typeById.get(leaf.ParentKPIID) : null;
+      const theme = subTheme?.ParentKPIID ? typeById.get(subTheme.ParentKPIID) : null;
+
+      const themeName = isDerivedView ? 'Drived KPI' : theme?.KPIName || 'Uncategorized Theme';
+      const subThemeName = isDerivedView ? 'Drived KPI' : subTheme?.KPIName || 'Uncategorized Sub-Theme';
+
+      if (!groupedThemes.has(themeName)) {
+        groupedThemes.set(themeName, new Map());
+      }
+
+      const subThemeMap = groupedThemes.get(themeName);
+      if (!subThemeMap.has(subThemeName)) {
+        subThemeMap.set(subThemeName, []);
+      }
+
+      subThemeMap.get(subThemeName).push({
+        id: assignment.Id,
+        kpiId: kpiRecord.Id,
+        name: (assignment.Name || assignment.Remark || leaf?.KPIName || kpiRecord.KPIType?.KPIName || '—').trim(),
+        baseline: formatValue(assignment.Baseline ?? kpiRecord.Baseline),
+        target: formatValue(targetValue),
+        theme: themeName,
+        subTheme: subThemeName,
+        isDerived,
+        unit: kpiRecord.Unit?.Code || kpiRecord.Unit?.Name || '—',
+        remark: assignment.Remark || kpiRecord.Description || '—',
+        evidenceRequired: Boolean(kpiRecord.IsEvedenceRequired || kpiRecord.IsEvidenceRequired),
+        q1: quarterValues.q1,
+        q2: quarterValues.q2,
+        q3: quarterValues.q3,
+        q4: quarterValues.q4,
+        quarterlyResults: quarterlyResults,
+      });
+    });
+
+    const normalized = Array.from(groupedThemes.entries())
+      .sort(([leftTheme], [rightTheme]) => leftTheme.localeCompare(rightTheme))
+      .map(([theme, subThemeMap]) => ({
+        theme,
+        subThemes: Array.from(subThemeMap.entries())
+          .sort(([leftSubTheme], [rightSubTheme]) => leftSubTheme.localeCompare(rightSubTheme))
+          .map(([name, kpisList]) => ({
+            name,
+            kpis: kpisList,
+          })),
+      }));
+
+    return { 
+      allocatedThemes: normalized, 
+      loading: queryLoading, 
+      error: queryError?.response?.data?.message || queryError?.message || '' 
     };
-  }, [authUser?.id, canCascadeKpis, refreshToken, activePerformanceTab]);
+  }, [authUser, roles, kpis, kpiTypes, allAssignments, fromParentAssignments, canCascadeKpis, activePerformanceTab, isDerivedView, queryLoading, queryError]);
+
+  useEffect(() => {
+    const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
+    const currentRole = roles.find((r) => String(r.Id || r.id || '').toLowerCase() === String(currentRoleId || '').toLowerCase());
+    const hasExtraMeasures = Boolean(currentRole?.HasExtraMeasures ?? currentRole?.hasExtraMeasures ?? authUser?.hasExtraMeasures);
+    
+    setShowPerformanceTabs(hasExtraMeasures);
+  }, [authUser, roles]);
+
+  useEffect(() => {
+    if (allocatedThemes.length > 0 && Object.keys(expandedThemes).length === 0) {
+      setExpandedThemes(
+        allocatedThemes.reduce(
+          (accumulator, item) => ({
+            ...accumulator,
+            [item.theme]: true,
+          }),
+          {}
+        )
+      );
+    }
+  }, [allocatedThemes]);
 
   const countThemeKpis = (themeBlock) => themeBlock.subThemes.reduce((sum, subTheme) => sum + subTheme.kpis.length, 0);
 
@@ -624,7 +605,7 @@ function AssignedKpisPage() {
           result: '',
           remark: '',
         }}
-        saving={savingSubmission}
+        saving={submitPerformanceMutation.isPending}
         onSubmit={async ({ quarter, result, remark, file }) => {
           if (!activeKpi) return;
 
@@ -643,32 +624,27 @@ function AssignedKpisPage() {
             }
           }
 
-          try {
-            setSavingSubmission(true);
+          const payload = new FormData();
+          payload.append('KPIId', activeKpi.kpiId);
+          payload.append('UserKPIId', activeKpi.id);
+          payload.append('KPIResult', result);
+          payload.append('Quarter', quarter);
+          payload.append('Description', remark || activeKpi.name || '');
 
-            const payload = new FormData();
-            payload.append('KPIId', activeKpi.kpiId);
-            payload.append('UserKPIId', activeKpi.id);
-            payload.append('KPIResult', result);
-            payload.append('Quarter', quarter);
-            payload.append('Description', remark || activeKpi.name || '');
-
-            if (file) {
-              payload.append('EvidenceFile', file);
-            }
-
-            await api.post('/user-kpi-results', payload);
-
-            setRefreshToken((previous) => previous + 1);
-
-            notify('Performance submitted successfully.', 'success');
-            setSubmissionModalOpen(false);
-            setActiveKpi(null);
-          } catch (submitErr) {
-            notify(submitErr?.response?.data?.message || 'Failed to submit performance.', 'error');
-          } finally {
-            setSavingSubmission(false);
+          if (file) {
+            payload.append('EvidenceFile', file);
           }
+
+          submitPerformanceMutation.mutate(payload, {
+            onSuccess: () => {
+              notify('Performance submitted successfully.', 'success');
+              setSubmissionModalOpen(false);
+              setActiveKpi(null);
+            },
+            onError: (err) => {
+              notify(err?.response?.data?.message || 'Failed to submit performance.', 'error');
+            }
+          });
         }}
       />
       <PerformanceDetailModal

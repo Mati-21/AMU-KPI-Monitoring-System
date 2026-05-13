@@ -8,6 +8,11 @@ import { Badge } from '../../Components/UI/Badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../Components/UI/dialog';
 import permissionUtils from '../../lib/permissionUtils';
 import { useNotification } from '../../Context/NotificationContext';
+import { 
+  useKpiApprovalsQuery, 
+  useApproveKpiMutation, 
+  useAdjustKpiMutation 
+} from '../../Hooks/Queries/useKpis';
 
 const statusMeta = {
   pending: {
@@ -54,54 +59,15 @@ const KpiApprovalsPage = () => {
   const userPermissions = authUser?.permissions || [];
   const canApprove = permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'KPI Approvals'));
   const [activeTab, setActiveTab] = useState('pending');
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(0);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
+  // Queries
+  const { data: items = [], isLoading: loading, error: queryError } = useKpiApprovalsQuery();
+  const error = queryError ? 'Failed to load KPI approvals.' : null;
 
-    const handleRefresh = () => {
-      setRefreshToken((previous) => previous + 1);
-    };
-
-    const handleStorage = (event) => {
-      if (event.key === 'amu:report-data-changed') {
-        handleRefresh();
-      }
-    };
-
-    window.addEventListener('amu:report-data-changed', handleRefresh);
-    window.addEventListener('storage', handleStorage);
-
-    return () => {
-      window.removeEventListener('amu:report-data-changed', handleRefresh);
-      window.removeEventListener('storage', handleStorage);
-    };
-  }, []);
-
-  useEffect(() => {
-    const fetchApprovals = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await api.get('/user-kpi-results/approvals');
-        setItems(response.data?.data || []);
-      } catch (err) {
-        console.error('Fetch approvals error:', err);
-        setError('Failed to load KPI approvals.');
-        notify('Failed to load KPI approvals.', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchApprovals();
-  }, [notify, refreshToken]);
+  // Mutations
+  const approveKpiMutation = useApproveKpiMutation();
+  const adjustKpiMutation = useAdjustKpiMutation();
 
   const handleWatch = (file) => {
     if (file.url) {
@@ -143,14 +109,15 @@ const KpiApprovalsPage = () => {
     );
     if (!confirmed) return;
 
-    try {
-      await api.patch(`/user-kpi-results/${approval.id}/approve`);
-      setItems((current) => current.map((item) => (item.id === approval.id ? { ...item, status: 'approved' } : item)));
-      emitReportDataChanged();
-      notify('KPI submission approved successfully.', 'success');
-    } catch (err) {
-      notify('Failed to approve KPI submission.', 'error');
-    }
+    approveKpiMutation.mutate(approval.id, {
+      onSuccess: () => {
+        emitReportDataChanged();
+        notify('KPI submission approved successfully.', 'success');
+      },
+      onError: () => {
+        notify('Failed to approve KPI submission.', 'error');
+      }
+    });
   };
 
   const handleAdjustAndApprove = async (approval) => {
@@ -168,18 +135,19 @@ const KpiApprovalsPage = () => {
       return;
     }
 
-    try {
-      await api.patch(`/user-kpi-results/${approval.id}/adjust`, { adjustedValue: parsedValue });
-      setItems((current) => current.map((item) => (item.id === approval.id ? { ...item, status: 'adjusted', adjustedReported: parsedValue } : item)));
-      emitReportDataChanged();
-      notify('KPI submission adjusted and approved.', 'success');
-    } catch (err) {
-      notify('Failed to adjust KPI submission.', 'error');
-    }
+    adjustKpiMutation.mutate({ id: approval.id, adjustedValue: parsedValue }, {
+      onSuccess: () => {
+        emitReportDataChanged();
+        notify('KPI submission adjusted and approved.', 'success');
+      },
+      onError: () => {
+        notify('Failed to adjust KPI submission.', 'error');
+      }
+    });
   };
 
   return (
-    <div className="min-h-full bg-linear-to-br from-slate-50 via-white to-blue-50/60 px-5 py-6 text-foreground sm:px-6 lg:px-8">
+    <div className="min-h-full bg-background px-5 py-6 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
@@ -188,19 +156,19 @@ const KpiApprovalsPage = () => {
               KPI Approvals
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">KPI Approvals</h1>
-              <p className="max-w-2xl text-sm text-slate-600">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">KPI Approvals</h1>
+              <p className="max-w-2xl text-sm text-muted-foreground">
                 Review evidence-based submissions from child units. Approve directly or adjust the reported value before final approval.
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button variant="outline" className="gap-2 bg-white/90">
+            <Button variant="outline" className="gap-2">
               <Clock3 className="h-4 w-4" />
               Audit Trail
             </Button>
-            <Button variant="outline" className="gap-2 bg-white/90">
+            <Button variant="outline" className="gap-2">
               <ArrowDownToLine className="h-4 w-4" />
               Export Report
             </Button>
@@ -217,14 +185,14 @@ const KpiApprovalsPage = () => {
             const Icon = card.icon;
 
             return (
-              <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div key={card.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.tone}`}>
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-3xl font-bold leading-none text-slate-900">{card.value}</p>
-                    <p className="text-sm text-slate-500">{card.label}</p>
+                    <p className="text-3xl font-bold leading-none text-foreground">{card.value}</p>
+                    <p className="text-sm text-muted-foreground">{card.label}</p>
                   </div>
                 </div>
               </div>
@@ -232,14 +200,14 @@ const KpiApprovalsPage = () => {
           })}
         </div>
 
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                activeTab === tab.key ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                activeTab === tab.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
               {tab.label}
@@ -252,22 +220,22 @@ const KpiApprovalsPage = () => {
 
         <div className="space-y-4">
           {loading ? (
-            <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10">
+            <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card px-6 py-10">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <p className="mt-4 text-sm text-slate-500">Loading pending approvals...</p>
+              <p className="mt-4 text-sm text-muted-foreground">Loading pending approvals...</p>
             </div>
           ) : error ? (
             <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-red-200 bg-red-50 px-6 py-10 text-center">
               <AlertCircle className="h-10 w-10 text-red-500" />
               <p className="mt-4 text-sm font-medium text-red-700">{error}</p>
-              <Button variant="outline" size="sm" className="mt-4 bg-white" onClick={() => window.location.reload()}>
+              <Button variant="outline" size="sm" className="mt-4 bg-card" onClick={() => window.location.reload()}>
                 Retry
               </Button>
             </div>
           ) : visibleItems.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-              <ShieldCheck className="h-10 w-10 text-slate-300" />
-              <p className="mt-4 text-sm text-slate-500">No {activeTab !== 'all' ? activeTab : ''} submissions found.</p>
+            <div className="flex h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card px-6 py-10 text-center">
+              <ShieldCheck className="h-10 w-10 text-muted-foreground/40" />
+              <p className="mt-4 text-sm text-muted-foreground">No {activeTab !== 'all' ? activeTab : ''} submissions found.</p>
             </div>
           ) : (
             visibleItems.map((approval) => {
@@ -275,13 +243,13 @@ const KpiApprovalsPage = () => {
               const StatusIcon = status.icon;
 
               return (
-                <section key={approval.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <section key={approval.id} className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
                   <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_300px]">
-                    <div className="space-y-4 border-b border-slate-200 p-5 lg:border-b-0 lg:border-r">
+                    <div className="space-y-4 border-b border-border p-5 lg:border-b-0 lg:border-r">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-2">
-                          <p className="text-xs font-medium text-slate-500">{approval.category}</p>
-                          <h2 className="text-xl font-bold text-slate-900">{approval.title}</h2>
+                          <p className="text-xs font-medium text-muted-foreground">{approval.category}</p>
+                          <h2 className="text-xl font-bold text-foreground">{approval.title}</h2>
                         </div>
                         <Badge variant="outline" className={`gap-1.5 border ${status.badge}`}>
                           <StatusIcon className="h-3.5 w-3.5" />
@@ -289,56 +257,56 @@ const KpiApprovalsPage = () => {
                         </Badge>
                       </div>
 
-                      <div className="space-y-2 text-sm text-slate-600">
+                      <div className="space-y-2 text-sm text-muted-foreground">
                         <p className="flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-slate-400" />
-                          <span className="font-medium text-slate-900">{approval.submitter}</span>
+                          <Sparkles className="h-4 w-4 text-muted-foreground/60" />
+                          <span className="font-medium text-foreground">{approval.submitter}</span>
                         </p>
                         <p className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-slate-400" />
+                          <AlertCircle className="h-4 w-4 text-muted-foreground/60" />
                           {approval.unit}
                         </p>
-                        <p className="flex items-center gap-2 text-slate-500">
-                          <Clock3 className="h-4 w-4 text-slate-400" />
+                        <p className="flex items-center gap-2 text-muted-foreground/80">
+                          <Clock3 className="h-4 w-4 text-muted-foreground/60" />
                           {approval.period} · submitted {approval.submittedAt}
                         </p>
                       </div>
                     </div>
 
-                    <div className="border-b border-slate-200 p-5 lg:border-b-0 lg:border-r">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Reported Performance</p>
+                    <div className="border-b border-border p-5 lg:border-b-0 lg:border-r">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Reported Performance</p>
                       <div className="mt-4 grid grid-cols-4 gap-4">
                         <div>
-                          <p className="text-xs text-slate-500">Baseline</p>
-                          <p className="text-lg font-bold text-slate-900">{formatPercent(approval.baseline)}</p>
+                          <p className="text-xs text-muted-foreground">Baseline</p>
+                          <p className="text-lg font-bold text-foreground">{formatPercent(approval.baseline)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Target</p>
-                          <p className="text-lg font-bold text-slate-900">{formatPercent(approval.target)}</p>
+                          <p className="text-xs text-muted-foreground">Target</p>
+                          <p className="text-lg font-bold text-foreground">{formatPercent(approval.target)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Reported</p>
-                          <p className="text-lg font-bold text-blue-600">{formatPercent(approval.adjustedReported ?? approval.reported)}</p>
+                          <p className="text-xs text-muted-foreground">Reported</p>
+                          <p className="text-lg font-bold text-primary">{formatPercent(approval.adjustedReported ?? approval.reported)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">Evidence</p>
-                          <p className={`text-sm font-bold ${approval.evidenceRequired ? 'text-amber-600' : 'text-slate-400'}`}>
+                          <p className="text-xs text-muted-foreground">Evidence</p>
+                          <p className={`text-sm font-bold ${approval.evidenceRequired ? 'text-amber-600' : 'text-muted-foreground/40'}`}>
                             {approval.evidenceRequired ? 'Required' : 'Not Required'}
                           </p>
                         </div>
                       </div>
 
-                      <p className="mt-5 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">“{approval.note}”</p>
+                      <p className="mt-5 rounded-2xl bg-muted/30 px-4 py-3 text-sm text-muted-foreground">“{approval.note}”</p>
 
                       {approval.evidence.length > 0 && (
                         <div className="mt-5 space-y-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Attached Evidence</p>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Attached Evidence</p>
                             {approval.evidence.length > 2 && (
                               <button
                                 type="button"
                                 onClick={() => setViewingEvidenceFor(approval)}
-                                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 transition hover:text-blue-700"
+                                className="flex items-center gap-1.5 text-xs font-medium text-primary transition hover:text-primary/80"
                               >
                                 <Eye className="h-3.5 w-3.5" />
                                 View All ({approval.evidence.length})
@@ -349,12 +317,12 @@ const KpiApprovalsPage = () => {
                             {approval.evidence.slice(0, 2).map((file) => (
                               <div
                                 key={file.name}
-                                className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+                                className="group flex items-center justify-between rounded-xl border border-border bg-muted/20 px-3 py-2 transition-colors hover:border-primary/30 hover:bg-primary/5"
                               >
                                 <div className="flex items-center gap-2 min-w-0">
-                                  <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                                  <FileText className="h-4 w-4 shrink-0 text-primary" />
                                   <div className="truncate">
-                                    <p className="truncate text-xs font-medium text-slate-900" title={file.name}>
+                                    <p className="truncate text-xs font-medium text-foreground" title={file.name}>
                                       {file.name}
                                     </p>
                                   </div>
@@ -363,7 +331,7 @@ const KpiApprovalsPage = () => {
                                   <button
                                     type="button"
                                     onClick={() => handleWatch(file)}
-                                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-blue-600"
+                                    className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-card hover:text-primary"
                                   >
                                     <Monitor className="h-3.5 w-3.5" />
                                   </button>
@@ -376,7 +344,7 @@ const KpiApprovalsPage = () => {
                     </div>
 
                     <div className="flex flex-col justify-center space-y-4 p-5">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Action Required</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">Action Required</p>
 
                       {approval.status === 'pending' ? (
                         <div className="space-y-2">
@@ -386,17 +354,17 @@ const KpiApprovalsPage = () => {
                           </Button>
                           <Button
                             variant="outline"
-                            className="w-full gap-2 bg-white"
+                            className="w-full gap-2 bg-card"
                             onClick={() => handleAdjustAndApprove(approval)}
                             disabled={!canApprove}
                           >
                             <PencilLine className="h-4 w-4" />
                             Adjust &amp; Approve
                           </Button>
-                          {!canApprove ? <p className="text-xs text-slate-500">Approvals require the create permission for KPI Approvals.</p> : null}
+                          {!canApprove ? <p className="text-xs text-muted-foreground">Approvals require the create permission for KPI Approvals.</p> : null}
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">
                           Finalized — included in aggregated reports.
                         </div>
                       )}
@@ -425,31 +393,31 @@ const KpiApprovalsPage = () => {
             {viewingEvidenceFor?.evidence.map((file) => (
               <div
                 key={file.name}
-                className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/50"
+                className="group flex items-center justify-between rounded-2xl border border-border bg-muted/50 p-4 transition-colors hover:border-primary/20 hover:bg-primary/5"
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="max-w-37.5 truncate">
-                    <p className="truncate text-sm font-semibold text-slate-900" title={file.name}>
+                    <p className="truncate text-sm font-semibold text-foreground" title={file.name}>
                       {file.name}
                     </p>
-                    <p className="text-xs text-slate-500">{file.size}</p>
+                    <p className="text-xs text-muted-foreground">{file.size}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => handleWatch(file)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:text-blue-600"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-primary/50 hover:text-primary"
                     title="Watch"
                   >
                     <Monitor className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-slate-900 hover:text-slate-900"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition hover:border-foreground hover:text-foreground"
                     title="Download"
                   >
                     <ArrowDownToLine className="h-4 w-4" />

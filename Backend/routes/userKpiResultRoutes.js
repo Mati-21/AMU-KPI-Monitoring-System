@@ -27,19 +27,10 @@ const AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS = [
   permissionKey('view', 'Other Role Reports'),
 ].filter(Boolean);
 
-const evidenceUploadDir = path.join(__dirname, '..', 'uploads', 'performance-evidence');
-fs.mkdirSync(evidenceUploadDir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, callback) => callback(null, evidenceUploadDir),
-  filename: (_req, file, callback) => {
-    const safeName = String(file.originalname || 'evidence').replace(/[^a-z0-9_.-]/gi, '_');
-    callback(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}-${safeName}`);
-  },
-});
+const { evidenceStorage } = require('../services/cloudinaryService');
 
 const upload = multer({
-  storage,
+  storage: evidenceStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 

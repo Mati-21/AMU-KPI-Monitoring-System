@@ -10,6 +10,15 @@ const parseNumericValue = (value) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+const FINALIZED_RESULT_STATUSES = new Set(['approved', 'adjusted']);
+
+const isFinalizedResultStatus = (status) =>
+  FINALIZED_RESULT_STATUSES.has(
+    String(status || '')
+      .trim()
+      .toLowerCase()
+  );
+
 const formatNumericValue = (value) => {
   const numeric = parseNumericValue(value);
   if (numeric === null) {
@@ -366,10 +375,10 @@ const sumUserKpiPerformance = (results) => {
       else if (q.includes('4')) q = 'Q4';
 
       const existing = latestByQuarter.get(q);
-      const isApproved = String(item.status || '').toLowerCase() === 'approved';
-      const existingIsApproved = existing ? String(existing.status || '').toLowerCase() === 'approved' : false;
+      const isFinalized = isFinalizedResultStatus(item.status);
+      const existingIsFinalized = existing ? isFinalizedResultStatus(existing.status) : false;
 
-      if (!existing || (isApproved && !existingIsApproved) || (isApproved === existingIsApproved && item.createdAt > existing.createdAt)) {
+      if (!existing || (isFinalized && !existingIsFinalized) || (isFinalized === existingIsFinalized && item.createdAt > existing.createdAt)) {
         latestByQuarter.set(q, { ...item, normalizedQuarter: q });
       }
     });
@@ -383,29 +392,37 @@ const sumUserKpiPerformance = (results) => {
       items.forEach((it) => console.log(`  - Item: Q=${it.quarter}, Val=${it.numeric}, Status=${it.status}`));
     }
 
-    let cumulativeTotal = 0;
+    let approvedTotal = 0;
+    let pendingTotal = 0;
     let isAllApproved = true;
+    let hasApproved = false;
+    let hasPending = false;
 
     sortedQuarters.forEach((quarterItem) => {
       const status = String(quarterItem.status || 'pending').toLowerCase();
-      if (status === 'pending' || status === 'submitted' || status === 'review') {
+      const quarterApproved = isFinalizedResultStatus(status);
+      const val = Number.isFinite(quarterItem.numeric) ? quarterItem.numeric : 0;
+
+      if (quarterApproved) {
+        hasApproved = true;
+        approvedTotal += val;
+      } else {
         isAllApproved = false;
+        hasPending = true;
+        pendingTotal += val;
       }
-      // Simple incremental sum: Treat each quarter as a new addition to the total
-      cumulativeTotal += Number.isFinite(quarterItem.numeric) ? quarterItem.numeric : 0;
     });
 
-    if (key.includes('3f9585e1') || key.includes('c635ff93') || key.includes('15ded5f3')) {
-      console.log(`[DEEP_STATUS_TRACE] Key: ${key}, Total: ${cumulativeTotal}, AllApproved: ${isAllApproved}, Quarters: ${sortedQuarters.length}`);
-      sortedQuarters.forEach((q) => {
-        console.log(`  -> Quarter: ${q.normalizedQuarter}, Value: ${q.numeric}, Status: ${q.status}`);
-      });
-    }
-
     resultDetails.set(key, {
-      performance: cumulativeTotal,
+      // Approved-only sum (safe to display without approval for evidence KPIs)
+      performance: approvedTotal,
+      // Full sum including pending quarters (for non-evidence KPIs or display hints)
+      totalPerformance: approvedTotal + pendingTotal,
+      pendingPerformance: pendingTotal,
+      approved: isAllApproved && sortedQuarters.length > 0,
       isApproved: isAllApproved && sortedQuarters.length > 0,
-      hasPending: !isAllApproved,
+      hasApproved,
+      hasPending,
     });
   });
 
@@ -467,25 +484,35 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
       return userMetrics || { performance: 0, isApproved: false };
     });
 
+    // For evidence KPIs: only count approved quarters. For non-evidence: count all quarters.
     const cumulativeTotal = cumulativeValues.reduce((sum, v) => {
-      const isApproved = v.isApproved;
       const isEvidenceReq = grouped.isEvidenceRequired;
-
-      if (!isEvidenceReq || isApproved) {
-        return sum + v.performance;
-      }
-      return sum;
+      // Use approved-only performance for evidence KPIs; total performance for non-evidence
+      return sum + (isEvidenceReq ? v.performance : (v.totalPerformance ?? v.performance));
     }, 0);
+
+    // Pending total: how much is still awaiting approval across all users for this KPI
+    const pendingTotal = cumulativeValues.reduce((sum, v) => {
+      return sum + (v.pendingPerformance || 0);
+    }, 0);
+
     const allApproved = cumulativeValues.length > 0 && cumulativeValues.every((v) => v.isApproved);
+    const hasPendingPerformance = pendingTotal > 0;
     const receiverCount = cumulativeValues.length;
     const aggregatedPerformance = grouped.isTargetIndividual ? (receiverCount > 0 ? cumulativeTotal / receiverCount : 0) : cumulativeTotal;
+    const aggregatedPendingTotal = grouped.isTargetIndividual ? (receiverCount > 0 ? (cumulativeTotal + pendingTotal) / receiverCount : 0) : (cumulativeTotal + pendingTotal);
 
     aggregation.set(key, {
       isTargetIndividual: grouped.isTargetIndividual,
       receiverCount,
-      aggregatedPerformance,
+      aggregatedPerformance,          // Approved total (for evidence KPIs) or full total (non-evidence)
+      aggregatedPendingTotal,         // Approved + pending total (for showing pending badge)
+      pendingPerformance: pendingTotal,
       hasAnySubmission,
+      approved: allApproved,
       isApproved: allApproved,
+      hasPending: !allApproved,
+      hasPendingPerformance,
     });
   });
 
@@ -671,30 +698,35 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       IsArchived: false,
       CycleYear: cycleYear,
       UserId: { [Op.in]: uniqueScopeOwnerUserIds },
-      ...(parentOfParentUserIds.length ? { CreatedBy: { [Op.in]: parentOfParentUserIds } } : {}),
     },
     include: kpiInclude,
     order: [['CreatedAt', 'ASC']],
   });
 
-  // 3. Fetch KPIs assigned BY the scope role to their children (Column Data)
+  // 3. Fetch KPIs assigned to child users for this cycle year.
+  // We intentionally do NOT filter by CreatedBy here — KPIs may be assigned by an admin
+  // or any other authority, and we still want them to appear in the parent report.
   const childAssignments = uniqueVisibleUserIds.length
     ? await UserKPI.findAll({
         where: {
           IsArchived: false,
           CycleYear: cycleYear,
           UserId: { [Op.in]: uniqueVisibleUserIds },
-          CreatedBy: { [Op.in]: uniqueScopeOwnerUserIds },
         },
         include: kpiInclude,
         order: [['CreatedAt', 'ASC']],
       })
     : [];
 
+  // Keep the raw (non-deduplicated) list for result filtering — child assignment IDs
+  // must be found even when a parent assignment for the same KPI takes priority in the
+  // deduplicated row-building list.
+  const allRawAssignments = [...officialParentAssignments, ...childAssignments];
+
   const allAssignments = [];
   const seenAssignmentKeys = new Set();
 
-  [...officialParentAssignments, ...childAssignments].forEach((assignment) => {
+  allRawAssignments.forEach((assignment) => {
     const leafType = assignment.KPI?.KPIType || null;
     const assignmentKey = `${String(assignment.KPIId)}::${(leafType?.KPIName || '').trim()}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
     if (seenAssignmentKeys.has(assignmentKey)) {
@@ -827,22 +859,35 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   const resultsWithAssignmentIds = results
     .filter((r) => {
-      // Find the specific assignment for this result to know which role it belongs to
-      const assignment = assignments.find((a) => String(a.Id) === String(r.UserKPIId));
+      const isFinalized = isFinalizedResultStatus(r.Status);
+
+      // Find the specific assignment for this result to know which role it belongs to.
+      // IMPORTANT: search allRawAssignments (not the deduplicated 'assignments') so that child
+      // assignments are found even when the same KPI's parent assignment took priority in dedup.
+      const assignment =
+        allRawAssignments.find((a) => String(a.Id) === String(r.UserKPIId)) ||
+        allRawAssignments.find((a) => String(a.UserId) === String(r.UserId) && String(a.KPIId) === String(r.KPIId));
       if (!assignment) return false;
 
       // UserKPI has UserId, not RoleId — look up the role from the user-role map
       const roleId = userRoleByUserId.get(String(assignment.UserId));
       if (!roleId) return false;
 
-      // Always show own data to the viewer (current office column)
-      if (viewerRoleId && String(roleId) === String(viewerRoleId)) return true;
+      // Always show performance data for the scope role itself (the first column)
+      if (String(roleId) === String(selectedScopeRole.Id)) return true;
 
       // For child columns, strictly only show if that child role has submitted their office report
       const targetColumnId = roleToChildColumn.get(String(roleId));
       if (!targetColumnId) return false;
 
       const isSubmitted = submittedRoleIds.has(String(targetColumnId));
+
+      // Finalized evidence-based results should surface in the parent report even if the child
+      // office has not formally submitted its report yet.
+      if (isFinalized) {
+        return true;
+      }
+
       return isSubmitted;
     })
     .map((r) => {
@@ -850,6 +895,8 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       return {
         ...raw,
         UserKPIId: raw.UserKPIId || null,
+        approved: isFinalizedResultStatus(raw.Status),
+        isApproved: isFinalizedResultStatus(raw.Status),
       };
     });
 
@@ -917,6 +964,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
           ? ''
           : assignment.Remark) || (isDerived ? '—' : kpi?.Remark || kpi?.Description || '—'),
       isEvidenceRequired: !!(kpi?.isEvidenceRequired || kpi?.IsEvidenceRequired || kpi?.IsEvedenceRequired),
+      isTargetIndividual: !!assignment.IsTargetIndividual,
       values: {},
     });
 
@@ -943,15 +991,34 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         } else if (details === undefined) {
           row.values[String(column.id)] = '—';
         } else {
-          // Check both User and Role column logic for pending status
-          const isPending = row.isEvidenceRequired && !details.isApproved;
-          row.values[String(column.id)] = {
-            value: isPending ? '—' : formatNumericValue(details.performance),
-            isApproved: details.isApproved,
-          };
+          const isEvidenceKpi = row.isEvidenceRequired;
+          const hasPending = details.hasPending && (details.pendingPerformance || 0) > 0;
 
-          if (column.name && column.name.includes('Engineering')) {
-            console.log(`[USER_COL_TRACE] KPI: ${row.kpi}, Value: ${row.values[String(column.id)].value}, Approved: ${details.isApproved}`);
+          if (isEvidenceKpi && details.performance === 0 && hasPending) {
+            // All quarters still pending — hide value until first approval
+            row.values[String(column.id)] = {
+              value: '—',
+              approved: false,
+              isApproved: false,
+              showPendingValue: true,
+            };
+          } else if (isEvidenceKpi && hasPending) {
+            // Some quarters approved, some pending — show approved total + pending badge
+            row.values[String(column.id)] = {
+              value: formatNumericValue(details.performance),
+              pendingTotal: formatNumericValue(details.totalPerformance),
+              approved: false,
+              isApproved: false,
+              showPendingValue: true,
+            };
+          } else {
+            // Non-evidence KPI or all quarters approved
+            row.values[String(column.id)] = {
+              value: formatNumericValue(isEvidenceKpi ? details.performance : (details.totalPerformance ?? details.performance)),
+              approved: details.isApproved,
+              isApproved: details.isApproved,
+              showPendingValue: false,
+            };
           }
         }
       } else {
@@ -962,15 +1029,35 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         } else if (!metrics.hasAnySubmission) {
           row.values[String(column.id)] = '—';
         } else {
-          const isPending = row.isEvidenceRequired && !metrics.isApproved;
+          const isApproved = metrics.approved ?? metrics.isApproved;
+          const isEvidenceKpi = row.isEvidenceRequired;
+          const hasPending = metrics.hasPendingPerformance;
 
-          row.values[String(column.id)] = {
-            value: isPending ? '—' : formatNumericValue(metrics.aggregatedPerformance),
-            isApproved: metrics.isApproved,
-          };
-
-          if (column.name && column.name.includes('Engineering')) {
-            console.log(`[ROLE_COL_TRACE] KPI: ${row.kpi}, Value: ${row.values[String(column.id)].value}, Approved: ${metrics.isApproved}`);
+          if (isEvidenceKpi && metrics.aggregatedPerformance === 0 && hasPending) {
+            // All quarters are still pending — hide from parent until first approval
+            row.values[String(column.id)] = {
+              value: '—',
+              approved: false,
+              isApproved: false,
+              showPendingValue: true,
+            };
+          } else if (isEvidenceKpi && hasPending) {
+            // Mix: some quarters approved (visible), some still pending
+            row.values[String(column.id)] = {
+              value: formatNumericValue(metrics.aggregatedPerformance),
+              pendingTotal: formatNumericValue(metrics.aggregatedPendingTotal),
+              approved: false,
+              isApproved: false,
+              showPendingValue: true,
+            };
+          } else {
+            // Non-evidence KPI (all quarters summed freely) OR all evidence quarters approved
+            row.values[String(column.id)] = {
+              value: formatNumericValue(metrics.aggregatedPerformance),
+              approved: isApproved,
+              isApproved: isApproved,
+              showPendingValue: false,
+            };
           }
         }
       }
@@ -1015,44 +1102,33 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         });
       }
 
-      // Match against report rows and overlay
+      // For non-evidence KPIs: the live aggregation (first pass) is always authoritative.
+      // The snapshot payload is only used as a fallback for evidence-required KPIs that
+      // haven't been approved yet (where live data may not be visible to the parent).
+      // We skip the overlay match/replace for non-evidence KPIs entirely — live data is correct.
       reportRows.forEach((row) => {
-        const lookupKeys = [row.kpiId, row.assignmentId, row.no, row.kpi]
-          .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
-          .map((value) => String(value).trim());
-
-        const matchedValue = lookupKeys.find((key) => submittedValuesByKpi.has(key));
-        if (matchedValue) {
-          const submittedValue = submittedValuesByKpi.get(matchedValue);
-          console.log(`[OVERLAY_MATCH] Child: ${childRoleId}, KPI: ${row.kpi}, Matched Key: ${matchedValue}, Value: ${submittedValue}`);
-          childColumnIds.forEach((childColId) => {
-            // Preserve object structure if the initial value was an object, otherwise just store the value
-            if (typeof row.values[childColId] === 'object' && row.values[childColId] !== null && !Array.isArray(row.values[childColId])) {
-              row.values[childColId].value = submittedValue;
-              // Non-evidence KPIs should display immediately in the parent report.
-              // Evidence-required KPIs stay pending until the parent approves them.
-              row.values[childColId].isApproved = !row.isEvidenceRequired;
-            } else {
-              row.values[childColId] = row.isEvidenceRequired ? { value: submittedValue, isApproved: false } : submittedValue;
-            }
-          });
-        } else {
-          console.log(
-            `[OVERLAY_NOMATCH] Child: ${childRoleId}, KPI: ${row.kpi}, Available Keys: ${Array.from(submittedValuesByKpi.keys()).join('|')}, Row Keys: ${lookupKeys.join('|')}`
-          );
-          // Keep the live aggregation for non-evidence KPIs so they remain visible even if the
-          // submitted payload key does not match perfectly. Evidence-required KPIs still show pending.
-          childColumnIds.forEach((childColId) => {
-            if (row.isEvidenceRequired) {
-              if (typeof row.values[childColId] === 'object' && row.values[childColId] !== null && !Array.isArray(row.values[childColId])) {
-                row.values[childColId].value = '—';
-                row.values[childColId].isApproved = false;
-              } else {
-                row.values[childColId] = { value: '—', isApproved: false };
-              }
-            }
-          });
+        if (!row.isEvidenceRequired) {
+          // Non-evidence KPIs: live aggregation is always used. No overlay needed.
+          return;
         }
+
+        // Evidence-required KPIs only:
+        // Check if the first pass already has an approved value from live data.
+        childColumnIds.forEach((childColId) => {
+          const existingValue = row.values[childColId];
+          const existingIsApproved =
+            existingValue && typeof existingValue === 'object' && (existingValue.approved || existingValue.isApproved);
+          const existingHasValue =
+            existingValue && typeof existingValue === 'object' && existingValue.value && existingValue.value !== '—';
+
+          if (existingIsApproved || existingHasValue) {
+            // Live data is present and approved — keep it, ignore snapshot
+            return;
+          }
+
+          // No approved live value yet — the first pass already shows pending/hidden state.
+          // Leave it as-is (pending state).
+        });
       });
     });
 
@@ -1065,11 +1141,19 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         let total = 0;
         let count = 0;
 
+        // Helper to extract the numeric value from a cell (which can be a string or object)
+        const extractCellNumeric = (cellValue) => {
+          if (cellValue === null || cellValue === undefined || cellValue === 'N/A' || cellValue === '—' || cellValue === '-') return NaN;
+          const raw = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
+          if (raw === null || raw === undefined || raw === 'N/A' || raw === '—' || raw === '-') return NaN;
+          return parseFloat(raw);
+        };
+
         // Sum values from all child columns and scope role
         childRoles.forEach((child) => {
           const val = row.values[String(child.Id)];
-          const num = parseFloat(val);
-          if (!isNaN(num) && val !== 'N/A' && val !== '—' && val !== '-') {
+          const num = extractCellNumeric(val);
+          if (!isNaN(num)) {
             total += num;
             count += 1;
           }
@@ -1077,13 +1161,14 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
         // Also include the scope role's own value if it has one
         const scopeVal = row.values[String(selectedScopeRole.Id)];
-        const scopeNum = parseFloat(scopeVal);
-        if (!isNaN(scopeNum) && scopeVal !== 'N/A' && scopeVal !== '—' && scopeVal !== '-') {
+        const scopeNum = extractCellNumeric(scopeVal);
+        if (!isNaN(scopeNum)) {
           total += scopeNum;
           count += 1;
         }
 
-        row.values[String(combinedCol.id)] = count > 0 ? formatNumericValue(total / count) : '—';
+        const finalValue = row.isTargetIndividual ? (count > 0 ? total / count : 0) : total;
+        row.values[String(combinedCol.id)] = count > 0 ? formatNumericValue(finalValue) : '—';
       });
     }
   }
@@ -1377,6 +1462,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
       baselineNumeric: parseNumericValue(assignment.Baseline ?? assignment.KPIYearPlan?.Baseline) ?? 0,
       target: formatNumericValue(assignment.AssignedTarget ?? assignment.KPIYearPlan?.Target),
       remark: assignment.Remark || kpi?.Remark || kpi?.Description || '—',
+      isEvidenceRequired: !!(kpi?.IsEvedenceRequired || kpi?.IsEvidenceRequired || kpi?.isEvidenceRequired),
       values: {},
     });
 
@@ -1390,14 +1476,34 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, reportTy
     } else if (!metrics.hasAnySubmission) {
       row.values[String(currentRoleId)] = '—';
     } else {
-      row.values[String(currentRoleId)] = {
-        value: formatNumericValue(metrics.aggregatedPerformance),
-        isApproved: metrics.isApproved,
-      };
+      const isEvidence = row.isEvidenceRequired;
+      const hasPending = metrics.hasPendingPerformance;
+      // Own report: ALWAYS show total of all quarters (approved + pending)
+      const displayTotal = metrics.aggregatedPerformance + (metrics.pendingPerformance || 0);
+
+      if (isEvidence && hasPending) {
+        // Evidence KPI with pending quarters: show total but flag as pending
+        // (parent may adjust the value; once approved the pending tag disappears)
+        row.values[String(currentRoleId)] = {
+          value: formatNumericValue(displayTotal),
+          isApproved: false,
+          approved: false,
+          showPendingValue: true,
+        };
+      } else {
+        // Non-evidence KPI or all evidence quarters fully approved
+        row.values[String(currentRoleId)] = {
+          value: formatNumericValue(displayTotal),
+          isApproved: metrics.isApproved,
+          approved: metrics.isApproved,
+          showPendingValue: false,
+        };
+      }
     }
     delete row.kpiId;
     delete row.assignmentId;
     delete row.baselineNumeric;
+    delete row.isEvidenceRequired;
   });
 
   const flatRows = [...reportRows.values()].sort(
@@ -1657,7 +1763,11 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
           kpiId: row.kpiId || null,
           no: row.no,
           kpi: row.kpi,
-          value: cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue || '0',
+          value: (() => {
+            if (!cellValue) return '—';
+            if (typeof cellValue === 'object') return cellValue.value ?? '—';
+            return cellValue;
+          })(),
           isEvidenceRequired: Boolean(row.isEvidenceRequired),
         };
         console.log(`[SUBMIT_PAYLOAD] Role: ${reportData.scopeRole.id}, KPI: ${row.kpi}, KPIId: ${row.kpiId}, Value: ${finalRow.value}`);
@@ -1683,7 +1793,7 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
       action: 'SUBMIT_OFFICE_REPORT',
       resource: 'OfficeReportSubmission',
       description: `Submitted office report for ${reportData.scopeRole.name} to ${reportData.parentRole.name} (${cycleYear})`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.status(201).json({
@@ -1730,7 +1840,7 @@ const createUserKPIResult = async (req, res) => {
       return res.status(404).json({ message: 'KPI not found' });
     }
 
-    const evidenceUrl = req.file ? `/uploads/performance-evidence/${req.file.filename}` : null;
+    const evidenceUrl = req.file ? req.file.path : null;
 
     if (kpi.IsEvedenceRequired && !evidenceUrl) {
       return res.status(400).json({ message: 'Evidence file is required for this KPI.' });
@@ -1772,12 +1882,40 @@ const createUserKPIResult = async (req, res) => {
 
     const result = await UserKPIResult.create(payload);
 
+    // Notify parent office approvers if evidence-based and pending
+    if (payload.Status === 'pending' && req.user?.currentRole?.ParentRoleId) {
+      try {
+        const { getActiveRoleUserIds, createBulkNotifications } = require('../services/notificationService');
+        const approverUserIds = await getActiveRoleUserIds(req.user.currentRole.ParentRoleId);
+
+        if (approverUserIds.length) {
+          await createBulkNotifications({
+            recipientUserIds: approverUserIds,
+            actorUserId: userId,
+            type: 'kpi_evidence_submitted',
+            title: 'KPI evidence submitted',
+            message: `${user.FirstName || 'A user'} submitted KPI evidence for review (${quarter} ${cycleYear}).`,
+            priority: 'high',
+            data: {
+              UserKPIResultId: result.Id,
+              KPIId: KPIId,
+              UserId: userId,
+              CycleYear: cycleYear,
+              Quarter: quarter,
+            },
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Failed to create evidence submission notifications:', notifErr.message);
+      }
+    }
+
     await logActivity({
       userId: userId,
       action: 'KPI_REPORTING',
       resource: 'UserKPIResult',
       description: `Reported KPI performance: ${PerformanceTitle || kpi.Description}`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.status(201).json({ success: true, data: result });
@@ -1938,14 +2076,31 @@ const approveKPIResult = async (req, res) => {
       return res.status(404).json({ message: 'KPI result not found.' });
     }
 
-    await result.update({ Status: 'approved', AdjustedResult: null });
+    await result.update({ Status: 'approved' });
+
+    try {
+      const { createNotification } = require('../services/notificationService');
+      await createNotification({
+        recipientUserId: result.UserId,
+        actorUserId: req.user?.Id || null,
+        type: 'kpi_result_approved',
+        title: 'KPI result approved',
+        message: 'Your KPI evidence submission has been approved.',
+        priority: 'medium',
+        data: {
+          UserKPIResultId: result.Id,
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Failed to create approval notification:', notifErr.message);
+    }
 
     await logActivity({
       userId: req.user.Id,
       action: 'APPROVE_KPI',
       resource: 'UserKPIResult',
       description: `Approved KPI result for user ID: ${result.UserId}`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.json({ success: true, message: 'KPI result approved successfully.' });
@@ -1968,12 +2123,30 @@ const adjustKPIResult = async (req, res) => {
 
     await result.update({ Status: 'adjusted', AdjustedResult: String(adjustedValue) });
 
+    try {
+      const { createNotification } = require('../services/notificationService');
+      await createNotification({
+        recipientUserId: result.UserId,
+        actorUserId: req.user?.Id || null,
+        type: 'kpi_result_adjusted',
+        title: 'KPI result adjusted',
+        message: 'Your KPI submission was adjusted and approved. Please review the updated value.',
+        priority: 'high',
+        data: {
+          UserKPIResultId: result.Id,
+          AdjustedResult: String(adjustedValue),
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Failed to create adjustment notification:', notifErr.message);
+    }
+
     await logActivity({
       userId: req.user.Id,
       action: 'ADJUST_KPI',
       resource: 'UserKPIResult',
       description: `Adjusted KPI result for user ID: ${result.UserId} to ${adjustedValue}`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.json({ success: true, message: 'KPI result adjusted and approved.' });
@@ -2095,7 +2268,7 @@ const updateUserKPIResult = async (req, res) => {
       }
     }
 
-    const evidenceUrl = req.file ? `/uploads/performance-evidence/${req.file.filename}` : undefined;
+    const evidenceUrl = req.file ? req.file.path : undefined;
 
     await result.update({
       KPIId,

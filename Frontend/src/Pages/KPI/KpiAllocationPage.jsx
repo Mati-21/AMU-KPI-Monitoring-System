@@ -15,6 +15,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { ScrollArea } from '../../Components/UI/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../Components/UI/dialog';
 import permissionUtils from '../../lib/permissionUtils';
+import { useRolesQuery } from '../../Hooks/Queries/useRoles';
+import { useUserRolesQuery } from '../../Hooks/Queries/useUsers';
+import {
+  useKpisQuery,
+  useKpiTypesQuery,
+  useUserKpisQuery,
+  useCreateUserKpiMutation,
+  useUpdateUserKpiMutation,
+  useDeleteUserKpiMutation,
+} from '../../Hooks/Queries/useKpis';
 
 const CompactCellText = ({ value, maxWidth = 'max-w-[220px]' }) => (
   <p className={`truncate ${maxWidth}`} title={String(value || '')}>
@@ -87,66 +97,54 @@ const emitReportDataChanged = () => {
   }
 };
 
+const EMPTY_ARRAY = [];
+const MINE_PARAMS = { scope: 'mine' };
+const MINE_PARENT_PARAMS = { scope: 'mine', fromParent: true };
+
 const KpiAllocationPage = () => {
   const { notify } = useNotification();
   const authUser = useSelector((state) => state.auth?.user);
   const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [themeFilter, setThemeFilter] = useState('all');
+  const [editingAssignmentId, setEditingAssignmentId] = useState(null);
+  const [editForm, setEditForm] = useState({ baseline: '', target: '', remark: '' });
+  const [customTargetModalState, setCustomTargetModalState] = useState({ open: false, kpiId: null });
+  const [activeTab, setActiveTab] = useState('view');
+  const [detailModal, setDetailModal] = useState({ open: false, title: '', data: null });
+  const [savingAssignmentId, setSavingAssignmentId] = useState(null);
+  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
+  const [assigning, setAssigning] = useState(false);
   const [selectedOffice, setSelectedOffice] = useState([]);
   const [selectedTheme, setSelectedTheme] = useState([]);
   const [selectedSubTheme, setSelectedSubTheme] = useState([]);
   const [selectedKpi, setSelectedKpi] = useState([]);
   const [kpiAssignmentOptions, setKpiAssignmentOptions] = useState({});
-  const [roles, setRoles] = useState([]);
-  const [userRoles, setUserRoles] = useState([]);
-  const [myAssignments, setMyAssignments] = useState([]);
-  const [allocatedAssignments, setAllocatedAssignments] = useState([]);
-  const [sentAssignments, setSentAssignments] = useState([]);
-  const [kpis, setKpis] = useState([]);
-  const [kpiTypes, setKpiTypes] = useState([]);
-  const [editingAssignmentId, setEditingAssignmentId] = useState(null);
-  const [editForm, setEditForm] = useState({ baseline: '', target: '', remark: '' });
-  const [savingAssignmentId, setSavingAssignmentId] = useState(null);
-  const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
-  const [customTargetModalState, setCustomTargetModalState] = useState({ open: false, kpiId: null });
-  const [activeTab, setActiveTab] = useState('view');
-  const [detailModal, setDetailModal] = useState({ open: false, title: '', data: null });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [themeFilter, setThemeFilter] = useState('all');
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // Queries
+  const { data: roles = EMPTY_ARRAY, isLoading: loadingRoles, error: rolesError } = useRolesQuery();
+  const { data: userRoles = EMPTY_ARRAY, isLoading: loadingUserRoles, error: userRolesError } = useUserRolesQuery();
+  const { data: myAssignments = EMPTY_ARRAY, isLoading: loadingMy, error: myError } = useUserKpisQuery(MINE_PARAMS);
+  const { data: allocatedAssignments = EMPTY_ARRAY, isLoading: loadingAllocated, error: allocatedError } = useUserKpisQuery(MINE_PARENT_PARAMS);
+  const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery();
+  const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
+  const { data: kpiTypes = EMPTY_ARRAY, isLoading: loadingTypes, error: typeError } = useKpiTypesQuery();
 
-    try {
-      const [rolesRes, userRolesRes, myUserKpiRes, userKpiRes, allUserKpiRes, kpiRes, kpiTypeRes] = await Promise.all([
-        api.get('/roles', { params: { t: Date.now() } }),
-        api.get('/user-roles', { params: { t: Date.now() } }),
-        api.get('/user-kpis', { params: { scope: 'mine', t: Date.now() } }),
-        api.get('/user-kpis', { params: { scope: 'mine', fromParent: true, t: Date.now() } }),
-        api.get('/user-kpis', { params: { t: Date.now() } }),
-        api.get('/kpis', { params: { t: Date.now() } }),
-        api.get('/kpi-types', { params: { t: Date.now() } }),
-      ]);
+  // Mutations
+  const createUserKpiMutation = useCreateUserKpiMutation();
+  const updateUserKpiMutation = useUpdateUserKpiMutation();
+  const deleteUserKpiMutation = useDeleteUserKpiMutation();
 
-      setRoles(rolesRes.data?.data || []);
-      setUserRoles(userRolesRes.data?.data || []);
-      setMyAssignments(myUserKpiRes.data?.data || []);
-      setAllocatedAssignments(userKpiRes.data?.data || []);
-      setSentAssignments(allUserKpiRes.data?.data || []);
-      setKpis(kpiRes.data?.data || []);
-      setKpiTypes(kpiTypeRes.data?.data || []);
-    } catch (loadErr) {
-      setError(loadErr?.response?.data?.message || 'Failed to load assign KPI data.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const loading = loadingRoles || loadingUserRoles || loadingMy || loadingAllocated || loadingSent || loadingKpis || loadingTypes;
+  const error =
+    rolesError?.response?.data?.message ||
+    userRolesError?.response?.data?.message ||
+    myError?.response?.data?.message ||
+    allocatedError?.response?.data?.message ||
+    sentError?.response?.data?.message ||
+    kpiError?.response?.data?.message ||
+    typeError?.response?.data?.message ||
+    '';
 
   const typeById = useMemo(() => new Map(kpiTypes.map((type) => [type.Id, type])), [kpiTypes]);
   const currentUserId = String(authUser?.id || authUser?.Id || '');
@@ -623,17 +621,21 @@ const KpiAllocationPage = () => {
   }, [myAssignments, allocatedAssignments, canCascadeKpis, kpiRowById]);
 
   const handleUnallocateHomeOfficeKpi = async (assignmentId) => {
-    try {
-      setDeletingAssignmentId(assignmentId);
-      await api.put(`/user-kpis/${assignmentId}`, { IncludeCurrentOffice: false });
-      notify('Home office KPI unallocated successfully and moved to Assigned KPI.', 'success');
-      emitReportDataChanged();
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to unallocate home office KPI.', 'error');
-    } finally {
-      setDeletingAssignmentId(null);
-    }
+    updateUserKpiMutation.mutate(
+      {
+        id: assignmentId,
+        data: { IncludeCurrentOffice: false },
+      },
+      {
+        onSuccess: () => {
+          notify('Home office KPI unallocated successfully and moved to Assigned KPI.', 'success');
+          emitReportDataChanged();
+        },
+        onError: (err) => {
+          notify(err?.response?.data?.message || 'Failed to unallocate home office KPI.', 'error');
+        },
+      }
+    );
   };
 
   const startEditingAssignment = (kpiItem) => {
@@ -651,70 +653,51 @@ const KpiAllocationPage = () => {
   };
 
   const handleUpdateSentAssignment = async (assignmentId) => {
-    try {
-      setSavingAssignmentId(assignmentId);
+    const payload = {
+      Baseline: editForm.baseline === '' ? null : Number(editForm.baseline),
+      AssignedTarget: editForm.target === '' ? null : Number(editForm.target),
+      Remark: editForm.remark?.trim() || null,
+    };
 
-      const payload = {
-        Baseline: editForm.baseline === '' ? null : Number(editForm.baseline),
-        AssignedTarget: editForm.target === '' ? null : Number(editForm.target),
-        Remark: editForm.remark?.trim() || null,
-      };
-
-      await api.put(`/user-kpis/${assignmentId}`, payload);
-
-      setSentAssignments((previous) =>
-        previous.map((assignment) =>
-          assignment.Id === assignmentId
-            ? {
-                ...assignment,
-                Baseline: payload.Baseline,
-                AssignedTarget: payload.AssignedTarget,
-                Remark: payload.Remark,
-              }
-            : assignment
-        )
-      );
-
-      setAllocatedAssignments((previous) =>
-        previous.map((assignment) =>
-          assignment.Id === assignmentId
-            ? {
-                ...assignment,
-                Baseline: payload.Baseline,
-                AssignedTarget: payload.AssignedTarget,
-                Remark: payload.Remark,
-              }
-            : assignment
-        )
-      );
-
-      notify('KPI assignment updated successfully.', 'success');
-      emitReportDataChanged();
-      cancelEditingAssignment();
-    } catch (updateErr) {
-      notify(updateErr?.response?.data?.message || 'Failed to update KPI assignment.', 'error');
-    } finally {
-      setSavingAssignmentId(null);
-    }
+    setSavingAssignmentId(assignmentId);
+    updateUserKpiMutation.mutate(
+      {
+        id: assignmentId,
+        data: payload,
+      },
+      {
+        onSuccess: () => {
+          notify('KPI assignment updated successfully.', 'success');
+          emitReportDataChanged();
+          cancelEditingAssignment();
+        },
+        onError: (err) => {
+          notify(err?.response?.data?.message || 'Failed to update KPI assignment.', 'error');
+        },
+        onSettled: () => {
+          setSavingAssignmentId(null);
+        },
+      }
+    );
   };
 
   const handleUnallocateSentAssignment = async (assignmentId) => {
-    try {
-      setDeletingAssignmentId(assignmentId);
-      await api.delete(`/user-kpis/${assignmentId}`);
-
-      if (editingAssignmentId === assignmentId) {
-        cancelEditingAssignment();
-      }
-
-      notify('KPI assignment unallocated successfully.', 'success');
-      emitReportDataChanged();
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to unallocate KPI assignment.', 'error');
-    } finally {
-      setDeletingAssignmentId(null);
-    }
+    setDeletingAssignmentId(assignmentId);
+    deleteUserKpiMutation.mutate(assignmentId, {
+      onSuccess: () => {
+        if (editingAssignmentId === assignmentId) {
+          cancelEditingAssignment();
+        }
+        notify('KPI assignment unallocated successfully.', 'success');
+        emitReportDataChanged();
+      },
+      onError: (err) => {
+        notify(err?.response?.data?.message || 'Failed to unallocate KPI assignment.', 'error');
+      },
+      onSettled: () => {
+        setDeletingAssignmentId(null);
+      },
+    });
   };
 
   const handleAssign = async () => {
@@ -737,7 +720,7 @@ const KpiAllocationPage = () => {
 
     const assignmentBatchId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null;
 
-    const requests = assignmentPreview.flatMap((kpiRecord) => {
+    const assignmentData = assignmentPreview.flatMap((kpiRecord) => {
       if (kpiRecord.targetRoleIds.length === 0) return [];
 
       const usersByRole = new Map();
@@ -760,81 +743,61 @@ const KpiAllocationPage = () => {
       return [...usersByRole.entries()].flatMap(([roleId, userIds]) => {
         const assignedTarget = kpiRecord.roleTargets?.[roleId] ?? kpiRecord.distributedTarget;
 
-        return [...userIds].map((userId) =>
-          api.post('/user-kpis', {
-            KPIId: kpiRecord.id,
-            UserId: userId,
-            AssignedTarget: assignedTarget,
-            IsTargetIndividual: kpiRecord.isTargetIndividual,
-            IncludeCurrentOffice: kpiRecord.includeCurrentRole && String(roleId) === String(currentRoleId),
-            AssignmentBatchId: assignmentBatchId,
-          })
-        );
+        return [...userIds].map((userId) => ({
+          KPIId: kpiRecord.id,
+          UserId: userId,
+          AssignedTarget: assignedTarget,
+          IsTargetIndividual: kpiRecord.isTargetIndividual,
+          IncludeCurrentOffice: kpiRecord.includeCurrentRole && String(roleId) === String(currentRoleId),
+          AssignmentBatchId: assignmentBatchId,
+        }));
       });
     });
 
-    if (!requests.length) {
+    if (!assignmentData.length) {
       notify('No active users found for the selected target offices.', 'warning');
       return;
     }
 
-    const outcomes = await Promise.allSettled(requests);
-    const successCount = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
-    const conflictCount = outcomes.filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status === 409).length;
-    const failureCount = outcomes.length - successCount - conflictCount;
-    const firstFailureMessage = outcomes
-      .filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status !== 409)
-      .map((outcome) => outcome.reason?.response?.data?.message || outcome.reason?.message)
-      .find(Boolean);
-    const createdAssignments = outcomes
-      .filter((outcome) => outcome.status === 'fulfilled')
-      .map((outcome) => outcome.value?.data?.data)
-      .filter(Boolean);
+    try {
+      setAssigning(true);
+      // Process assignments in parallel using mutateAsync
+      const outcomes = await Promise.allSettled(assignmentData.map((data) => createUserKpiMutation.mutateAsync(data)));
 
-    if (successCount > 0) {
-      if (createdAssignments.length) {
-        setSentAssignments((previous) => {
-          const existingIds = new Set(previous.map((item) => item.Id));
-          const uniqueCreated = createdAssignments.filter((item) => !existingIds.has(item.Id));
-          return [...uniqueCreated, ...previous];
-        });
+      const successCount = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
+      const conflictCount = outcomes.filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status === 409).length;
+      const failureCount = outcomes.length - successCount - conflictCount;
+      const firstFailureMessage = outcomes
+        .filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status !== 409)
+        .map((outcome) => outcome.reason?.response?.data?.message || outcome.reason?.message)
+        .find(Boolean);
 
-        const currentUserId = String(authUser?.id || authUser?.Id || '');
-        setMyAssignments((previous) => {
-          const existingIds = new Set(previous.map((item) => item.Id));
-          const ownCreated = createdAssignments.filter(
-            (item) => String(item?.UserId || '') === currentUserId && !existingIds.has(String(item?.Id || ''))
-          );
-          return [...ownCreated, ...previous];
-        });
+      if (successCount > 0) {
+        const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
+
+        notify(
+          `Assigned ${selectedKpiRecords.length} KPI(s) to ${uniqueReceiverRoles.size} office(s). Success: ${successCount}, Duplicate: ${conflictCount}, Failed: ${failureCount}.`,
+          failureCount > 0 ? 'warning' : 'success'
+        );
+
+        emitReportDataChanged();
+        setSelectedOffice([]);
+        setSelectedTheme([]);
+        setSelectedSubTheme([]);
+        setSelectedKpi([]);
+        setKpiAssignmentOptions({});
+        return;
       }
 
-      const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
-
-      notify(
-        `Assigned ${selectedKpiRecords.length} KPI(s) to ${uniqueReceiverRoles.size} office(s). Success: ${successCount}, Duplicate: ${conflictCount}, Failed: ${failureCount}.`,
-        failureCount > 0 ? 'warning' : 'success'
-      );
-      emitReportDataChanged();
-      setSelectedOffice([]);
-      setSelectedTheme([]);
-      setSelectedSubTheme([]);
-      setSelectedKpi([]);
-      setKpiAssignmentOptions({});
-      return;
+      if (conflictCount > 0 && failureCount === 0) {
+        notify(`All selected KPI assignments already exist for this cycle year. Duplicate: ${conflictCount}.`, 'warning');
+        return;
+      }
+    } catch (error) {
+      notify(error?.message || 'Failed to complete KPI assignments.', 'error');
+    } finally {
+      setAssigning(false);
     }
-
-    if (conflictCount > 0 && failureCount === 0) {
-      notify(`All selected KPI assignments already exist for this cycle year. Duplicate: ${conflictCount}.`, 'warning');
-      return;
-    }
-
-    notify(
-      `No KPI assignment was saved. Success: 0, Duplicate: ${conflictCount}, Failed: ${failureCount}${
-        firstFailureMessage ? `, First error: ${firstFailureMessage}` : ''
-      }`,
-      'error'
-    );
   };
 
   useEffect(() => {
