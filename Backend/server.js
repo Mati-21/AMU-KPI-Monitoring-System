@@ -6,8 +6,10 @@ const morgan = require('morgan');
 const compression = require('compression');
 const dotenv = require('dotenv');
 const path = require('path');
+const http = require('http');
 const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/errorMiddleware');
+const { initSocket } = require('./realtime/socket');
 
 dotenv.config();
 
@@ -25,6 +27,8 @@ const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
 const kpiYearPlanRoutes = require('./routes/kpiYearPlanRoutes');
 const adminDashboardRoutes = require('./routes/adminDashboardRoutes');
 const settingRoutes = require('./routes/settingRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const messageRoutes = require('./routes/messageRoutes');
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
@@ -36,18 +40,20 @@ const envOrigins = (process.env.CLIENT_URL || '')
   .filter(Boolean);
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envOrigins])];
 
-app.use(helmet({
-  crossOriginResourcePolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "http://localhost:5000", "blob:"],
-      connectSrc: ["'self'", "http://localhost:5000"],
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'http://localhost:5000', 'blob:', 'https://res.cloudinary.com'],
+        connectSrc: ["'self'", 'http://localhost:5000', 'ws://localhost:5000', 'https://res.cloudinary.com'],
+      },
     },
-  },
-}));
+  })
+);
 app.use(
   cors({
     origin(origin, callback) {
@@ -95,6 +101,8 @@ app.use('/api/kpi-documents', kpiDocumentRoutes);
 app.use('/api/kpi-year-plans', kpiYearPlanRoutes);
 app.use('/api/admin-dashboard', adminDashboardRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/messages', messageRoutes);
 
 app.get('/health', (req, res) => {
   res.json({
@@ -117,7 +125,10 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    initSocket(server, { allowedOrigins });
+
+    server.listen(PORT, () => {
       console.log(`API running on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
     });
   } catch (error) {

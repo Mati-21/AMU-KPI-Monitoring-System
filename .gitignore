@@ -45,3 +45,6 @@ Thumbs.db
 *.db
 # Misc
 *.swp
+
+
+Backend/uploads/

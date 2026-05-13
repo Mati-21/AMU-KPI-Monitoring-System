@@ -150,29 +150,32 @@ export const AuthBootstrap = ({ children }) => {
         dispatch(setAuthLoading());
         
         // Parallel fetch for session and comprehensive system status
-        const [authRes, systemRes] = await Promise.all([
+        // Use allSettled so if /auth/me fails (guest), we still get /settings/status
+        const [authRes, systemRes] = await Promise.allSettled([
           api.get('/auth/me'),
           api.get('/settings/status')
         ]);
 
         if (!mounted) return;
 
-        // Sync branding and maintenance state
-        const { maintenanceMode, displayName, orgName, systemLogo } = systemRes.data;
-        dispatch(setMaintenance(maintenanceMode));
-        dispatch(setSystemSettings({ displayName, orgName, systemLogo }));
-        
-        hasLoggedOutRef.current = false;
-        dispatch(setUser(normalizeAuthUser(authRes.data.user, authRes.data.role)));
+        // 1. Sync branding and maintenance state (Always do this if it succeeds)
+        if (systemRes.status === 'fulfilled') {
+          const { maintenanceMode, displayName, orgName, systemLogo } = systemRes.value.data;
+          dispatch(setMaintenance(maintenanceMode));
+          dispatch(setSystemSettings({ displayName, orgName, systemLogo }));
+        }
+
+        // 2. Handle Auth Session
+        if (authRes.status === 'fulfilled') {
+          hasLoggedOutRef.current = false;
+          dispatch(setUser(normalizeAuthUser(authRes.value.data.user, authRes.value.data.role)));
+        } else {
+          // Not logged in or session expired
+          dispatch(logout());
+          queryClient.clear();
+        }
       } catch (err) {
         if (!mounted) return;
-        
-        // Even if session fails, we might want to check maintenance
-        try {
-          const mRes = await api.get('/settings/status');
-          dispatch(setMaintenance(mRes.data.maintenanceMode));
-        } catch {}
-
         dispatch(logout());
         queryClient.clear();
       } finally {

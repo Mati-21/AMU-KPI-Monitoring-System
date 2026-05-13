@@ -259,6 +259,7 @@ export const normalizeProfileUser = (user) => {
     address: user.address || '',
     bankAccount: user.bankAccount || '',
     personalEmail: user.personalEmail || '',
+    profilePicture: user.profilePicture || user.ProfilePicture || '',
     kpiBreakdown: user.kpiBreakdown || [],
     recentActivity: user.recentActivity || [],
     achievements: user.achievements || [],

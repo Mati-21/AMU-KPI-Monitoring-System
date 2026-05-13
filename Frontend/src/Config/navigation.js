@@ -13,6 +13,7 @@ import {
   Target,
   User,
   Users,
+  MessageSquare,
 } from 'lucide-react';
 import permissionUtils from '../lib/permissionUtils';
 
@@ -159,7 +160,19 @@ export const navigationSections = [
         icon: ScrollText,
         label: 'System Logs',
         path: '/system-logs',
-        permissions: [permissionUtils.permissionKey('view', 'Configuration'), permissionUtils.permissionKey('view', 'Role Management')],
+        permissions: [permissionUtils.permissionKey('view', 'System Logs')],
+      },
+      {
+        icon: MessageSquare,
+        label: 'Contact Messages',
+        path: '/contact-messages',
+        permissions: [permissionUtils.permissionKey('view', 'Configuration')],
+      },
+      {
+        icon: MessageSquare,
+        label: 'Direct Messages',
+        path: '/direct-messages',
+        permissions: [permissionUtils.permissionKey('view', 'Personal Profile')],
       },
     ],
   },

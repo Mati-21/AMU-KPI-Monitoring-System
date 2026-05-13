@@ -26,7 +26,7 @@ export const DropdownMenu = ({ trigger, children }) => {
       <div onClick={() => setOpen(!open)}>{trigger}</div>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-48 rounded-md bg-white shadow-md z-50 border border-gray-100 overflow-hidden" onClick={() => setOpen(false)}>
+        <div className="absolute right-0 mt-2 w-48 rounded-md bg-popover text-popover-foreground shadow-md z-50 border border-border overflow-hidden" onClick={() => setOpen(false)}>
           {children}
         </div>
       )}
@@ -34,25 +34,25 @@ export const DropdownMenu = ({ trigger, children }) => {
   );
 };
 
-export const DropdownMenuItem = ({ children, onClick }) => {
+export const DropdownMenuItem = ({ children, onClick, className = '' }) => {
   return (
-    <div onClick={onClick} className="px-3 py-2 text-sm cursor-pointer flex items-center gap-3 hover:bg-gray-100">
+    <div onClick={onClick} className={`px-3 py-2 text-sm cursor-pointer flex items-center gap-3 hover:bg-muted transition-colors ${className}`}>
       {children}
     </div>
   );
 };
 
 export const DropdownMenuSeparator = () => {
-  return <div className="h-px bg-gray-200 my-1" />;
+  return <div className="h-px bg-border my-1" />;
 };
 
-export const DropdownMenuLabel = ({ children }) => {
-  return <div className="px-3 py-2 text-xs font-semibold text-gray-500">{children}</div>;
+export const DropdownMenuLabel = ({ children, className = '' }) => {
+  return <div className={`px-3 py-2 text-xs font-semibold text-muted-foreground ${className}`}>{children}</div>;
 };
 
-export const DropdownMenuCheckboxItem = ({ checked, children, onClick }) => {
+export const DropdownMenuCheckboxItem = ({ checked, children, onClick, className = '' }) => {
   return (
-    <div onClick={onClick} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-100">
+    <div onClick={onClick} className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors ${className}`}>
       {checked && <Check className="w-4 h-4" />}
       {children}
     </div>

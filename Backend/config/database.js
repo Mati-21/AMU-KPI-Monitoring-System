@@ -22,12 +22,9 @@ const connectDB = async () => {
     console.log('PostgreSQL database connected successfully');
 
     if (process.env.NODE_ENV === 'development') {
-      try {
-        await sequelize.sync({ alter: true });
-      } catch (alterErr) {
-        console.warn('⚠️  sync({ alter }) failed, falling back to basic sync:', alterErr.message);
-        await sequelize.sync();
-      }
+      // Using basic sync() instead of sync({ alter: true }) to speed up startup.
+      // Use { alter: true } only when you've modified model definitions.
+      await sequelize.sync();
       console.log('Database models synced');
     }
   } catch (error) {

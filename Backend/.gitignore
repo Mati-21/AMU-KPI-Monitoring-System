@@ -1,17 +1,76 @@
-# Server Configuration
-PORT=5000
-NODE_ENV=development
+# =========================
+# Dependencies
+# =========================
+node_modules/
+Backend/node_modules/
+Frontend/node_modules/
 
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=Minte@123
-DB_NAME=kpi_monitoring_db
+# =========================
+# Environment Variables
+# =========================
+.env
+.env.local
+.env.development
+.env.production
+Backend/.env
+Frontend/.env
 
-# JWT Configuration
-JWT_SECRET=your_super_secret_jwt_key_change_this_in_production
-JWT_EXPIRE=7d
+# =========================
+# Uploads & User Files
+# =========================
+Backend/uploads/
+uploads/
 
-# Frontend URL
-CLIENT_URL=http://localhost:3000
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Build / Production Files
+# =========================
+dist/
+build/
+Frontend/dist/
+Frontend/build/
+
+# =========================
+# Cache Files
+# =========================
+.cache/
+.parcel-cache/
+
+# =========================
+# OS Generated Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor Files
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+
+# =========================
+# Coverage Reports
+# =========================
+coverage/
+
+# =========================
+# Optional
+# =========================
+*.zip
+*.tar
+*.gz

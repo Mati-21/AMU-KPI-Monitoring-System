@@ -21,7 +21,7 @@ Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef((props, ref) => {
   const { className, ...rest } = props;
-  return <thead ref={ref} className={cn(' bg-[theme(colors-primary)]/10 text-[theme(colors-foreground)]', className)} {...rest} />;
+  return <thead ref={ref} className={cn('bg-primary/10 text-foreground', className)} {...rest} />;
 });
 
 TableHeader.displayName = 'TableHeader';

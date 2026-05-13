@@ -22,7 +22,9 @@ import {
   Save,
   X,
   EyeOff,
+  Camera,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
@@ -33,8 +35,8 @@ import { setUser } from '../../Features/authSlice';
 import { getUserById, normalizeProfileUser } from '../../data/userDirectory';
 import { api } from '../../api/axios';
 import { useNotification } from '../../Context/NotificationContext';
-
-const DEFAULT_SELF_ID = 'amu-admin-001';
+import { getFileUrl } from '../../lib/utils';
+import { useUserQuery, useUpdateUserMutation, useUpdateProfilePictureMutation } from '../../Hooks/Queries/useUsers';
 
 const UserProfile = () => {
   const { userId } = useParams();
@@ -44,70 +46,44 @@ const UserProfile = () => {
   const { notify } = useNotification();
 
   const isAdmin = (authUser?.role || '').toLowerCase().includes('admin');
-  const isSelf = !userId || String(userId) === String(authUser?.id || authUser?.Id || DEFAULT_SELF_ID);
-  const [profile, setProfile] = useState(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const authUserId = authUser?.id || authUser?.Id;
+  const targetUserId = userId || authUserId;
+  const isSelf = !userId || String(userId) === String(authUserId);
 
-  useEffect(() => {
-    let mounted = true;
+  const { data: profile, isLoading: profileLoading } = useUserQuery(targetUserId, {
+    enabled: !!targetUserId,
+    select: (record) => {
+      if (!record) return null;
+      const activeRole = record?.UserRoles?.[0]?.Role;
+      return normalizeProfileUser({
+        id: record?.Id,
+        firstName: record?.FirstName || '',
+        fatherName: record?.FatherName || '',
+        grandFatherName: record?.GrandFatherName || '',
+        fullName: [record?.FirstName, record?.FatherName, record?.GrandFatherName].filter(Boolean).join(' '),
+        email: record?.Email || '',
+        userName: record?.UserName || '',
+        phone: record?.Phone || '',
+        role: activeRole?.RoleName || 'Unassigned',
+        roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
+        officeLevel: activeRole?.RoleName || '-',
+        joinedDate: record?.CreatedAt ? new Date(record.CreatedAt).toISOString().slice(0, 10) : '',
+        status: 'Active',
+        profilePicture: record?.ProfilePicture,
+      });
+    },
+  });
 
-    const fallbackProfile = normalizeProfileUser(getUserById(DEFAULT_SELF_ID) || authUser || getUserById(DEFAULT_SELF_ID));
-
-    const loadProfile = async () => {
-      if (!userId) {
-        if (mounted) {
-          setProfile(normalizeProfileUser(authUser || getUserById(DEFAULT_SELF_ID) || fallbackProfile));
-          setProfileLoading(false);
-        }
-        return;
-      }
-
-      setProfileLoading(true);
-      try {
-        const response = await api.get(`/users/${userId}`, { params: { t: Date.now() } });
-        if (!mounted) return;
-
-        const record = response.data?.data;
-        const activeRole = record?.UserRoles?.[0]?.Role;
-        const normalized = normalizeProfileUser({
-          id: record?.Id,
-          firstName: record?.FirstName || '',
-          fatherName: record?.FatherName || '',
-          grandFatherName: record?.GrandFatherName || '',
-          fullName: [record?.FirstName, record?.FatherName, record?.GrandFatherName].filter(Boolean).join(' '),
-          email: record?.Email || '',
-          userName: record?.UserName || '',
-          phone: record?.Phone || '',
-          role: activeRole?.RoleName || 'Unassigned',
-          roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
-          officeLevel: activeRole?.RoleName || '-',
-          joinedDate: record?.CreatedAt ? new Date(record.CreatedAt).toISOString().slice(0, 10) : '',
-          status: 'Active',
-        });
-
-        setProfile(normalized);
-      } catch (loadErr) {
-        if (!mounted) return;
-        notify(loadErr?.response?.data?.message || 'Failed to load user profile.', 'error');
-        setProfile(normalizeProfileUser(authUser || getUserById(DEFAULT_SELF_ID) || fallbackProfile));
-      } finally {
-        if (mounted) setProfileLoading(false);
-      }
-    };
-
-    loadProfile();
-
-    return () => {
-      mounted = false;
-    };
-  }, [userId, authUser, notify]);
+  const updateUserMutation = useUpdateUserMutation();
+  const updateProfilePictureMutation = useUpdateProfilePictureMutation();
 
   const canViewPersonal = isSelf || isAdmin;
   const canEdit = isSelf || isAdmin;
-  const [draft, setDraft] = useState(profile);
+  const [draft, setDraft] = useState(null);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [avatarHovered, setAvatarHovered] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setDraft(profile);
@@ -116,8 +92,33 @@ const UserProfile = () => {
     setNotice('');
   }, [profile, location.state, canEdit]);
 
-  if (profileLoading || !profile) {
-    return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Profile not available.</div>;
+  if (profileLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground animate-pulse">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-4 text-center max-w-xs">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+            <User className="w-8 h-8 text-muted-foreground/40" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-bold text-foreground">Profile Not Available</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We couldn't retrieve the profile data. This might happen if the user ID is invalid or session has expired.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const handleChange = (field, value) => {
@@ -142,80 +143,54 @@ const UserProfile = () => {
       }
     }
 
-    setSaving(true);
-    try {
-      const saveResponse = await api.put(`/users/${targetUserId}`, {
-        FirstName: activeDraft.firstName,
-        FatherName: activeDraft.fatherName,
-        GrandFatherName: activeDraft.grandFatherName,
-        Email: activeDraft.email,
-        Phone: activeDraft.phone,
-        UserName: activeDraft.userName,
-      });
+    updateUserMutation.mutate(
+      {
+        userId: targetUserId,
+        data: {
+          FirstName: activeDraft.firstName,
+          FatherName: activeDraft.fatherName,
+          GrandFatherName: activeDraft.grandFatherName,
+          Email: activeDraft.email,
+          Phone: activeDraft.phone,
+          UserName: activeDraft.userName,
+        },
+      },
+      {
+        onSuccess: async (savedRecord) => {
+          if (isAdmin && !isSelf && resetPassword) {
+            try {
+              await api.put(`/users/${targetUserId}/reset-password`, { password: resetPassword });
+              notify('Password reset successfully.', 'success');
+            } catch (err) {
+              notify('Failed to reset password.', 'error');
+            }
+          }
 
-      const savedRecord = saveResponse.data?.data;
-      const activeRole = savedRecord?.UserRoles?.[0]?.Role;
-      const updated = normalizeProfileUser({
-        id: savedRecord?.Id,
-        firstName: savedRecord?.FirstName || '',
-        fatherName: savedRecord?.FatherName || '',
-        grandFatherName: savedRecord?.GrandFatherName || '',
-        fullName: [savedRecord?.FirstName, savedRecord?.FatherName, savedRecord?.GrandFatherName].filter(Boolean).join(' '),
-        email: savedRecord?.Email || '',
-        userName: savedRecord?.UserName || '',
-        phone: savedRecord?.Phone || '',
-        role: activeRole?.RoleName || profile?.role || 'Unassigned',
-        roleCategory: activeRole?.RoleCategory?.CategoryName || profile?.roleCategory || 'No Category',
-        officeLevel: activeRole?.RoleName || profile?.officeLevel || '-',
-        joinedDate: savedRecord?.CreatedAt ? new Date(savedRecord.CreatedAt).toISOString().slice(0, 10) : profile?.joinedDate,
-        status: 'Active',
-        department: activeDraft.department,
-        location: activeDraft.location,
-        bio: activeDraft.bio,
-        personalEmail: activeDraft.personalEmail,
-        emergencyContact: activeDraft.emergencyContact,
-        address: activeDraft.address,
-        bankAccount: activeDraft.bankAccount,
-        dateOfBirth: activeDraft.dateOfBirth,
-        nationalId: activeDraft.nationalId,
-      });
+          if (String(targetUserId) === String(authUser?.id || authUser?.Id || '')) {
+            const updatedName = [savedRecord.FirstName, savedRecord.FatherName, savedRecord.GrandFatherName].filter(Boolean).join(' ');
+            dispatch(
+              setUser({
+                ...authUser,
+                FirstName: savedRecord.FirstName,
+                FatherName: savedRecord.FatherName,
+                GrandFatherName: savedRecord.GrandFatherName,
+                Email: savedRecord.Email,
+                UserName: savedRecord.UserName,
+                Phone: savedRecord.Phone,
+                fullName: updatedName,
+                name: updatedName,
+              })
+            );
+          }
 
-      if (isAdmin && !isSelf && resetPassword) {
-        await api.put(`/users/${targetUserId}/reset-password`, { password: resetPassword });
-        notify('Password reset successfully.', 'success');
+          setEditing(false);
+          setNotice('Profile saved successfully.');
+        },
+        onError: (err) => {
+          notify(err?.response?.data?.message || 'Failed to save changes.', 'error');
+        },
       }
-
-      if (String(updated?.id || '') === String(authUser?.id || authUser?.Id || '')) {
-        dispatch(
-          setUser({
-            ...authUser,
-            FirstName: savedRecord?.FirstName,
-            FatherName: savedRecord?.FatherName,
-            GrandFatherName: savedRecord?.GrandFatherName,
-            Email: savedRecord?.Email,
-            UserName: savedRecord?.UserName,
-            Phone: savedRecord?.Phone,
-            fullName: updated?.fullName,
-            name: updated?.fullName,
-          })
-        );
-      }
-
-      const normalizedSaved = normalizeProfileUser({
-        ...(updated || profile),
-        resetPassword: '',
-        confirmResetPassword: '',
-      });
-
-      setProfile(normalizedSaved);
-      setDraft(normalizedSaved);
-      setEditing(false);
-      setNotice('Profile saved successfully.');
-    } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to save changes.', 'error');
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   const handleCancel = () => {
@@ -231,6 +206,33 @@ const UserProfile = () => {
     return <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">Profile not available.</div>;
   }
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('profile', file);
+
+    updateProfilePictureMutation.mutate(
+      {
+        userId: display.id,
+        formData,
+      },
+      {
+        onSuccess: (data) => {
+          const newUrl = data?.profilePicture;
+          if (newUrl && String(display.id) === String(authUser?.id || authUser?.Id)) {
+            dispatch(setUser({ ...authUser, ProfilePicture: newUrl }));
+          }
+          notify('Profile picture updated successfully.', 'success');
+        },
+        onError: (err) => {
+          notify(err?.response?.data?.message || 'Failed to upload image.', 'error');
+        },
+      }
+    );
+  };
+
   return (
     <div className="flex flex-1 overflow-y-auto bg-background">
       <div className="flex-1 flex flex-col min-w-0">
@@ -239,8 +241,60 @@ const UserProfile = () => {
             <div className="h-32 bg-linear-to-r from-primary/20 via-primary/10 to-accent/20" />
             <CardContent className="relative pb-6 pt-0 px-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end -mt-12">
-                <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-card bg-primary/10 text-2xl font-bold text-primary shadow-lg">
-                  {display.initials}
+                <div
+                  className="relative h-24 w-24 rounded-full overflow-hidden border-4 border-card shadow-lg"
+                  onMouseEnter={() => setAvatarHovered(true)}
+                  onMouseLeave={() => setAvatarHovered(false)}
+                >
+                  <div className="flex h-full w-full items-center justify-center bg-primary/10 text-2xl font-bold text-primary">
+                    {display.profilePicture ? (
+                      <img src={getFileUrl(display.profilePicture)} alt={display.fullName} className="h-full w-full object-cover" />
+                    ) : (
+                      display.initials
+                    )}
+                  </div>
+                  {editing && (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: '33.3%',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: updateProfilePictureMutation.isPending ? 'not-allowed' : 'pointer',
+                        opacity: avatarHovered ? 1 : 0,
+                        transition: 'opacity 0.3s ease',
+                        zIndex: 10,
+                      }}
+                    >
+                      <Camera style={{ width: 18, height: 18, color: '#fff' }} />
+                      <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} accept="image/*" />
+                    </div>
+                  )}
+                  {updateProfilePictureMutation.isPending && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        borderRadius: '9999px',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 20,
+                      }}
+                    >
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1">
                   <div className="flex flex-wrap items-center gap-3">
@@ -307,9 +361,9 @@ const UserProfile = () => {
                             <X className="h-4 w-4" />
                             Cancel
                           </Button>
-                          <Button size="sm" onClick={handleSave} className="gap-2" disabled={saving}>
+                          <Button size="sm" onClick={handleSave} className="gap-2" disabled={updateUserMutation.isPending}>
                             <Save className="h-4 w-4" />
-                            {saving ? 'Saving...' : 'Save'}
+                            {updateUserMutation.isPending ? 'Saving...' : 'Save'}
                           </Button>
                         </div>
                       ) : (

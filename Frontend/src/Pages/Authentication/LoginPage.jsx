@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import kpiImage from '../../assets/images/kpi.jpeg';
 import Navbar from '../../Components/UI/Navbar';
@@ -8,6 +8,7 @@ import { useLogin } from '../../Hooks/Auth/useLogin';
 import { getDefaultRouteByRole } from '../../lib/authRouting';
 import { api, BASE_URL } from '../../api/axios';
 import { useSelector } from 'react-redux';
+import { getFileUrl } from '../../lib/utils';
 
 const SignIn = () => {
   const [email, setEmail] = useState('');
@@ -17,9 +18,7 @@ const SignIn = () => {
   const navigate = useNavigate();
 
   const systemSettings = useSelector((state) => state.auth.systemSettings);
-  const logoUrl = systemSettings?.systemLogo 
-    ? `${BASE_URL}${systemSettings.systemLogo}` 
-    : null;
+  const logoUrl = getFileUrl(systemSettings?.systemLogo);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -130,24 +129,7 @@ const SignIn = () => {
                 </div>
               </div>
 
-              {/* Remember Me */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="remember"
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className="w-4 h-4 rounded-sm border border-primary focus:ring-2 focus:ring-ring"
-                  />
-                  <label htmlFor="remember" className="text-sm text-muted-foreground font-normal cursor-pointer">
-                    Remember Me
-                  </label>
-                </div>
-                <a href="#" className="text-sm text-primary hover:underline underline-offset-4">
-                  Forgot password?
-                </a>
-              </div>
+
 
               {error ? (
                 <p className="text-sm text-red-500">{error.response?.data?.message || error.message || 'Login failed. Please try again.'}</p>
@@ -167,9 +149,9 @@ const SignIn = () => {
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account?{' '}
-            <a href="#" className="text-primary font-medium hover:underline underline-offset-4">
+            <Link to="/contact-admin" className="text-primary font-medium hover:underline underline-offset-4">
               Contact your administrator
-            </a>
+            </Link>
           </p>
         </div>
       </div>

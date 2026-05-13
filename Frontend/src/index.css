@@ -55,20 +55,21 @@ body,
   --search-text: #0d9488; /* Teal/Emerald */
   --search-bg: #f3f4f6; /* Light gray bg */
 
-  /* Sidebar Colors */
-  --sidebar-background: #ffffff; /* sidebar background (white) */
-  --sidebar-foreground: #24262d; /* sidebar text (dark charcoal) */
+  /* Sidebar Colors (Light Mode - Blue) */
+  --sidebar-background: #1e3a8a;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #1e3a8a;
+  --sidebar-accent: rgba(255, 255, 255, 0.15);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #3b82f6;
+  --sidebar-muted: rgba(255, 255, 255, 0.6);
 
-  --sidebar-primary: #3b82f6; /* sidebar primary (blue) */
-  --sidebar-primary-foreground: #ffffff; /* white text */
-
-  --sidebar-accent: #e1f0ff; /* light blue accent */
-  --sidebar-accent-foreground: #3b82f6; /* blue text */
-
-  --sidebar-border: #e6e8f0; /* sidebar border gray */
-  --sidebar-ring: #3b82f6; /* focus ring */
-
-  --sidebar-muted: #757b8c; /* muted gray text */
+  /* Navbar Colors (Light Mode - White) */
+  --navbar-background: #ffffff;
+  --navbar-foreground: #24262d;
+  --navbar-border: #e6e8f0;
 
   /* Custom shadows */
   --shadow-soft: 0 10px 25px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
@@ -134,6 +135,11 @@ body,
   --sidebar-ring: #60a5fa; /* focus ring */
 
   --sidebar-muted: #94a3b8; /* muted gray */
+
+  /* Navbar Colors (Dark Mode) */
+  --navbar-background: #111827;
+  --navbar-foreground: #e2e8f0;
+  --navbar-border: #334155;
 }
 
 /* Report sub-total row: compact height + dark mode support */
@@ -146,4 +152,48 @@ body,
   :root:not(.light) {
     color-scheme: dark;
   }
+}
+
+/* Custom Scrollbar (Firefox-style consistency) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-muted-foreground) transparent;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 4px; /* Even thinner for a sleeker look */
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+  border-left: 1px solid var(--color-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-muted-foreground);
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-primary);
+}
+
+/* Global Cursor Pointer for all buttons */
+button, 
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.cursor-pointer {
+  cursor: pointer !important;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"],
+.cursor-not-allowed {
+  cursor: not-allowed !important;
 }

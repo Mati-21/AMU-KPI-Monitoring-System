@@ -4,11 +4,15 @@ const Button = ({ children, variant = 'default', size = 'default', className = '
   // 🎨 Variants
   let variantStyle = '';
   if (variant === 'destructive') {
-    variantStyle = 'bg-red-500 text-white hover:bg-red-600';
+    variantStyle = 'bg-destructive text-destructive-foreground hover:bg-destructive/90';
   } else if (variant === 'outline') {
-    variantStyle = 'border border-gray-300 hover:bg-gray-100';
+    variantStyle = 'border border-border bg-transparent hover:bg-accent/50 text-foreground';
+  } else if (variant === 'secondary') {
+    variantStyle = 'bg-secondary text-secondary-foreground hover:bg-secondary/80';
+  } else if (variant === 'ghost') {
+    variantStyle = 'bg-transparent hover:bg-accent/50 text-foreground';
   } else {
-    variantStyle = 'bg-blue-500 text-white hover:bg-blue-600';
+    variantStyle = 'bg-primary text-primary-foreground hover:bg-primary/90';
   }
 
   // 📏 Sizes

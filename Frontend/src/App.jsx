@@ -15,6 +15,9 @@ import PermissionManagement from './Pages/Admin/Permissions/PermissonsManagement
 import SystemLogs from './Pages/Admin/SystemLogs/SystemLogs';
 import Maintenance from './Pages/Common/Maintenance';
 import UserProfile from './Pages/Profile/UserProfile';
+import ContactAdmin from './Pages/Authentication/ContactAdmin';
+import ContactMessages from './Pages/Admin/ContactMessages/ContactMessages';
+import DirectMessageView from './Pages/Admin/ContactMessages/DirectMessageView';
 
 import DashboardHome from './Pages/Common/DashboardHome';
 import OfficeReport from './Pages/Strategic/OfficeReport';
@@ -26,6 +29,7 @@ import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from './Comp
 import { NotificationProvider } from './Context/NotificationContext';
 import AuthenticatedShell from './Components/Layout/AuthenticatedShell';
 import permissionUtils from './lib/permissionUtils';
+import { SocketProvider } from './Context/SocketContext';
 
 function App() {
   return (
@@ -40,12 +44,19 @@ function App() {
                 <Route element={<GuestOnly />}>
                   <Route path="/signin" element={<SignIn />} />
                   <Route path="/login" element={<Navigate to="/signin" replace />} />
+                  <Route path="/contact-admin" element={<ContactAdmin />} />
                 </Route>
                 <Route path="/maintenance" element={<Maintenance />} />
 
                 {/* Protected Routes */}
                 <Route element={<RequireAuth />}>
-                  <Route element={<AuthenticatedShell />}>
+                  <Route
+                    element={
+                      <SocketProvider>
+                        <AuthenticatedShell />
+                      </SocketProvider>
+                    }
+                  >
                     <Route index element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<DashboardHome />} />
 
@@ -202,15 +213,11 @@ function App() {
                       <Route path="/alert-notification" element={<AlertsNotifications />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[permissionUtils.permissionKey('view', 'Configuration'), permissionUtils.permissionKey('view', 'Role Management')]}
-                        />
-                      }
-                    >
+                    <Route element={<RequirePermission permissions={[permissionUtils.permissionKey('view', 'System Logs')]} />}>
                       <Route path="/system-logs" element={<SystemLogs />} />
                     </Route>
+                    <Route path="/contact-messages" element={<ContactMessages />} />
+                    <Route path="/direct-messages" element={<DirectMessageView />} />
 
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Route>
