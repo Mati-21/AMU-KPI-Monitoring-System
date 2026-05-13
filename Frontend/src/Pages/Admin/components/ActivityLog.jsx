@@ -1,5 +1,22 @@
-const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download Log', actionVariant = 'outline', activities = [], onViewAll }) => {
-  const displayActivities = activities.length > 0 ? activities : [
+import React, { useState } from 'react';
+
+const ActivityLog = ({ 
+  title = 'Recent System Activity', 
+  actionLabel = 'Download Log', 
+  actionVariant = 'outline', 
+  activities = [], 
+  onViewAll,
+  initialCount = 5,
+  allowExpand = false
+}) => {
+  const [visibleCount, setVisibleCount] = useState(initialCount);
+
+  // Sync visibleCount with initialCount when the prop changes (e.g., after data loads)
+  React.useEffect(() => {
+    setVisibleCount(initialCount);
+  }, [initialCount]);
+
+  const displayActivities = activities.length > 0 ? activities.slice(0, visibleCount) : [
     {
       user: 'No Activity',
       action: 'N/A',
@@ -8,6 +25,10 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
       status: 'Inactive',
     }
   ];
+
+  const handleShowMore = () => {
+    setVisibleCount(prev => prev + 3);
+  };
 
   return (
     <div className="bg-card rounded-xl border border-border p-6 animate-fade-in" style={{ animationDelay: '0.3s' }}>
@@ -37,14 +58,14 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[theme(colors-border)] bg-[theme(colors-card)] shadow-sm">
-        <table className="w-full text-sm bg-transparent text-[theme(colors-card-foreground)]">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <table className="w-full text-sm bg-transparent text-card-foreground">
           <thead>
-            <tr className="bg-[theme(colors-secondary)]">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-[theme(colors-muted-foreground)] uppercase tracking-wide">Admin User</th>
-              <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action Performed</th>
-              <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Time</th>
-              <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+            <tr className="bg-secondary/50 text-left">
+              <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Admin User</th>
+              <th className="py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action Performed</th>
+              <th className="py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Time</th>
+              <th className="py-2.5 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -52,12 +73,12 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
               <tr key={i} className="border-t border-border hover:bg-muted/50 transition-colors">
                 <td className="py-2.5 px-4">
                   <div>
-                    <p className="font-medium text-[theme(colors-foreground)] text-xs">{a.user}</p>
+                    <p className="font-medium text-foreground text-xs">{a.user}</p>
                     <p className="text-[11px] text-muted-foreground">{a.action}</p>
                   </div>
                 </td>
-                <td className="py-2.5 px-4 text-xs text-[theme(colors-muted-foreground)]">{a.description}</td>
-                <td className="py-2.5 px-4 text-xs text-[theme(colors-muted-foreground)]">{a.time}</td>
+                <td className="py-2.5 px-4 text-xs text-muted-foreground">{a.description}</td>
+                <td className="py-2.5 px-4 text-xs text-muted-foreground">{a.time}</td>
                 <td className="py-2.5 px-4">
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">{a.status}</span>
                 </td>
@@ -65,6 +86,25 @@ const ActivityLog = ({ title = 'Recent System Activity', actionLabel = 'Download
             ))}
           </tbody>
         </table>
+
+        {allowExpand && activities.length > 0 && (
+          <div className="border-t border-border bg-muted/20">
+            {visibleCount < activities.length ? (
+              <button
+                onClick={handleShowMore}
+                className="w-full py-3 text-sm font-bold text-primary hover:bg-primary/10 transition-all flex items-center justify-center gap-2"
+              >
+                Show More
+              </button>
+            ) : (
+              <div className="py-3 flex justify-center border-t border-border bg-muted/10">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                  End of available logs (Up to 300)
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

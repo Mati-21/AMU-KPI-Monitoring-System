@@ -89,7 +89,7 @@ const uploadLogo = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const logoPath = `/uploads/${req.file.filename}`;
+    const logoPath = req.file.path;
     
     const [setting, created] = await SystemSetting.findOrCreate({
       where: { Key: 'system_logo' },

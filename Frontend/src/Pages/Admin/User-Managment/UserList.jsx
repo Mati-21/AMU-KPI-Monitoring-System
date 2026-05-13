@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { api } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
 import permissionUtils from '../../../lib/permissionUtils';
+import { getFileUrl } from '../../../lib/utils';
+import { useUsersQuery, useDeleteUserMutation } from '../../../Hooks/Queries/useUsers';
 
 const sanitizeNamePart = (value) => {
   const normalized = String(value || '').trim();
@@ -41,39 +43,16 @@ function UserList({ setActiveTab }) {
     permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'User Management'));
   const [currentPage, setCurrentPage] = useState(1);
   const [internalSearch, setInternalSearch] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [usersRaw, setUsersRaw] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [deletingUser, setDeletingUser] = useState(null);
-  const [deleting, setDeleting] = useState(false);
+
+  const { data: usersRaw = [], isLoading: loading, error: queryError } = useUsersQuery({ t: Date.now() });
+  const deleteMutation = useDeleteUserMutation();
   const itemsPerPage = 10;
   const { notify } = useNotification();
 
-  useEffect(() => {
-    let mounted = true;
+  const error = queryError?.response?.data?.message || queryError?.message || '';
 
-    const loadUsers = async () => {
-      setLoading(true);
-      setError('');
 
-      try {
-        const usersRes = await api.get('/users', { params: { t: Date.now() } });
-        if (!mounted) return;
-        setUsersRaw(usersRes.data?.data || []);
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load users from database.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadUsers();
-    return () => {
-      mounted = false;
-    };
-  }, [refreshKey]);
 
   const users = useMemo(
     () =>
@@ -95,6 +74,7 @@ function UserList({ setActiveTab }) {
           roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
           officeLevel: activeRole?.RoleName || '-',
           joinedDate: u.CreatedAt ? new Date(u.CreatedAt).toISOString().slice(0, 10) : '-',
+          profilePicture: u.ProfilePicture,
         };
       }),
     [usersRaw]
@@ -115,17 +95,15 @@ function UserList({ setActiveTab }) {
   const confirmDeleteUser = async () => {
     if (!deletingUser?.id) return;
 
-    setDeleting(true);
-    try {
-      await api.delete(`/users/${deletingUser.id}`);
-      notify(`User "${deletingUser.fullName}" archived successfully.`, 'success');
-      setDeletingUser(null);
-      setRefreshKey((prev) => prev + 1);
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete user.', 'error');
-    } finally {
-      setDeleting(false);
-    }
+    deleteMutation.mutate(deletingUser.id, {
+      onSuccess: () => {
+        notify(`User "${deletingUser.fullName}" archived successfully.`, 'success');
+        setDeletingUser(null);
+      },
+      onError: (err) => {
+        notify(err?.response?.data?.message || 'Failed to delete user.', 'error');
+      }
+    });
   };
 
   const filteredUsers = users.filter((u) => {
@@ -187,8 +165,12 @@ function UserList({ setActiveTab }) {
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                          {user.initials}
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary overflow-hidden border border-border/50">
+                         {user.profilePicture ? (
+                           <img src={getFileUrl(user.profilePicture)} alt={user.fullName} className="h-full w-full object-cover" />
+                         ) : (
+                           user.initials
+                         )}
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{user.fullName}</p>
@@ -246,7 +228,7 @@ function UserList({ setActiveTab }) {
         <TablePagination currentPage={currentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
       </div>
 
-      <Dialog open={Boolean(deletingUser)} onOpenChange={(open) => !open && !deleting && setDeletingUser(null)}>
+      <Dialog open={Boolean(deletingUser)} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeletingUser(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
@@ -256,11 +238,11 @@ function UserList({ setActiveTab }) {
           </DialogHeader>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingUser(null)} disabled={deleting}>
+            <Button variant="outline" onClick={() => setDeletingUser(null)} disabled={deleteMutation.isPending}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteUser} disabled={deleting}>
-              {deleting ? 'Deleting...' : 'Delete'}
+            <Button variant="destructive" onClick={confirmDeleteUser} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

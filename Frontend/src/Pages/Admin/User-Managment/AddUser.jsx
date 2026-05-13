@@ -8,6 +8,11 @@ import Button from '../../../Components/UI/Button';
 import { api } from '../../../api/axios';
 import permissionUtils from '../../../lib/permissionUtils';
 import { useNotification } from '../../../Context/NotificationContext';
+import { useRolesQuery } from '../../../Hooks/Queries/useRoles';
+import { 
+  useRegisterUserMutation, 
+  useAssignUserRoleMutation 
+} from '../../../Hooks/Queries/useUsers';
 
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
@@ -42,39 +47,19 @@ function AddUser({ setActiveTab }) {
     permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'Child Office Accounts')) || isSystemAdmin;
   const delegatedOnlyMode = !isSystemAdmin && canCreateChildAccounts && !canManageUsers;
   const [formData, setFormData] = useState(emptyForm);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState('');
-  const [roles, setRoles] = useState([]);
+  
+  // Queries
+  const { data: roles = [], isLoading: catalogLoading, error: queryError } = useRolesQuery();
+
+  // Mutations
+  const registerUserMutation = useRegisterUserMutation();
+  const assignRoleMutation = useAssignUserRoleMutation();
+
+  const catalogError = queryError?.response?.data?.message || '';
   const { notify } = useNotification();
 
-  useEffect(() => {
-    let mounted = true;
 
-    const loadCatalog = async () => {
-      setCatalogLoading(true);
-      setCatalogError('');
-
-      try {
-        const rolesRes = await api.get('/roles', { params: { t: Date.now() } });
-
-        if (!mounted) return;
-        setRoles(rolesRes.data?.data || []);
-      } catch (catalogErr) {
-        if (!mounted) return;
-        setCatalogError(catalogErr?.response?.data?.message || 'Failed to load role catalog from database.');
-      } finally {
-        if (mounted) setCatalogLoading(false);
-      }
-    };
-
-    loadCatalog();
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const creatableRoles = useMemo(() => {
     if (!delegatedOnlyMode) {
@@ -187,10 +172,8 @@ function AddUser({ setActiveTab }) {
       return;
     }
 
-    setSaving(true);
-
     try {
-      const registerPayload = {
+      const createdDbUser = await registerUserMutation.mutateAsync({
         FirstName: formData.firstName,
         FatherName: formData.fatherName,
         GrandFatherName: formData.grandFatherName || '',
@@ -198,12 +181,9 @@ function AddUser({ setActiveTab }) {
         UserName: formData.username,
         Phone: formData.phone,
         password: formData.password,
-      };
+      });
 
-      const registerRes = await api.post('/auth/register', registerPayload);
-      const createdDbUser = registerRes.data?.user;
-
-      await api.post('/user-roles', {
+      await assignRoleMutation.mutateAsync({
         UserId: createdDbUser?.Id,
         RoleId: selectedRoleRecord.Id,
       });
@@ -220,8 +200,6 @@ function AddUser({ setActiveTab }) {
             .join(' ')
         : '';
       setError(validationMessage || saveErr?.response?.data?.message || 'Failed to create user in the database.');
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -354,9 +332,9 @@ function AddUser({ setActiveTab }) {
         <Button variant="outline" onClick={handleCancel}>
           Cancel
         </Button>
-        <Button onClick={handleSave} className="gap-2" disabled={saving || catalogLoading}>
+        <Button onClick={handleSave} className="gap-2" disabled={registerUserMutation.isPending || assignRoleMutation.isPending || catalogLoading}>
           <UserPlus className="h-4 w-4" />
-          {saving ? 'Saving...' : 'Save User'}
+          {registerUserMutation.isPending || assignRoleMutation.isPending ? 'Saving...' : 'Save User'}
         </Button>
       </div>
     </div>

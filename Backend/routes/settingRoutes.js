@@ -5,16 +5,9 @@ const path = require('path');
 const { getSettings, updateSetting, getSystemStatus, uploadLogo } = require('../controllers/settingController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename(req, file, cb) {
-    cb(null, `logo-${Date.now()}${path.extname(file.originalname)}`);
-  },
-});
+const { logoStorage } = require('../services/cloudinaryService');
 
-const upload = multer({ storage });
+const upload = multer({ storage: logoStorage });
 
 router.get('/status', getSystemStatus);
 router.get('/', protect, admin, getSettings);

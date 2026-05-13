@@ -5,6 +5,7 @@ import { Label } from '../../../Components/UI/Label';
 import { Switch } from '../../../Components/UI/Switch';
 import { api, BASE_URL } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
+import { getFileUrl } from '../../../lib/utils';
 
 function GeneralSystemSetting({ maintenanceMode, settings, setSettings, setMaintenanceMode, systemOnline, setSystemOnline }) {
   const { notify } = useNotification();
@@ -53,9 +54,7 @@ function GeneralSystemSetting({ maintenanceMode, settings, setSettings, setMaint
     }
   };
 
-  const logoUrl = settings.system_logo 
-    ? `${BASE_URL}${settings.system_logo}` 
-    : null;
+  const logoUrl = getFileUrl(settings.system_logo);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 ">

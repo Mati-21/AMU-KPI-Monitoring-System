@@ -69,6 +69,8 @@ const SystemLogs = () => {
               title="Full System Activity Log"
               activities={data?.systemActivities}
               actionLabel="Export CSV"
+              initialCount={5}
+              allowExpand={true}
             />
           ) : (
             <ActivityLog
@@ -76,6 +78,8 @@ const SystemLogs = () => {
               activities={data?.adminActivities}
               actionLabel="Export Security Log"
               actionVariant="destructive"
+              initialCount={5}
+              allowExpand={true}
             />
           )}
         </div>

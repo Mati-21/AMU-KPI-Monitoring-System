@@ -15,6 +15,14 @@ import TabButton from '../../../Components/UI/TabButton';
 import { api } from '../../../api/axios';
 import { useSearchParams } from 'react-router-dom';
 import permissionUtils from '../../../lib/permissionUtils';
+import { 
+  useRolesQuery, 
+  useRoleCategoriesQuery,
+  useUpdateRoleMutation,
+  useDeleteRoleMutation,
+  useUpdateRoleCategoryMutation,
+  useDeleteRoleCategoryMutation
+} from '../../../Hooks/Queries/useRoles';
 
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
@@ -43,12 +51,18 @@ const RoleManagement = () => {
   };
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const [loading, setLoading] = useState(false);
-  const [pageError, setPageError] = useState('');
-  const [roles, setRoles] = useState([]);
-  const [roleCategories, setRoleCategories] = useState([]);
+  // Queries
+  const { data: roles = [], isLoading: loading, error: queryError } = useRolesQuery();
+  const { data: roleCategories = [] } = useRoleCategoriesQuery();
+
+  // Mutations
+  const updateRoleMutation = useUpdateRoleMutation();
+  const deleteRoleMutation = useDeleteRoleMutation();
+  const updateCategoryMutation = useUpdateRoleCategoryMutation();
+  const deleteCategoryMutation = useDeleteRoleCategoryMutation();
+
+  const pageError = queryError?.response?.data?.message || '';
 
   const [editingCategory, setEditingCategory] = useState(null);
   const [deletingCategory, setDeletingCategory] = useState(null);
@@ -69,34 +83,7 @@ const RoleManagement = () => {
 
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    if (activeTab !== 'list') return;
 
-    let mounted = true;
-
-    const loadData = async () => {
-      setLoading(true);
-      setPageError('');
-
-      try {
-        const [rolesRes, categoriesRes] = await Promise.all([api.get('/roles', { params: { t: Date.now() } }), api.get('/role-categories')]);
-        if (!mounted) return;
-        setRoles(rolesRes.data?.data || []);
-        setRoleCategories(categoriesRes.data?.data || []);
-      } catch (loadErr) {
-        if (!mounted) return;
-        setPageError(loadErr?.response?.data?.message || 'Failed to load role management data from database.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadData();
-
-    return () => {
-      mounted = false;
-    };
-  }, [refreshKey, activeTab]);
 
   const roleRows = useMemo(
     () =>
@@ -174,18 +161,22 @@ const RoleManagement = () => {
     setModalSaving(true);
     setModalError('');
 
-    try {
-      await api.put(`/role-categories/${editingCategory.id}`, {
+    updateCategoryMutation.mutate({
+      id: editingCategory.id,
+      data: {
         CategoryName: editForm.name.trim(),
         Description: editForm.description?.trim() || null,
-      });
-      setEditingCategory(null);
-      setRefreshKey((prev) => prev + 1);
-    } catch (saveErr) {
-      setModalError(saveErr?.response?.data?.message || 'Failed to update role category.');
-    } finally {
-      setModalSaving(false);
-    }
+      }
+    }, {
+      onSuccess: () => {
+        setEditingCategory(null);
+        setModalSaving(false);
+      },
+      onError: (err) => {
+        setModalError(err?.response?.data?.message || 'Failed to update role category.');
+        setModalSaving(false);
+      }
+    });
   };
 
   const handleDeleteCategory = (category) => {
@@ -199,15 +190,16 @@ const RoleManagement = () => {
     setModalSaving(true);
     setModalError('');
 
-    try {
-      await api.delete(`/role-categories/${deletingCategory.id}`);
-      setDeletingCategory(null);
-      setRefreshKey((prev) => prev + 1);
-    } catch (deleteErr) {
-      setModalError(deleteErr?.response?.data?.message || 'Failed to delete role category.');
-    } finally {
-      setModalSaving(false);
-    }
+    deleteCategoryMutation.mutate(deletingCategory.id, {
+      onSuccess: () => {
+        setDeletingCategory(null);
+        setModalSaving(false);
+      },
+      onError: (err) => {
+        setModalError(err?.response?.data?.message || 'Failed to delete role category.');
+        setModalSaving(false);
+      }
+    });
   };
 
   const handleEditRole = (role) => {
@@ -239,23 +231,26 @@ const RoleManagement = () => {
     setModalSaving(true);
     setModalError('');
 
-    try {
-      await api.put(`/roles/${editingRole.id}`, {
+    updateRoleMutation.mutate({
+      id: editingRole.id,
+      data: {
         RoleCategoryId: editRoleForm.roleCategoryId || null,
         RoleName: editRoleForm.roleName.trim(),
         ParentRoleId: editRoleForm.parentRoleId || null,
         Description: editRoleForm.description?.trim() || null,
         HasExtraMeasures: Boolean(editRoleForm.extraMeasure),
         IsDistributable: Boolean(editRoleForm.isDistributable),
-      });
-
-      setEditingRole(null);
-      setRefreshKey((prev) => prev + 1);
-    } catch (saveErr) {
-      setModalError(saveErr?.response?.data?.message || 'Failed to update role.');
-    } finally {
-      setModalSaving(false);
-    }
+      }
+    }, {
+      onSuccess: () => {
+        setEditingRole(null);
+        setModalSaving(false);
+      },
+      onError: (err) => {
+        setModalError(err?.response?.data?.message || 'Failed to update role.');
+        setModalSaving(false);
+      }
+    });
   };
 
   const handleDeleteRole = (role) => {
@@ -269,15 +264,16 @@ const RoleManagement = () => {
     setModalSaving(true);
     setModalError('');
 
-    try {
-      await api.delete(`/roles/${deletingRole.id}`);
-      setDeletingRole(null);
-      setRefreshKey((prev) => prev + 1);
-    } catch (deleteErr) {
-      setModalError(deleteErr?.response?.data?.message || 'Failed to delete role.');
-    } finally {
-      setModalSaving(false);
-    }
+    deleteRoleMutation.mutate(deletingRole.id, {
+      onSuccess: () => {
+        setDeletingRole(null);
+        setModalSaving(false);
+      },
+      onError: (err) => {
+        setModalError(err?.response?.data?.message || 'Failed to delete role.');
+        setModalSaving(false);
+      }
+    });
   };
 
   const editParentRoleOptions = roleRows.filter((role) => role.id !== editingRole?.id);
@@ -426,11 +422,11 @@ const RoleManagement = () => {
           )}
 
           {activeTab === 'addRole' && canCreateRole ? (
-            <AddRole setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+            <AddRole setActiveTab={handleTabChange} />
           ) : null}
 
           {activeTab === 'addCategory' && canManageRoleCategories ? (
-            <AddCategory setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />
+            <AddCategory setActiveTab={handleTabChange} />
           ) : null}
 
           <Dialog open={Boolean(editingCategory)} onOpenChange={(open) => !open && setEditingCategory(null)}>

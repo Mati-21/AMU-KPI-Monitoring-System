@@ -16,6 +16,8 @@ const KPIYearPlan = require('./KPIYearPlan');
 const UserActivityLog = require('./UserActivityLog');
 const SystemSetting = require('./SystemSetting');
 const AuditLog = require('./AuditLog');
+const Notification = require('./Notification');
+const Message = require('./Message');
 
 // Set up associations
 RoleCategory.hasMany(Role, { foreignKey: 'RoleCategoryId' });
@@ -72,6 +74,18 @@ UserActivityLog.belongsTo(User, { foreignKey: 'UserId' });
 User.hasMany(AuditLog, { foreignKey: 'UserId' });
 AuditLog.belongsTo(User, { foreignKey: 'UserId' });
 
+User.hasMany(Notification, { foreignKey: 'RecipientUserId', as: 'Notifications' });
+Notification.belongsTo(User, { foreignKey: 'RecipientUserId', as: 'Recipient' });
+
+User.hasMany(Notification, { foreignKey: 'ActorUserId', as: 'NotificationActions' });
+Notification.belongsTo(User, { foreignKey: 'ActorUserId', as: 'Actor' });
+
+User.hasMany(Message, { foreignKey: 'SenderId', as: 'SentMessages' });
+Message.belongsTo(User, { foreignKey: 'SenderId', as: 'Sender' });
+
+User.hasMany(Message, { foreignKey: 'ReceiverId', as: 'ReceivedMessages' });
+Message.belongsTo(User, { foreignKey: 'ReceiverId', as: 'Receiver' });
+
 // Export all models
 module.exports = {
   sequelize,
@@ -90,4 +104,6 @@ module.exports = {
   UserActivityLog,
   SystemSetting,
   AuditLog,
+  Notification,
+  Message,
 };

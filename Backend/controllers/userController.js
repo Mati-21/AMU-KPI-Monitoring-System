@@ -49,7 +49,7 @@ const getUsers = async (req, res) => {
   try {
     const users = await User.findAll({
       where: { IsArchived: false },
-      attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'Email', 'UserName', 'Phone', 'CreatedAt', 'CreatedBy'],
+      attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'Email', 'UserName', 'Phone', 'CreatedAt', 'CreatedBy', 'ProfilePicture'],
       include: [
         {
           model: UserRole,
@@ -101,9 +101,22 @@ const getUsers = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
+    const isSelf = String(req.user?.Id || '') === String(id);
 
     const user = await User.findByPk(id, {
-      attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'Email', 'UserName', 'Phone', 'CreatedAt', 'CreatedBy', 'IsArchived'],
+      attributes: [
+        'Id',
+        'FirstName',
+        'FatherName',
+        'GrandFatherName',
+        'Email',
+        'UserName',
+        'Phone',
+        'CreatedAt',
+        'CreatedBy',
+        'IsArchived',
+        'ProfilePicture',
+      ],
       include: [
         {
           model: UserRole,
@@ -136,7 +149,7 @@ const getUserById = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (!canManageUsers(req) && canCreateChildOfficeAccounts(req)) {
+    if (!isSelf && !canManageUsers(req) && canCreateChildOfficeAccounts(req)) {
       const assignments = Array.isArray(user?.UserRoles) ? user.UserRoles : [];
       if (!isCreatedByCurrentDelegatedUser(req, user, assignments)) {
         return res.status(403).json({ message: 'Not authorized to view this user.' });
@@ -217,7 +230,19 @@ const updateUser = async (req, res) => {
     });
 
     const updatedUser = await User.findByPk(id, {
-      attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'Email', 'UserName', 'Phone', 'CreatedAt', 'CreatedBy', 'IsArchived'],
+      attributes: [
+        'Id',
+        'FirstName',
+        'FatherName',
+        'GrandFatherName',
+        'Email',
+        'UserName',
+        'Phone',
+        'CreatedAt',
+        'CreatedBy',
+        'IsArchived',
+        'ProfilePicture',
+      ],
       include: [
         {
           model: UserRole,
@@ -251,7 +276,7 @@ const updateUser = async (req, res) => {
       action: 'UPDATE_USER',
       resource: 'User',
       description: `Updated profile for user: ${updatedUser.FirstName} ${updatedUser.FatherName} (${updatedUser.UserName})`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.json({
@@ -299,7 +324,7 @@ const deleteUser = async (req, res) => {
       action: 'DELETE_USER',
       resource: 'User',
       description: `Archived user account: ${user.FirstName} ${user.FatherName} (${user.UserName})`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.json({
@@ -335,7 +360,7 @@ const resetUserPassword = async (req, res) => {
       action: 'RESET_PASSWORD',
       resource: 'User',
       description: `Reset password for user: ${user.FirstName} ${user.FatherName} (${user.UserName})`,
-      ipAddress: req.ip
+      ipAddress: req.ip,
     });
 
     res.json({
@@ -348,10 +373,50 @@ const resetUserPassword = async (req, res) => {
   }
 };
 
+const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+
+    if (!user || user.IsArchived) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Only allow users to upload their own profile picture or admins
+    if (String(req.user.Id) !== String(id) && !isSystemAdminRequest(req)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    await user.update({ ProfilePicture: req.file.path });
+
+    await logActivity({
+      userId: req.user.Id,
+      action: 'UPLOAD_PROFILE_PICTURE',
+      resource: 'User',
+      description: `Uploaded profile picture for user: ${user.UserName}`,
+      ipAddress: req.ip,
+    });
+
+    res.json({
+      success: true,
+      profilePicture: req.file.path,
+      message: 'Profile picture uploaded successfully',
+    });
+  } catch (error) {
+    console.error('Upload profile picture error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   getUsers,
   getUserById,
   updateUser,
   deleteUser,
   resetUserPassword,
+  uploadProfilePicture,
 };

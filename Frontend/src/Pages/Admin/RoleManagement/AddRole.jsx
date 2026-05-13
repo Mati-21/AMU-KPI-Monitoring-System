@@ -6,6 +6,11 @@ import Button from '../../../Components/UI/Button';
 import CustomSelect from '../../../Components/UI/CustomSelect';
 import { api } from '../../../api/axios';
 import permissionUtils from '../../../lib/permissionUtils';
+import { 
+  useRolesQuery, 
+  useRoleCategoriesQuery,
+  useCreateRoleMutation 
+} from '../../../Hooks/Queries/useRoles';
 
 const NO_CATEGORY_OPTION = 'No Category (Top Level)';
 
@@ -28,43 +33,18 @@ function AddRole({ setActiveTab, onSaved }) {
     parentRoleId: '',
     extraMeasure: false,
   });
+
+  // Queries
+  const { data: categories = [], isLoading: loadingCategories } = useRoleCategoriesQuery();
+  const { data: roles = [], isLoading: loadingRoles } = useRolesQuery();
+
+  // Mutations
+  const createRoleMutation = useCreateRoleMutation();
+
+  const loadingCatalog = loadingCategories || loadingRoles;
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loadingCatalog, setLoadingCatalog] = useState(true);
-  const [categories, setCategories] = useState([]);
-  const [roles, setRoles] = useState([]);
 
-  useEffect(() => {
-    if (!canCreateRole) {
-      setError('You are not authorized to create roles.');
-      setLoadingCatalog(false);
-      return;
-    }
 
-    let mounted = true;
-
-    const loadCatalog = async () => {
-      setLoadingCatalog(true);
-      setError('');
-
-      try {
-        const [categoriesRes, rolesRes] = await Promise.all([api.get('/role-categories'), api.get('/roles')]);
-        if (!mounted) return;
-        setCategories(categoriesRes.data?.data || []);
-        setRoles(rolesRes.data?.data || []);
-      } catch (catalogErr) {
-        if (!mounted) return;
-        setError(catalogErr?.response?.data?.message || 'Failed to load role catalog from database.');
-      } finally {
-        if (mounted) setLoadingCatalog(false);
-      }
-    };
-
-    loadCatalog();
-    return () => {
-      mounted = false;
-    };
-  }, [canCreateRole]);
 
   const roleCategories = useMemo(() => categories.map((category) => ({ label: category.CategoryName, value: category.Id })), [categories]);
 
@@ -110,36 +90,31 @@ function AddRole({ setActiveTab, onSaved }) {
       return;
     }
 
-    setSaving(true);
-
-    try {
-      await api.post('/roles', {
-        RoleCategoryId: delegatedOnlyMode ? creatorRoleCategoryId || null : roleForm.roleCategoryId || null,
-        RoleName: roleForm.roleName.trim(),
-        ParentRoleId: delegatedOnlyMode ? authUser?.roleId || null : roleForm.parentRoleId || null,
-        Description: roleForm.description?.trim() || null,
-        HasExtraMeasures: checked,
-        IsDistributable: checkedDistributable,
-      });
-    } catch (saveErr) {
-      setError(saveErr?.response?.data?.message || 'Failed to save role to database.');
-      setSaving(false);
-      return;
-    }
-
-    setSaving(false);
-
-    setRoleForm({
-      roleCategoryId: delegatedOnlyMode ? creatorRoleCategoryId : '',
-      roleName: '',
-      description: '',
-      parentRoleId: '',
-      extraMeasure: false,
+    createRoleMutation.mutate({
+      RoleCategoryId: delegatedOnlyMode ? creatorRoleCategoryId || null : roleForm.roleCategoryId || null,
+      RoleName: roleForm.roleName.trim(),
+      ParentRoleId: delegatedOnlyMode ? authUser?.roleId || null : roleForm.parentRoleId || null,
+      Description: roleForm.description?.trim() || null,
+      HasExtraMeasures: checked,
+      IsDistributable: checkedDistributable,
+    }, {
+      onSuccess: () => {
+        setRoleForm({
+          roleCategoryId: delegatedOnlyMode ? creatorRoleCategoryId : '',
+          roleName: '',
+          description: '',
+          parentRoleId: '',
+          extraMeasure: false,
+        });
+        setChecked(false);
+        setCheckedDistributable(true);
+        onSaved?.();
+        setActiveTab('list');
+      },
+      onError: (err) => {
+        setError(err?.response?.data?.message || 'Failed to save role to database.');
+      }
     });
-    setChecked(false);
-    setCheckedDistributable(true);
-    onSaved?.();
-    setActiveTab('list');
   };
 
   return (
@@ -231,8 +206,8 @@ function AddRole({ setActiveTab, onSaved }) {
 
       {/* Buttons */}
       <div className="flex gap-3 pt-2">
-        <Button onClick={handleRoleSave} disabled={saving || loadingCatalog}>
-          {saving ? 'Saving...' : 'Save'}
+        <Button onClick={handleRoleSave} disabled={createRoleMutation.isPending || loadingCatalog}>
+          {createRoleMutation.isPending ? 'Saving...' : 'Save'}
         </Button>
         <Button variant="outline" onClick={() => setActiveTab('list')}>
           Cancel

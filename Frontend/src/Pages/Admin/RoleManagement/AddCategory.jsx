@@ -1,15 +1,13 @@
-import { useState } from 'react';
-import { Input } from '../../../Components/UI/Input';
-import Button from '../../../Components/UI/Button';
-import { api } from '../../../api/axios';
+import { useCreateRoleCategoryMutation } from '../../../Hooks/Queries/useRoles';
 
 function AddCategory({ setActiveTab, onSaved }) {
   const [categoryForm, setCategoryForm] = useState({
     category: '',
     description: '',
   });
+  // Mutations
+  const createCategoryMutation = useCreateRoleCategoryMutation();
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const handleCategorySave = async () => {
     setError('');
@@ -19,24 +17,19 @@ function AddCategory({ setActiveTab, onSaved }) {
       return;
     }
 
-    setSaving(true);
-
-    try {
-      await api.post('/role-categories', {
-        CategoryName: categoryForm.category.trim(),
-        Description: categoryForm.description?.trim() || null,
-      });
-    } catch (saveErr) {
-      setError(saveErr?.response?.data?.message || 'Failed to save role category to database.');
-      setSaving(false);
-      return;
-    }
-
-    setSaving(false);
-
-    setCategoryForm({ category: '', description: '' });
-    onSaved?.();
-    setActiveTab('list');
+    createCategoryMutation.mutate({
+      CategoryName: categoryForm.category.trim(),
+      Description: categoryForm.description?.trim() || null,
+    }, {
+      onSuccess: () => {
+        setCategoryForm({ category: '', description: '' });
+        onSaved?.();
+        setActiveTab('list');
+      },
+      onError: (err) => {
+        setError(err?.response?.data?.message || 'Failed to save role category to database.');
+      }
+    });
   };
 
   return (
@@ -68,8 +61,8 @@ function AddCategory({ setActiveTab, onSaved }) {
       />
 
       <div className="flex gap-3 pt-2">
-        <Button onClick={handleCategorySave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save'}
+        <Button onClick={handleCategorySave} disabled={createCategoryMutation.isPending}>
+          {createCategoryMutation.isPending ? 'Saving...' : 'Save'}
         </Button>
         <Button variant="outline" onClick={() => setActiveTab('list')}>
           Cancel

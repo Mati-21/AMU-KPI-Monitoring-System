@@ -56,6 +56,10 @@ const User = sequelize.define('User', {
   LastActiveAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
+  },
+  ProfilePicture: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   timestamps: false,
@@ -87,6 +91,7 @@ User.prototype.getPublicProfile = function() {
     Email: this.Email,
     UserName: this.UserName,
     Phone: this.Phone,
+    ProfilePicture: this.ProfilePicture,
     CreatedAt: this.CreatedAt
   };
 };
