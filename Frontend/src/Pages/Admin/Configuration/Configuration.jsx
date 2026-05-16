@@ -85,7 +85,7 @@ const Configuration = () => {
       dispatch(setSystemSettings({
         displayName: settings.displayName,
         orgName: settings.orgName,
-        systemLogo: settings.system_logo || null,
+        systemLogo: settings.system_logo || settings.systemLogo || null,
       }));
       
       notify("Configuration saved successfully!", "success");

@@ -12,13 +12,9 @@ import {
   Layers,
   Zap,
   Globe,
-  Mail,
-  MapPin,
-  Phone,
   GraduationCap,
   Eye,
   Lightbulb,
-  Send,
 } from "lucide-react";
 
 import kpiImage from "../../assets/images/kpi.jpeg";
@@ -105,20 +101,21 @@ const Landing = () => {
                 evaluate, and report institutional performance across all
                 sectors and subsectors.
               </p>
-              <div className="flex flex-wrap gap-3 pt-2">
-                {/* Hero Buttons as normal buttons */}
-                <button className="px-6 py-3 text-sm rounded-md bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-primary/90 transition-colors">
-                  <a href="#about" className="flex items-center gap-2">
-                    Learn More
-                    <ArrowRight className="w-4 h-4" />
-                  </a>
-                </button>
-                <button className="px-6 py-3 text-sm rounded-md border border-input bg-background flex items-center gap-2 hover:bg-accent hover:text-accent-foreground transition-colors">
-                  <Link to="/signin" className="flex items-center gap-2">
-                    Sign In
-                    <ChevronRight className="w-4 h-4" />
-                  </Link>
-                </button>
+              <div className="flex flex-wrap gap-4 pt-2">
+                <a
+                  href="#about"
+                  className="px-6 py-3 text-sm font-semibold rounded-md bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300"
+                >
+                  Learn More
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+                <Link
+                  to="/signin"
+                  className="px-6 py-3 text-sm font-semibold rounded-md border border-input bg-background flex items-center gap-2 hover:bg-accent hover:text-accent-foreground hover:-translate-y-0.5 hover:shadow-md transition-all duration-300"
+                >
+                  Sign In
+                  <ChevronRight className="w-4 h-4" />
+                </Link>
               </div>
             </div>
 
@@ -401,154 +398,35 @@ const Landing = () => {
             Join Arba Minch University in building a culture of measurable
             excellence.
           </p>
-          <div className="flex justify-center gap-3 pt-2">
-            {/* Normal button styled like before */}
-            <button className="px-6 py-3 text-lg rounded-md bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-primary/90 transition-colors">
-              <Link to="/signin" className="flex items-center gap-2">
-                Get Started
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </button>
+          <div className="flex justify-center gap-4 pt-2">
+            <Link
+              to="/signin"
+              className="px-8 py-4 text-lg font-semibold rounded-md bg-primary text-primary-foreground shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-primary/90 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300"
+            >
+              Get Started
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Contact */}
-      <section id="contact" className="py-24 bg-accent/30">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-            <h2 className="text-3xl font-bold text-foreground tracking-tight">
-              Get in touch
-            </h2>
-            <p className="text-muted-foreground leading-relaxed">
-              Have questions about the KPI system? Reach out and our team will
-              get back to you promptly.
-            </p>
-          </div>
-
-          <div className="grid lg:grid-cols-5 gap-8">
-            {/* Form */}
-            <div className="lg:col-span-3 bg-card rounded-2xl border border-border/60 shadow-lg p-8">
-              <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
-                {/* Name + Email */}
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Abebe Kebede"
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="abebe@amu.edu.et"
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                </div>
-
-                {/* Subject */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="How can we help?"
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </div>
-
-                {/* Message */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    Message
-                  </label>
-                  <textarea
-                    rows={5}
-                    placeholder="Tell us more about your inquiry..."
-                    className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                  Send Message
-                </button>
-              </form>
-            </div>
-
-            {/* Contact Info */}
-            <div className="lg:col-span-2 space-y-4">
-              {[
-                {
-                  icon: MapPin,
-                  title: "Address",
-                  lines: [
-                    "Arba Minch University",
-                    "Arba Minch, SNNPR, Ethiopia",
-                  ],
-                },
-                {
-                  icon: Mail,
-                  title: "Email",
-                  lines: ["info@amu.edu.et", "kpi-support@amu.edu.et"],
-                },
-                {
-                  icon: Phone,
-                  title: "Phone",
-                  lines: ["+251 46 881 1147", "+251 46 881 4986"],
-                },
-              ].map((c) => (
-                <div
-                  key={c.title}
-                  className="p-6 rounded-xl bg-card border border-border/60 hover:shadow-md hover:border-primary/20 transition-all duration-300 flex gap-4 items-start"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center text-primary shrink-0">
-                    <c.icon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground text-sm mb-1">
-                      {c.title}
-                    </h4>
-                    {c.lines.map((l) => (
-                      <p key={l} className="text-sm text-muted-foreground">
-                        {l}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Footer */}
       <footer className="border-t border-border/60 py-8">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <span>© 2026 Arba Minch University. All rights reserved.</span>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-foreground transition-colors">
+          <div className="flex gap-8">
+            <a href="#" className="hover:text-primary transition-colors relative group py-1">
               Privacy
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
             </a>
-            <a href="#" className="hover:text-foreground transition-colors">
+            <a href="#" className="hover:text-primary transition-colors relative group py-1">
               Terms
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
             </a>
-            <a href="#" className="hover:text-foreground transition-colors">
+            <a href="#" className="hover:text-primary transition-colors relative group py-1">
               Support
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
             </a>
           </div>
         </div>

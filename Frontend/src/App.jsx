@@ -57,7 +57,6 @@ function App() {
                       </SocketProvider>
                     }
                   >
-                    <Route index element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<DashboardHome />} />
 
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Assigned KPI')} />}>

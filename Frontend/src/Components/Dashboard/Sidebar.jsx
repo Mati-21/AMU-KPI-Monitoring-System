@@ -14,7 +14,7 @@ const Sidebar = () => {
   const logoUrl = getFileUrl(systemSettings?.systemLogo);
 
   const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
-  const hiddenForAdminLabels = new Set(['Performance', 'KPI Allocation', 'Drived KPI Allocation', 'Sub Unit', 'Registered KPIs', 'Report']);
+  const hiddenForAdminLabels = new Set(['Performance', 'KPI Approvals', 'KPI Allocation', 'Drived KPI Allocation', 'Sub Unit', 'Registered KPIs', 'Report']);
 
   const canAccessFullUserManagement = permissionUtils.hasPermission(userPermissions, [
     permissionUtils.permissionKey('view', 'User Management'),

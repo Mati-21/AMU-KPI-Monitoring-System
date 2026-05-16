@@ -45,7 +45,7 @@ function UserList({ setActiveTab }) {
   const [internalSearch, setInternalSearch] = useState('');
   const [deletingUser, setDeletingUser] = useState(null);
 
-  const { data: usersRaw = [], isLoading: loading, error: queryError } = useUsersQuery({ t: Date.now() });
+  const { data: usersRaw = [], isLoading: loading, error: queryError } = useUsersQuery();
   const deleteMutation = useDeleteUserMutation();
   const itemsPerPage = 10;
   const { notify } = useNotification();

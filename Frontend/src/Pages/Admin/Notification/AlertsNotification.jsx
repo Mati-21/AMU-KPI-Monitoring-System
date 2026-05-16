@@ -57,13 +57,6 @@ const Input = ({ className = '', ...props }) => {
 };
 
 /* -------------------- Helpers -------------------- */
-const toPriorityLabel = (value) => {
-  const normalized = String(value || '').toLowerCase();
-  if (normalized === 'high') return 'High Priority';
-  if (normalized === 'low') return 'Low Priority';
-  return 'Medium Priority';
-};
-
 const formatDateLabel = (value) => {
   if (!value) return '';
   const date = new Date(value);
@@ -77,17 +70,7 @@ const formatDateLabel = (value) => {
   });
 };
 
-const priorityColor = {
-  'High Priority': 'border-red-500 text-red-600 bg-red-50',
-  'Medium Priority': 'border-orange-400 text-orange-600 bg-orange-50',
-  'Low Priority': 'border-green-500 text-green-600 bg-green-50',
-};
 
-const borderColor = {
-  'High Priority': 'border-l-red-500',
-  'Medium Priority': 'border-l-orange-400',
-  'Low Priority': 'border-l-green-500',
-};
 
 /* -------------------- Main Component -------------------- */
 const AlertsNotifications = () => {
@@ -115,7 +98,6 @@ const AlertsNotifications = () => {
           description: row.Message || '',
           date: formatDateLabel(row.CreatedAt),
           createdAt: row.CreatedAt,
-          priority: toPriorityLabel(row.Priority),
           read: Boolean(row.IsRead),
           type: row.Type || null,
           data: row.Data || null,
@@ -151,7 +133,6 @@ const AlertsNotifications = () => {
           description: row.Message || '',
           date: formatDateLabel(row.CreatedAt),
           createdAt: row.CreatedAt,
-          priority: toPriorityLabel(row.Priority),
           read: Boolean(row.IsRead),
           type: row.Type || null,
           data: row.Data || null,
@@ -230,50 +211,22 @@ const AlertsNotifications = () => {
       !query ||
       title.toLowerCase().includes(query) ||
       description.toLowerCase().includes(query) ||
-      priorityText.toLowerCase().includes(query) ||
       typeText.toLowerCase().includes(query);
 
-    const matchesPriority = priority === 'all' || n.priority === priority;
     const matchesDate = passesDateFilter(n.createdAt);
     const matchesType = passesTypeFilter(n.createdAt);
 
-    return matchesSearch && matchesPriority && matchesDate && matchesType;
+    return matchesSearch && matchesDate && matchesType;
   });
 
   const sorted = useMemo(() => {
     const rows = [...filtered];
-
-    const priorityRank = {
-      'High Priority': 3,
-      'Medium Priority': 2,
-      'Low Priority': 1,
-    };
-
-    const getTime = (value) => {
-      const time = new Date(value || 0).getTime();
-      return Number.isFinite(time) ? time : 0;
-    };
-
-    if (sortBy === 'oldest') {
-      rows.sort((a, b) => getTime(a.createdAt) - getTime(b.createdAt));
-      return rows;
-    }
 
     if (sortBy === 'unread') {
       rows.sort((a, b) => {
         const leftUnread = a.read ? 0 : 1;
         const rightUnread = b.read ? 0 : 1;
         if (leftUnread !== rightUnread) return rightUnread - leftUnread;
-        return getTime(b.createdAt) - getTime(a.createdAt);
-      });
-      return rows;
-    }
-
-    if (sortBy === 'priority') {
-      rows.sort((a, b) => {
-        const left = priorityRank[a.priority] || 0;
-        const right = priorityRank[b.priority] || 0;
-        if (left !== right) return right - left;
         return getTime(b.createdAt) - getTime(a.createdAt);
       });
       return rows;
@@ -307,23 +260,7 @@ const AlertsNotifications = () => {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-8">
-          {/* Priority */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-xs">Priority :</span>
 
-            <CustomSelect
-              value={priority}
-              onChange={setPriority}
-              className="w-36"
-              options={[
-                { label: 'All', value: 'all' },
-                { label: 'High Priority', value: 'High Priority' },
-                { label: 'Medium Priority', value: 'Medium Priority' },
-                { label: 'Low Priority', value: 'Low Priority' },
-              ]}
-            />
-          </div>
 
           {/* Date */}
           <div className="flex items-center gap-2">
@@ -373,7 +310,7 @@ const AlertsNotifications = () => {
               key={n.id}
               role="button"
               tabIndex={0}
-              className={`flex justify-between rounded-md bg-card shadow-sm border border-border border-l-4 ${borderColor[n.priority]} px-4 py-3 cursor-pointer hover:bg-accent/20 ${
+              className={`flex justify-between rounded-md bg-card shadow-sm border border-border border-l-4 border-l-primary/30 px-4 py-3 cursor-pointer hover:bg-accent/20 ${
                 n.read ? 'opacity-80' : ''
               }`}
               onClick={() => {
@@ -395,8 +332,6 @@ const AlertsNotifications = () => {
                   <span className="text-xs flex items-center gap-1">
                     <Calendar className="w-3 h-3" /> {n.date}
                   </span>
-
-                  <Badge className={`text-[10px] ${priorityColor[n.priority]}`}>{n.priority}</Badge>
                 </div>
               </div>
             </div>

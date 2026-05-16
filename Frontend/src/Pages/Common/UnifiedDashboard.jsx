@@ -29,18 +29,6 @@ function UnifiedDashboard() {
     return <div className="flex h-full items-center justify-center p-6 text-red-500">Error: {config.loadError}</div>;
   }
 
-  if (!config.hasData) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-6 text-center space-y-4">
-        <h2 className="text-xl font-semibold text-foreground">No Performance Data</h2>
-        <p className="text-muted-foreground max-w-md">
-          There are no KPI assignments or quarterly submissions recorded for your role or sub-units yet. Once data is submitted, your dashboard will
-          populate with real-time analytics.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <PerformanceDashboard
       config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : ['Current Cycle'] }}

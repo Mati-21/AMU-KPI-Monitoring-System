@@ -5,13 +5,16 @@ import { queryKeys } from '../../Config/queryKeys';
 /**
  * Hook for fetching all users
  */
-export const useUsersQuery = (params = {}) => {
+export const useUsersQuery = (params = {}, options = {}) => {
   return useQuery({
     queryKey: queryKeys.users.list(params),
     queryFn: async () => {
       const response = await api.get('/users', { params });
       return response.data?.data || [];
     },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...options,
   });
 };
 
@@ -27,6 +30,8 @@ export const useUserQuery = (userId, options = {}) => {
       return response.data?.data;
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
     ...options,
   });
 };
@@ -103,10 +108,15 @@ export const useDeleteUserMutation = () => {
  * Hook for registering a new user
  */
 export const useRegisterUserMutation = () => {
+  const queryClient = useQueryClient();
+  
   return useMutation({
     mutationFn: async (userData) => {
       const response = await api.post('/auth/register', userData);
       return response.data?.user;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
     },
   });
 };

@@ -11,7 +11,7 @@ import { useNotification } from '../../Context/NotificationContext';
 import { useSocket } from '../../Context/SocketContext';
 import { getFileUrl } from '../../lib/utils';
 
-const navLinks = ['About', 'Features', 'Benefits', 'Contact'];
+const navLinks = ['About', 'Features', 'Benefits'];
 
 const Navbar = () => {
   const { isDark, toggleTheme } = useTheme();
@@ -247,7 +247,6 @@ const Navbar = () => {
 
   useEffect(() => {
     if (!notificationOpen) return;
-    fetchUnreadCount();
     fetchRecentNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notificationOpen]);
@@ -283,23 +282,25 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     try {
-      // 1. Tell backend to clear the cookie
+      // 1. Backend logout to clear httpOnly cookie
       await api.post('/auth/logout');
     } catch (err) {
-      console.warn('Backend logout failed or was already cleared', err);
-    } finally {
-      // 2. Clear frontend state
-      dispatch(logout());
-
-      // 3. Clear all local storage to be safe
-      localStorage.clear();
-
-      // 4. Hard redirect to signin to flush all memory/cache
-      window.location.href = '/signin';
+      console.error('Logout error:', err);
     }
+
+    // 2. Clear frontend state immediately
+    dispatch(logout());
+
+    // 3. Optional: Clear specific non-theme items if needed
+    // localStorage.removeItem('some-other-key');
+
+    // 4. Force a clean redirect to the sign-in page
+    window.location.replace('/signin');
   };
 
-  return isAuthenticated ? (
+  const isLandingPage = location.pathname === '/';
+
+  return (isAuthenticated && !isLandingPage) ? (
     <header className="h-16 bg-[var(--navbar-background)] border-b border-[var(--navbar-border)] flex items-center justify-between px-6 w-full">
       <div className="flex items-center gap-4">
         <button className="p-2 rounded-lg hover:bg-muted">
@@ -494,10 +495,15 @@ const Navbar = () => {
           </div>
         </Link>
 
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
-            <a key={link} href={`/#${link.toLowerCase()}`}>
+            <a
+              key={link}
+              href={`/#${link.toLowerCase()}`}
+              className="px-4 py-2 text-sm font-semibold text-muted-foreground hover:text-primary transition-all duration-300 relative group"
+            >
               {link}
+              <span className="absolute bottom-1 left-4 right-4 h-0.5 bg-primary transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" />
             </a>
           ))}
         </div>
@@ -511,9 +517,16 @@ const Navbar = () => {
           >
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
-          <button className="h-10 border px-3 rounded cursor-pointer">Learn More</button>
+          <button
+            className="h-10 px-4 rounded-md border border-border bg-background text-sm font-semibold hover:bg-accent hover:text-accent-foreground hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 transition-all duration-200"
+          >
+            Learn More
+          </button>
           {location.pathname !== '/signin' && (
-            <button className="h-10 bg-primary text-white px-3 rounded cursor-pointer" onClick={() => navigate('/signin')}>
+            <button
+              className="h-10 bg-primary text-primary-foreground px-5 rounded-md text-sm font-semibold hover:bg-primary/90 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/20 active:translate-y-0 transition-all duration-200"
+              onClick={() => navigate('/signin')}
+            >
               Sign In
             </button>
           )}
