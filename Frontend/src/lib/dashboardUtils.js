@@ -138,14 +138,14 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
 
     // Track per-KPI trend data
     const kpiId = assignment.KPIId;
-    
+
     // Prioritize the dedicated Name property for Derived KPIs
     let kpiLabel = assignment.Name || kpiRecord?.KPIType?.KPIName || kpiRecord?.Description || assignment.KPI?.Description;
-    
+
     if (!kpiLabel || kpiLabel.length < 3) {
       kpiLabel = getThemeName(kpiRecord, typeById);
     }
-    
+
     if (!kpiLabel) kpiLabel = `KPI ${String(kpiId).slice(0, 6)}`;
 
     if (!kpiTrendsDataRaw.has(kpiId)) {

@@ -8,6 +8,7 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true,
 });
 
 // Helper for different storage folders
@@ -16,7 +17,7 @@ const createStorage = (subfolder) => {
     cloudinary: cloudinary,
     params: {
       folder: `amu-kpi-monitoring-system/${subfolder}`,
-      allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      // Remove allowed_formats to allow 'resource_type: auto' to handle all docs without conflict
       resource_type: 'auto',
       public_id: (req, file) => {
         const safeName = String(file.originalname || 'file')

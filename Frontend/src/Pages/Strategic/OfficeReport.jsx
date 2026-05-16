@@ -1,6 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { RefreshCw, Clock3 } from 'lucide-react';
+import { 
+  RefreshCw, 
+  Clock3, 
+  ChevronDown, 
+  ChevronUp, 
+  Plus, 
+  Eye,
+  Send,
+  Check 
+} from 'lucide-react';
+import { cn } from '../../lib/utils';
+import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
+import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
+import { useSubmitPerformanceMutation, useReportQuery, useSubmitReportMutation } from '../../Hooks/Queries/useKpis';
+import { useNotification } from '../../Context/NotificationContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../Config/queryKeys';
 
 import Button from '../../Components/UI/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../Components/UI/Card';
@@ -9,10 +25,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { ScrollArea } from '../../Components/UI/scroll-area';
 import { api } from '../../api/axios';
 import permissionUtils from '../../lib/permissionUtils';
-import { useNotification } from '../../Context/NotificationContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../Components/UI/dialog';
+import { Tabs, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { AlertCircle } from 'lucide-react';
-import { useReportQuery, useSubmitReportMutation } from '../../Hooks/Queries/useKpis';
 
 const REPORT_PERMISSION_KEYS = [
   permissionUtils.permissionKey('view', 'KPI Reporting'),
@@ -59,18 +74,46 @@ const getRowLabelClassName = (rowType) => {
 };
 
 const OfficeReport = () => {
+  const queryClient = useQueryClient();
   const { notify } = useNotification();
   const authUser = useSelector((state) => state.auth?.user);
   const userPermissions = authUser?.permissions || [];
   const canViewReport = permissionUtils.hasPermission(userPermissions, REPORT_PERMISSION_KEYS);
 
+  useEffect(() => {
+    const handleDataChange = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('amu:report-data-changed', handleDataChange);
+      window.addEventListener('storage', (event) => {
+        if (event.key === 'amu:report-data-changed') {
+          handleDataChange();
+        }
+      });
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('amu:report-data-changed', handleDataChange);
+      }
+    };
+  }, [queryClient]);
+
   const [selectedScopeRoleId, setSelectedScopeRoleId] = useState('');
   const [expandedColumns, setExpandedColumns] = useState({});
-  const [selectedReportType, setSelectedReportType] = useState('all');
+  const [selectedReportType, setSelectedReportType] = useState('original');
   const [availableYears, setAvailableYears] = useState([]);
   const [selectedCycleYear, setSelectedCycleYear] = useState('');
   const [selectedReportMode, setSelectedReportMode] = useState('individual');
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
+  const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [activeKpi, setActiveKpi] = useState(null);
+  const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
+
+  const submitPerformanceMutation = useSubmitPerformanceMutation();
 
   // Queries
   const reportParams = {
@@ -127,21 +170,57 @@ const OfficeReport = () => {
   const scopeRoleOptions = reportData?.availableScopeRoles || [];
   const showScopeSelector = scopeRoleOptions.length > 0;
 
-  const hasOriginal = reportData?.hasOriginal ?? false;
-  const hasDerived = reportData?.hasDerived ?? false;
+  const isMeasurer = reportData?.scopeRoleHasExtraMeasures;
+  const isSubordinateOfMeasurer = reportData?.isSubordinateOfMeasurer;
 
-  // Show Original/Derived dropdown if role has extra measures OR if both types exist in data
-  const showReportTypeSelector = reportData?.scopeRoleHasExtraMeasures || (hasOriginal && hasDerived);
+  // Show Original/Derived tabs only if role is a "measurer" (hasExtraMeasures)
+  const showReportTypeSelector = isMeasurer;
+
 
   // Show Individual/Combined dropdown if role is distributable OR if it has multiple columns (children)
   const showReportModeSelector = reportData?.scopeRoleIsDistributable || (columns.length > 1 && !reportData?.reportMode === 'combined');
 
   const isDerivedView = selectedReportType === 'derived';
+  const isCombinedMode = reportData?.reportMode === 'combined';
 
   // Calculate if the entire view has pending items
   const hasPendingItems = rows.some((row) =>
     columns.some((col) => row.values?.[col.id]?.approved === false || row.values?.[col.id]?.isApproved === false)
   );
+
+  const handleOpenSubmit = (row) => {
+    setActiveKpi({
+      id: row.assignmentId,
+      kpiId: row.kpiId,
+      name: row.kpi,
+      unit: row.unit,
+      target: row.target,
+      baseline: row.baseline,
+      quarterlyResults: row.quarterlyResults || [],
+    });
+    setSubmissionInitialValues({
+      quarter: '',
+      result: '',
+      remark: '',
+    });
+    setSubmissionModalOpen(true);
+  };
+
+  const handleOpenDetail = (row) => {
+    setActiveKpi({
+      id: row.assignmentId,
+      kpiId: row.kpiId,
+      name: row.kpi,
+      unit: row.unit,
+      target: row.target,
+      baseline: row.baseline,
+      weight: row.weight,
+      evidenceRequired: row.isEvidenceRequired,
+      quarterlyResults: row.allQuarterlyResults || row.quarterlyResults || [],
+      allEvidenceUrls: row.allEvidenceUrls || [],
+    });
+    setDetailModalOpen(true);
+  };
 
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
@@ -184,20 +263,6 @@ const OfficeReport = () => {
               </>
             ) : null}
 
-            {showReportTypeSelector ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">Type</span>
-                <select
-                  value={selectedReportType}
-                  onChange={(event) => setSelectedReportType(event.target.value)}
-                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
-                >
-                  <option value="all">All KPIs</option>
-                  <option value="original">Original</option>
-                  <option value="derived">Derived</option>
-                </select>
-              </div>
-            ) : null}
 
             {showReportModeSelector ? (
               <div className="flex items-center gap-2">
@@ -240,16 +305,22 @@ const OfficeReport = () => {
               </Badge>
             )}
             {loading ? <Badge variant="secondary">Loading...</Badge> : null}
-            <Button
-              type="button"
-              size="sm"
-              className="flex items-center gap-2"
-              disabled={submittingReport}
-              onClick={() => setIsSubmitDialogOpen(true)}
-            >
-              {submittingReport ? 'Submitting...' : 'Submit Report'}
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="flex items-center gap-2" onClick={() => {}}>
+            {reportData?.canSubmit ? (
+              <Button
+                className="flex items-center gap-2 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+                disabled={submittingReport}
+                onClick={() => setIsSubmitDialogOpen(true)}
+              >
+                <Send className="h-4 w-4" />
+                {submittingReport ? 'Submitting...' : 'Submit Report'}
+              </Button>
+            ) : reportData && !reportData.canSubmit && reportData.parentRole ? (
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 border border-emerald-500/20">
+                <Check className="h-4 w-4" />
+                Report Submitted
+              </div>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={() => {}}>
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
@@ -262,7 +333,7 @@ const OfficeReport = () => {
       <Card className="border-border shadow-sm">
         <CardHeader className="shrink-0 space-y-2">
           <CardTitle className="text-lg">
-            {isDerivedView ? 'Derived KPI Report' : 'Report'} for {currentOfficeName}
+            {selectedReportType === 'derived' ? 'Derived KPI Report' : 'Original KPI Report'} for {currentOfficeName}
           </CardTitle>
         </CardHeader>
 
@@ -286,37 +357,50 @@ const OfficeReport = () => {
                     const isSubmitted = column.isSubmitted;
 
                     return (
-                      <TableHead key={column.id} className="min-w-30 text-center font-bold" title={fullName}>
-                        <div className="flex flex-col items-center justify-center gap-0.5">
-                          <div className="flex items-center justify-center gap-1">
-                            {isSubmitted && !reportData?.reportMode === 'combined' && (
-                              <span className="text-emerald-500 font-bold" title="Report Submitted">
-                                ✓{' '}
+                      <TableHead key={column.id} className="min-w-[120px] max-w-[200px] text-center font-bold" title={fullName}>
+                        <div className="flex flex-col items-center justify-center gap-1 py-1">
+                          <div className="flex items-start justify-center gap-1">
+                            {isSubmitted && reportData?.reportMode !== 'combined' && (
+                              <span className="text-emerald-500 font-bold shrink-0 mt-0.5" title="Report Submitted">
+                                ✓
                               </span>
                             )}
-                            <span>{displayName}</span>
+                            <span 
+                              className={cn(
+                                "text-xs leading-tight transition-all duration-200",
+                                !isExpanded && "line-clamp-2"
+                              )}
+                            >
+                              {fullName}
+                            </span>
                           </div>
-                          {isLong ? (
+                          {fullName.length > 20 && (
                             <button
                               type="button"
                               onClick={() => toggleColumnExpand(column.id)}
-                              className="text-[10px] font-normal text-primary hover:underline"
+                              className="inline-flex items-center justify-center w-6 h-4 rounded hover:bg-muted text-primary transition-colors mt-0.5"
+                              title={isExpanded ? "Show less" : "Show more"}
                             >
-                              [{isExpanded ? 'Less' : 'More'}]
+                              {isExpanded ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <span className="text-sm leading-none font-bold">...</span>
+                              )}
                             </button>
-                          ) : null}
+                          )}
                         </div>
                       </TableHead>
                     );
                   })}
                   <TableHead className="min-w-37.5 font-bold">Remark</TableHead>
+                  <TableHead className="w-24 text-center font-bold">Action</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={10 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
                       Loading report data...
                     </TableCell>
                   </TableRow>
@@ -334,7 +418,14 @@ const OfficeReport = () => {
                           </TableCell>
                         )}
                         <TableCell style={compactPad} className={`text-sm ${isDerivedView ? '' : getRowLabelClassName(rowType)}`}>
-                          {row.kpi}
+                          <div className="flex items-center gap-2">
+                            <span>{row.kpi}</span>
+                            {isCombinedMode && row.isEvidenceRequired && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[9px] font-bold uppercase tracking-wider border border-amber-200">
+                                Required
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell style={compactPad} className="text-center text-sm">
                           {row.unit}
@@ -356,8 +447,6 @@ const OfficeReport = () => {
                             cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A'
                             || (typeof cellValue === 'object' && cellValue?.value === '—');
                           const showPendingValue = isPendingDisplayCell(cellValue);
-                          // When some quarters approved + some pending: value = approved total, pendingTotal = full total
-                          const hasMixedApproval = showPendingValue && cellValue?.value && cellValue.value !== '-' && cellValue.value !== '—';
                           const displayValue = formatCellValue(cellValue);
 
                           return (
@@ -367,41 +456,59 @@ const OfficeReport = () => {
                               className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
                             >
                               <div className="flex flex-col items-center gap-1">
-                                {hasMixedApproval ? (
-                                  // Has some approved quarters AND some pending (parent report view)
-                                  <span>
-                                    {displayValue}
-                                    <span className="text-amber-500 text-xs ml-1">
-                                      ({cellValue?.pendingTotal ?? displayValue} Pending)
-                                    </span>
-                                  </span>
-                                ) : showPendingValue ? (
-                                  // All pending OR own-report pending (show value with tag)
-                                  <span>
-                                    {displayValue !== '-' ? displayValue : ''}
-                                    <span className="text-amber-500 text-xs ml-1">(Pending)</span>
-                                  </span>
-                                ) : (
-                                  <span>{displayValue}</span>
-                                )}
-                                {showPendingValue && (
-                                  <Badge variant="outline" className="text-[10px] py-0 px-1 border-amber-200 bg-amber-50 text-amber-600 font-normal">
-                                    Awaiting Approval
-                                  </Badge>
-                                )}
+                                 {showPendingValue ? (
+                                   <div className="flex flex-col items-center leading-none gap-0.5">
+                                     {displayValue === 'Pending' ? (
+                                       <span className="text-amber-600 font-bold italic text-xs py-1">Pending</span>
+                                     ) : (
+                                       <>
+                                         <span className="font-semibold text-sm">{displayValue}</span>
+                                         <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50">
+                                           Pending
+                                         </span>
+                                       </>
+                                     )}
+                                   </div>
+                                 ) : (
+                                   <span>{displayValue}</span>
+                                 )}
                               </div>
                             </TableCell>
                           );
                         })}
-                        <TableCell style={compactPad} className="text-sm text-muted-foreground">
+                        <TableCell className="text-xs leading-relaxed italic text-muted-foreground whitespace-pre-wrap">
                           {row.remark}
+                        </TableCell>
+                        <TableCell style={compactPad} className="text-center border-l border-border/50">
+                          {(row.rowType === 'kpi' || !row.rowType) && (
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDetail(row)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-primary hover:bg-muted transition-colors shadow-sm"
+                                title="View details"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              {row.isHomeOfficeKpi && row.isEvidenceRequired && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSubmit(row)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors shadow-sm"
+                                  title="Add/Update Action"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7 + columns.length} className="py-20 text-center">
+                    <TableCell colSpan={20} className="py-20 text-center">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <p className="text-base font-medium text-muted-foreground">
                           {selectedReportType === 'derived'
@@ -425,6 +532,46 @@ const OfficeReport = () => {
           </div>
         </CardContent>
       </Card>
+
+      <PerformanceSubmitModal
+        open={submissionModalOpen}
+        onOpenChange={setSubmissionModalOpen}
+        kpi={activeKpi}
+        initialValues={submissionInitialValues}
+        saving={submitPerformanceMutation.isPending}
+        onSubmit={async ({ quarter, result, remark, file }) => {
+          if (!activeKpi) return;
+
+          const payload = new FormData();
+          payload.append('KPIId', activeKpi.kpiId);
+          payload.append('UserKPIId', activeKpi.id);
+          payload.append('KPIResult', result);
+          payload.append('Quarter', quarter);
+          payload.append('Description', remark || activeKpi.name || '');
+
+          if (file) {
+            payload.append('EvidenceFile', file);
+          }
+
+          submitPerformanceMutation.mutate(payload, {
+            onSuccess: () => {
+              notify('Performance submitted successfully.', 'success');
+              setSubmissionModalOpen(false);
+              setActiveKpi(null);
+            },
+            onError: (err) => {
+              notify(err?.response?.data?.message || 'Failed to submit performance.', 'error');
+            }
+          });
+        }}
+      />
+
+      <PerformanceDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        kpi={activeKpi}
+      />
+
       <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
         <DialogContent className="sm:max-w-106.25">
           <DialogHeader>
@@ -448,6 +595,24 @@ const OfficeReport = () => {
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={submittingReport}
               onClick={async () => {
+                // New Requirement: Block submission if any KPI that requires evidence has no evidence uploaded
+                const missingEvidence = rows.filter(row => {
+                  if (!row.isEvidenceRequired) return false;
+                  
+                  // If it's a KPI that requires evidence, check if any evidence exists globally for this row
+                  const hasAggregatedEvidence = row.allEvidenceUrls && row.allEvidenceUrls.length > 0;
+                  const hasLocalEvidence = row.quarterlyResults && row.quarterlyResults.some(r => r.evidenceURL || r.EvidenceURL);
+                  
+                  return !hasAggregatedEvidence && !hasLocalEvidence;
+                });
+
+                if (missingEvidence.length > 0) {
+                  const names = missingEvidence.map(r => r.kpi).join(', ');
+                  notify(`Submission blocked: Evidence is required for ${missingEvidence.length} KPIs: ${names}. Please use the '+' icon to upload evidence first.`, 'error');
+                  setIsSubmitDialogOpen(false);
+                  return;
+                }
+
                 setIsSubmitDialogOpen(false);
                 submitReportMutation.mutate(
                   {

@@ -3,6 +3,7 @@ import { CalendarDays, FileUp, Target } from 'lucide-react';
 import Button from '../UI/Button';
 import { Input } from '../UI/Input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../UI/dialog';
+import { useNotification } from '../../Context/NotificationContext';
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 
@@ -44,6 +45,7 @@ const createInitialForm = (quarter = 'Q1', initialValues = {}) => ({
 });
 
 const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubmit, saving }) => {
+  const { notify } = useNotification();
   const [form, setForm] = useState(() => createInitialForm());
 
   useEffect(() => {
@@ -98,10 +100,12 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
 
   const handleSubmit = async () => {
     if (form.result === '' || form.result === null || form.result === undefined) {
+      notify('Please enter a performance result value.', 'warning');
       return;
     }
 
     if (evidenceRequired && !form.file) {
+      notify('Evidence file is required for this KPI. Please upload a document.', 'error');
       return;
     }
 
@@ -115,16 +119,16 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[72vh] w-full max-w-3xl flex-col overflow-hidden border-0 bg-slate-50 p-0 text-slate-900 shadow-2xl sm:rounded-3xl">
-        <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5">
+      <DialogContent className="flex max-h-[72vh] w-full max-w-3xl flex-col overflow-hidden border border-border/60 bg-background p-0 text-foreground shadow-2xl sm:rounded-3xl">
+        <div className="shrink-0 border-b border-border bg-card px-4 py-3.5 sm:px-5">
           <DialogHeader className="text-left">
-            <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold text-slate-900">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-600">
+            <DialogTitle className="flex items-center gap-2.5 text-xl font-semibold text-foreground">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
                 <Target className="h-4.5 w-4.5" />
               </span>
               Performance Form
             </DialogTitle>
-            <DialogDescription className="mt-1 max-w-2xl text-sm text-slate-500">
+            <DialogDescription className="mt-1 max-w-2xl text-sm text-muted-foreground">
               Review the KPI details, choose a quarter, attach evidence if needed, and submit the performance result.
             </DialogDescription>
           </DialogHeader>
@@ -134,23 +138,23 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
             <div className="grid gap-2.5 sm:grid-cols-2">
               {detailItems.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{item.label}</div>
-                  <div className="mt-1.5 wrap-break-word text-sm font-semibold leading-5 text-slate-900">{item.value}</div>
+                <div key={item.label} className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{item.label}</div>
+                  <div className="mt-1.5 wrap-break-word text-sm font-semibold leading-5 text-foreground">{item.value}</div>
                 </div>
               ))}
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-slate-700">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-foreground/80">
                   <CalendarDays className="h-4 w-4" />
                   Quarter
                 </label>
                 <select
                   value={form.quarter}
                   onChange={(event) => setForm((previous) => ({ ...previous, quarter: event.target.value }))}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:bg-white"
+                  className="h-11 w-full rounded-xl border border-border bg-muted/50 px-3.5 text-sm text-foreground outline-none transition focus:border-primary focus:bg-card"
                 >
                   {QUARTERS.map((quarter, index) => {
                     const quarterKey = quarter.toUpperCase();
@@ -168,7 +172,7 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
                     }
 
                     return (
-                      <option key={quarter} value={quarter} disabled={!isAllowed}>
+                      <option key={quarter} value={quarter} disabled={!isAllowed} className="bg-card">
                         {quarter} {!isAllowed ? '(Previous quarter missing)' : ''}
                       </option>
                     );
@@ -176,59 +180,59 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
                 </select>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="mb-2.5 block text-sm font-semibold text-slate-700">Performance Result</label>
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                <label className="mb-2.5 block text-sm font-semibold text-foreground/80">Performance Result</label>
                 <Input
                   type="number"
                   inputMode="decimal"
                   value={form.result}
                   onChange={(event) => setForm((previous) => ({ ...previous, result: event.target.value }))}
-                  className="h-11 rounded-xl border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:border-slate-900 focus-visible:ring-0"
+                  className="h-11 rounded-xl border-border bg-muted/50 px-3.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-0"
                   placeholder="Enter performance value"
                 />
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <label className="mb-2.5 block text-sm font-semibold text-slate-700">Remarks</label>
+            <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <label className="mb-2.5 block text-sm font-semibold text-foreground/80">Remarks</label>
               <textarea
                 value={form.remark}
                 onChange={(event) => setForm((previous) => ({ ...previous, remark: event.target.value }))}
                 rows={4}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 transition focus:border-slate-900 focus:bg-white"
+                className="w-full rounded-xl border border-border bg-muted/50 px-3.5 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 transition focus:border-primary focus:bg-card"
                 placeholder="Add a short note about this performance entry"
               />
             </div>
 
             {evidenceRequired ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 shadow-sm">
+                <label className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-amber-600">
                   <FileUp className="h-4 w-4" />
                   Evidence File
                 </label>
                 <input
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                   onChange={(event) => setForm((previous) => ({ ...previous, file: event.target.files?.[0] || null }))}
-                  className="block w-full text-xs text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3.5 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
+                  className="block w-full text-xs text-foreground/70 file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-3.5 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
                 />
-                {form.file ? <p className="mt-2 text-xs text-slate-500">Selected: {form.file.name}</p> : null}
-                <p className="mt-1.5 text-xs text-amber-800">This KPI requires an evidence file before submission.</p>
+                {form.file ? <p className="mt-2 text-xs text-muted-foreground">Selected: {form.file.name}</p> : null}
+                <p className="mt-1.5 text-xs text-amber-600/80 font-medium">This KPI requires an evidence file before submission.</p>
               </div>
             ) : null}
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 sm:px-4">
+        <div className="shrink-0 border-t border-border bg-card px-3 py-3 sm:px-4">
           <DialogFooter className="mx-auto flex w-full max-w-2xl flex-row justify-end gap-2.5 sm:rounded-none">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="min-w-20 px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              className="min-w-20 px-3 py-2"
             >
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={saving} className="min-w-32 px-4 py-2 bg-slate-900 text-white hover:bg-slate-800">
+            <Button onClick={handleSubmit} disabled={saving} className="min-w-32 px-4 py-2">
               {saving ? 'Submitting...' : 'Save Performance'}
             </Button>
           </DialogFooter>

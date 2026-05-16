@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/axios';
 import { queryKeys } from '../../Config/queryKeys';
+import { emitReportDataChanged } from '../../lib/utils';
 
 /**
  * Hook for fetching all KPIs
@@ -12,7 +13,7 @@ export const useKpisQuery = (params = {}) => {
       const response = await api.get('/kpis', { params });
       return response.data?.data || [];
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 };
 
@@ -26,8 +27,22 @@ export const useKpiTypesQuery = () => {
       const response = await api.get('/kpi-types');
       return response.data?.data || [];
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
+    staleTime: 1000 * 60 * 15, // 15 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
+  });
+};
+
+/**
+ * Hook for fetching all units
+ */
+export const useUnitsQuery = () => {
+  return useQuery({
+    queryKey: queryKeys.kpis.units,
+    queryFn: async () => {
+      const response = await api.get('/units');
+      return response.data?.data || [];
+    },
+    staleTime: 1000 * 60 * 30, // 30 minutes
   });
 };
 
@@ -57,6 +72,7 @@ export const useCreateUserKpiMutation = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+      emitReportDataChanged();
     },
   });
 };
@@ -72,8 +88,32 @@ export const useUpdateUserKpiMutation = () => {
       const response = await api.put(`/user-kpis/${id}`, data);
       return response.data?.data;
     },
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.kpis.all });
+
+      // Snapshot previous assignments
+      const previousAssignments = queryClient.getQueriesData({ queryKey: ['kpis', 'assignments'] });
+
+      // Optimistically update to the new value
+      queryClient.setQueriesData({ queryKey: ['kpis', 'assignments'] }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((item) => (String(item.Id) === String(id) ? { ...item, ...data } : item));
+      });
+
+      return { previousAssignments };
+    },
+    onError: (err, variables, context) => {
+      // Roll back
+      if (context?.previousAssignments) {
+        context.previousAssignments.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+      emitReportDataChanged();
     },
   });
 };
@@ -88,8 +128,69 @@ export const useDeleteUserKpiMutation = () => {
     mutationFn: async (id) => {
       await api.delete(`/user-kpis/${id}`);
     },
-    onSuccess: () => {
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.kpis.all });
+
+      // Snapshot previous assignments
+      const previousAssignments = queryClient.getQueriesData({ queryKey: ['kpis', 'assignments'] });
+
+      // Optimistically remove the item
+      queryClient.setQueriesData({ queryKey: ['kpis', 'assignments'] }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((item) => String(item.Id) !== String(id));
+      });
+
+      return { previousAssignments };
+    },
+    onError: (err, id, context) => {
+      // Roll back
+      if (context?.previousAssignments) {
+        context.previousAssignments.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+      emitReportDataChanged();
+    },
+  });
+};
+
+/**
+ * Hook for bulk deleting user KPI assignments
+ */
+export const useBulkDeleteUserKpisMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids) => {
+      await api.post('/user-kpis/bulk-delete', { ids });
+    },
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.kpis.all });
+      const previousAssignments = queryClient.getQueriesData({ queryKey: ['kpis', 'assignments'] });
+
+      const idsSet = new Set(ids.map(String));
+
+      queryClient.setQueriesData({ queryKey: ['kpis', 'assignments'] }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((item) => !idsSet.has(String(item.Id)));
+      });
+
+      return { previousAssignments };
+    },
+    onError: (err, ids, context) => {
+      if (context?.previousAssignments) {
+        context.previousAssignments.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+      emitReportDataChanged();
     },
   });
 };
@@ -114,12 +215,13 @@ export const useApproveKpiMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id) => {
-      await api.patch(`/user-kpi-results/${id}/approve`);
+    mutationFn: async ({ id, remark }) => {
+      await api.patch(`/user-kpi-results/${id}/approve`, { remark });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
       queryClient.invalidateQueries({ queryKey: ['kpis', 'report'] });
+      emitReportDataChanged();
     },
   });
 };
@@ -131,12 +233,13 @@ export const useAdjustKpiMutation = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, adjustedValue }) => {
-      await api.patch(`/user-kpi-results/${id}/adjust`, { adjustedValue });
+    mutationFn: async ({ id, adjustedValue, remark }) => {
+      await api.patch(`/user-kpi-results/${id}/adjust`, { adjustedValue, remark });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
       queryClient.invalidateQueries({ queryKey: ['kpis', 'report'] });
+      emitReportDataChanged();
     },
   });
 };
@@ -154,6 +257,7 @@ export const useSubmitPerformanceMutation = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
       queryClient.invalidateQueries({ queryKey: ['kpis', 'report'] });
+      emitReportDataChanged();
     },
   });
 };
@@ -168,7 +272,7 @@ export const useReportQuery = (params = {}) => {
       const response = await api.get('/user-kpi-results/report', { params });
       return response.data?.data;
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 };
 
@@ -184,6 +288,7 @@ export const useSubmitReportMutation = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['kpis', 'report'] });
+      emitReportDataChanged();
     },
   });
 };

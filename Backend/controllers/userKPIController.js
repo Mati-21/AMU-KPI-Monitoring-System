@@ -104,8 +104,7 @@ const createUserKPI = async (req, res) => {
         UserId,
         CycleYear: cycleYear,
         IsArchived: false,
-        Remark: Remark || null,
-        Name: Name || null, // Check for exact same name as well
+        Name: Name || null, // Name identifies the specific derivation (for Derived KPIs)
       },
     });
 
@@ -195,7 +194,6 @@ const createUserKPI = async (req, res) => {
       Baseline: computedBaseline,
       AssignedTarget: parseNumericValue(AssignedTarget),
       IsTargetIndividual: Boolean(IsTargetIndividual),
-      IncludeCurrentOffice: Boolean(IncludeCurrentOffice),
       AssignmentBatchId: assignmentBatchId,
       Remark,
       Name,
@@ -287,7 +285,19 @@ const getUserKPIs = async (req, res) => {
     const userKpis = await UserKPI.findAll({
       where,
       include: [
-        { model: User, attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'] },
+        {
+          model: User,
+          attributes: ['Id', 'FirstName', 'FatherName', 'GrandFatherName', 'UserName', 'Email'],
+          include: [
+            {
+              model: require('../models').UserRole,
+              attributes: ['RoleId'],
+              where: { IsArchived: false },
+              required: false,
+              include: [{ model: require('../models').Role, attributes: ['Id', 'RoleName', 'ParentRoleId'] }],
+            },
+          ],
+        },
         { model: KPI, attributes: ['Id', 'Description', 'DefaultBaseline'] },
         { model: require('../models').KPIYearPlan, attributes: ['Id', 'Baseline', 'Target'], required: false },
       ],
@@ -306,21 +316,91 @@ const getUserKPIs = async (req, res) => {
               UserId: { [Op.in]: assignmentUserIds },
               KPIId: { [Op.in]: assignmentKpiIds },
             },
-            attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'Quarter', 'CreatedAt'],
+            attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'Description', 'ApproverRemark', 'PerformanceTitle', 'EvidenceURL'],
             order: [['CreatedAt', 'DESC']],
           })
         : [];
 
+    // Dashboard Submission-Gating:
+    // If the requester is a parent, they should only see child data if the child has submitted.
+    // Self-data is always visible.
+    const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
+    const currentUserId = String(req.user?.Id || '');
+    
+    // Fetch all roles to build the hierarchy in-memory
+    const allRoles = await require('../models').Role.findAll({
+      where: { IsArchived: false },
+      attributes: ['Id', 'ParentRoleId'],
+    });
+    
+    const roleMap = new Map(allRoles.map(r => [String(r.Id), r]));
+    
+    // Find all direct children
+    const directChildRoleIds = allRoles
+      .filter((r) => String(r.ParentRoleId || '') === currentRoleId)
+      .map((r) => String(r.Id));
+
+
+
+    const submissions = directChildRoleIds.length
+      ? await require('../models').OfficeReportSubmission.findAll({
+          where: {
+            CycleYear: year || getCurrentCycleYear(),
+            SourceRoleId: { [Op.in]: directChildRoleIds },
+            ParentRoleId: currentRoleId,
+            IsArchived: false,
+          },
+          attributes: ['SourceRoleId'],
+        })
+      : [];
+    const submittedChildRoleIds = new Set(submissions.map((s) => String(s.SourceRoleId)));
+
+    const userRoles = await require('../models').UserRole.findAll({
+      where: { UserId: { [Op.in]: assignmentUserIds }, IsArchived: false },
+      attributes: ['UserId', 'RoleId'],
+    });
+    const roleIdByUserId = new Map(userRoles.map((ur) => [String(ur.UserId), String(ur.RoleId)]));
+
+    // Map assignment ID to its creator
+    const assignmentCreatorMap = new Map(userKpis.map(a => [String(a.Id), String(a.CreatedBy || '')]));
+
+    const filteredResults = quarterlyResults.filter((r) => {
+      const resultRoleId = roleIdByUserId.get(String(r.UserId));
+      if (!resultRoleId || resultRoleId === currentRoleId) return true;
+      
+      const isDirectChild = directChildRoleIds.includes(resultRoleId);
+      
+      if (isDirectChild) {
+        // Direct child data only visible after submission
+        return submittedChildRoleIds.has(resultRoleId);
+      } else {
+        // For non-direct children (descendants/peers), only show if the current user assigned it
+        const assignmentCreator = assignmentCreatorMap.get(String(r.UserKPIId));
+        return assignmentCreator === currentUserId;
+      }
+    });
+
     const quarterlyResultsByAssignmentId = new Map();
     const quarterlyResultsByLegacyKey = new Map();
 
-    quarterlyResults.forEach((result) => {
+    filteredResults.forEach((result) => {
       const normalizedQuarter = String(result.Quarter || '').toUpperCase();
+      const effectiveResult = result.Status === 'adjusted' && result.AdjustedResult !== null && result.AdjustedResult !== undefined
+        ? result.AdjustedResult
+        : result.KPIResult;
+
       const item = {
         id: result.Id,
         quarter: result.Quarter,
-        result: result.KPIResult,
+        result: effectiveResult,
+        originalResult: result.KPIResult,
+        adjustedResult: result.AdjustedResult,
+        status: result.Status,
         createdAt: result.CreatedAt,
+        remark: result.Description,
+        approverRemark: result.ApproverRemark,
+        performanceTitle: result.PerformanceTitle,
+        evidenceURL: result.EvidenceURL,
       };
 
       if (result.UserKPIId) {
@@ -330,11 +410,25 @@ const getUserKPIs = async (req, res) => {
         }
         const bucket = quarterlyResultsByAssignmentId.get(idKey);
         bucket.quarterlyResults.push(item);
-        const resultVal = parseNumericValue(result.KPIResult) || 0;
-        if (normalizedQuarter === 'Q1') bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
-        if (normalizedQuarter === 'Q2') bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
-        if (normalizedQuarter === 'Q3') bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
-        if (normalizedQuarter === 'Q4') bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+        const resultVal = parseNumericValue(effectiveResult) || 0;
+        const isPending = result.Status === 'pending';
+
+        if (normalizedQuarter === 'Q1') {
+          bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
+          if (isPending) bucket.q1Pending = true;
+        }
+        if (normalizedQuarter === 'Q2') {
+          bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
+          if (isPending) bucket.q2Pending = true;
+        }
+        if (normalizedQuarter === 'Q3') {
+          bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
+          if (isPending) bucket.q3Pending = true;
+        }
+        if (normalizedQuarter === 'Q4') {
+          bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+          if (isPending) bucket.q4Pending = true;
+        }
       } else {
         const legacyKey = `${String(result.UserId || '')}::${String(result.KPIId || '')}`;
         if (!quarterlyResultsByLegacyKey.has(legacyKey)) {
@@ -343,11 +437,25 @@ const getUserKPIs = async (req, res) => {
         const bucket = quarterlyResultsByLegacyKey.get(legacyKey);
         bucket.quarterlyResults.push(item);
 
-        const resultVal = parseNumericValue(result.KPIResult) || 0;
-        if (normalizedQuarter === 'Q1') bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
-        if (normalizedQuarter === 'Q2') bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
-        if (normalizedQuarter === 'Q3') bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
-        if (normalizedQuarter === 'Q4') bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+        const resultVal = parseNumericValue(effectiveResult) || 0;
+        const isPending = result.Status === 'pending';
+
+        if (normalizedQuarter === 'Q1') {
+          bucket.q1 = (bucket.q1 === '-' ? 0 : Number(bucket.q1)) + resultVal;
+          if (isPending) bucket.q1Pending = true;
+        }
+        if (normalizedQuarter === 'Q2') {
+          bucket.q2 = (bucket.q2 === '-' ? 0 : Number(bucket.q2)) + resultVal;
+          if (isPending) bucket.q2Pending = true;
+        }
+        if (normalizedQuarter === 'Q3') {
+          bucket.q3 = (bucket.q3 === '-' ? 0 : Number(bucket.q3)) + resultVal;
+          if (isPending) bucket.q3Pending = true;
+        }
+        if (normalizedQuarter === 'Q4') {
+          bucket.q4 = (bucket.q4 === '-' ? 0 : Number(bucket.q4)) + resultVal;
+          if (isPending) bucket.q4Pending = true;
+        }
       }
     });
 
@@ -364,6 +472,10 @@ const getUserKPIs = async (req, res) => {
         q2: bucket?.q2 || '-',
         q3: bucket?.q3 || '-',
         q4: bucket?.q4 || '-',
+        q1Pending: bucket?.q1Pending || false,
+        q2Pending: bucket?.q2Pending || false,
+        q3Pending: bucket?.q3Pending || false,
+        q4Pending: bucket?.q4Pending || false,
       };
     });
 
@@ -465,51 +577,10 @@ const updateUserKPI = async (req, res) => {
       Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : userKPI.Baseline,
       AssignedTarget: AssignedTarget !== undefined ? parseNumericValue(AssignedTarget) : userKPI.AssignedTarget,
       IsTargetIndividual: IsTargetIndividual !== undefined ? Boolean(IsTargetIndividual) : userKPI.IsTargetIndividual,
-      IncludeCurrentOffice: includeCurrentOfficeBoolean,
       AssignmentBatchId: AssignmentBatchId !== undefined ? AssignmentBatchId || null : userKPI.AssignmentBatchId,
       CycleYear: CycleYear || userKPI.CycleYear,
       Name: Name !== undefined ? Name : userKPI.Name,
-      CreatedBy: nextCreatedBy,
     });
-
-    if (IncludeCurrentOffice !== undefined && previousIncludeCurrentOffice !== Boolean(includeCurrentOfficeBoolean)) {
-      try {
-        const cycleYear = userKPI.CycleYear || getCurrentCycleYear();
-        if (Boolean(includeCurrentOfficeBoolean)) {
-          await createNotification({
-            recipientUserId: userKPI.UserId,
-            actorUserId: req.user?.Id || null,
-            type: 'kpi_assigned',
-            title: 'KPI allocated',
-            message: `A KPI has been allocated to your home office for ${cycleYear}.`,
-            priority: 'low',
-            data: {
-              UserKPIId: userKPI.Id,
-              KPIId: userKPI.KPIId,
-              CycleYear: cycleYear,
-              IncludeCurrentOffice: true,
-            },
-          });
-        } else {
-          await createNotification({
-            recipientUserId: userKPI.UserId,
-            actorUserId: req.user?.Id || null,
-            type: 'kpi_unallocated',
-            title: 'KPI unallocated',
-            message: `A KPI was unallocated from your home office for ${cycleYear}.`,
-            priority: 'low',
-            data: {
-              UserKPIId: userKPI.Id,
-              KPIId: userKPI.KPIId,
-              CycleYear: cycleYear,
-              IncludeCurrentOffice: false,
-            },
-          });
-        }
-      } catch (notifErr) {
-        console.warn('Failed to create home office allocation notification:', notifErr.message);
-      }
-    }
 
     res.json({ success: true, data: userKPI });
   } catch (error) {
@@ -600,10 +671,94 @@ const deleteUserKPI = async (req, res) => {
   }
 };
 
+const bulkDeleteUserKPIs = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) {
+      return res.status(400).json({ message: 'Invalid or empty IDs list provided.' });
+    }
+
+    const assignments = await UserKPI.findAll({
+      where: {
+        Id: { [Op.in]: ids },
+      },
+    });
+
+    if (!assignments.length) {
+      return res.status(404).json({ message: 'No assignments found for the provided IDs.' });
+    }
+
+    const canDeleteAny =
+      hasModulePermission(req, 'KPI Allocation', 'delete') ||
+      hasModulePermission(req, 'Drived KPI', 'delete') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'delete');
+    const canCreateKpiAllocation =
+      hasModulePermission(req, 'KPI Allocation', 'create') ||
+      hasModulePermission(req, 'Drived KPI', 'create') ||
+      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+    const canUseExtraMeasures = hasExtraMeasuresAccess(req);
+    const currentUserId = String(req.user?.Id || '');
+
+    // Filter assignments that the user is authorized to delete
+    const authorizedAssignments = assignments.filter((a) => {
+      const isCreator = String(a.CreatedBy || '') === currentUserId;
+      return canDeleteAny || canUseExtraMeasures || (canCreateKpiAllocation && isCreator);
+    });
+
+    if (!authorizedAssignments.length) {
+      return res.status(403).json({ message: 'Not authorized to delete any of the specified assignments.' });
+    }
+
+    const authorizedIds = authorizedAssignments.map((a) => a.Id);
+    const affectedUserIds = [...new Set(authorizedAssignments.map((a) => a.UserId))];
+
+    // 1. Delete results
+    await UserKPIResult.destroy({
+      where: {
+        UserKPIId: { [Op.in]: authorizedIds },
+      },
+    });
+
+    // 2. Clear report submissions for affected users' roles
+    const userRoles = await UserRole.findAll({
+      where: {
+        UserId: { [Op.in]: affectedUserIds },
+        IsArchived: false,
+      },
+    });
+    const affectedRoleIds = [...new Set(userRoles.map((ur) => ur.RoleId))];
+
+    if (affectedRoleIds.length) {
+      await OfficeReportSubmission.destroy({
+        where: {
+          SourceRoleId: { [Op.in]: affectedRoleIds },
+        },
+      });
+    }
+
+    // 3. Delete assignments
+    await UserKPI.destroy({
+      where: {
+        Id: { [Op.in]: authorizedIds },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully unallocated ${authorizedIds.length} assignment(s).`,
+      count: authorizedIds.length,
+    });
+  } catch (error) {
+    console.error('Bulk delete user KPIs error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   createUserKPI,
   getUserKPIs,
   getUserKPIById,
   updateUserKPI,
   deleteUserKPI,
+  bulkDeleteUserKPIs,
 };

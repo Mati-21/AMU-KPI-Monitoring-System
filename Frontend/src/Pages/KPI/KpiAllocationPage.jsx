@@ -9,6 +9,7 @@ import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { Search, Trash2, PencilLine, Save, X, Eye } from 'lucide-react';
 import { useNotification } from '../../Context/NotificationContext';
+import { cn, emitReportDataChanged } from '../../lib/utils';
 import { api } from '../../api/axios';
 import MultiSelect from '../../Components/UI/MultiSelect';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/UI/Table';
@@ -24,6 +25,7 @@ import {
   useCreateUserKpiMutation,
   useUpdateUserKpiMutation,
   useDeleteUserKpiMutation,
+  useBulkDeleteUserKpisMutation,
 } from '../../Hooks/Queries/useKpis';
 
 const CompactCellText = ({ value, maxWidth = 'max-w-[220px]' }) => (
@@ -80,26 +82,15 @@ const isActiveAssignment = (assignment) => {
 };
 
 const getDefaultAssignmentOption = () => ({
-  includeCurrentRole: false,
   targetIndividual: false,
   customTargets: {},
 });
 
-const emitReportDataChanged = () => {
-  const timestamp = String(Date.now());
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('amu:report-data-changed', { detail: { timestamp } }));
-  }
-
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('amu:report-data-changed', timestamp);
-  }
-};
 
 const EMPTY_ARRAY = [];
 const MINE_PARAMS = { scope: 'mine' };
 const MINE_PARENT_PARAMS = { scope: 'mine', fromParent: true };
+const SENT_PARAMS = { scope: 'sent' };
 
 const KpiAllocationPage = () => {
   const { notify } = useNotification();
@@ -112,7 +103,13 @@ const KpiAllocationPage = () => {
   const [detailModal, setDetailModal] = useState({ open: false, title: '', data: null });
   const [savingAssignmentId, setSavingAssignmentId] = useState(null);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState(null);
-  const [assigning, setAssigning] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({
+    open: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+    isDestructive: true,
+  });
   const [selectedOffice, setSelectedOffice] = useState([]);
   const [selectedTheme, setSelectedTheme] = useState([]);
   const [selectedSubTheme, setSelectedSubTheme] = useState([]);
@@ -126,7 +123,7 @@ const KpiAllocationPage = () => {
   const { data: userRoles = EMPTY_ARRAY, isLoading: loadingUserRoles, error: userRolesError } = useUserRolesQuery();
   const { data: myAssignments = EMPTY_ARRAY, isLoading: loadingMy, error: myError } = useUserKpisQuery(MINE_PARAMS);
   const { data: allocatedAssignments = EMPTY_ARRAY, isLoading: loadingAllocated, error: allocatedError } = useUserKpisQuery(MINE_PARENT_PARAMS);
-  const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery();
+  const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery(SENT_PARAMS);
   const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
   const { data: kpiTypes = EMPTY_ARRAY, isLoading: loadingTypes, error: typeError } = useKpiTypesQuery();
 
@@ -134,6 +131,7 @@ const KpiAllocationPage = () => {
   const createUserKpiMutation = useCreateUserKpiMutation();
   const updateUserKpiMutation = useUpdateUserKpiMutation();
   const deleteUserKpiMutation = useDeleteUserKpiMutation();
+  const bulkDeleteUserKpiMutation = useBulkDeleteUserKpisMutation();
 
   const loading = loadingRoles || loadingUserRoles || loadingMy || loadingAllocated || loadingSent || loadingKpis || loadingTypes;
   const error =
@@ -446,10 +444,6 @@ const KpiAllocationPage = () => {
       const options = kpiAssignmentOptions[record.id] || getDefaultAssignmentOption();
       const targetRoleIds = new Set(selectedOffice.map((id) => String(id)));
 
-      if (options.includeCurrentRole && currentRoleOption.id) {
-        targetRoleIds.add(String(currentRoleOption.id));
-      }
-
       const targetRoleIdsArray = [...targetRoleIds];
       const receiverCount = targetRoleIds.size;
       const parentTarget = parseNumericValue(record.targetValue ?? record.target);
@@ -593,11 +587,41 @@ const KpiAllocationPage = () => {
   }, [sentAssignments, authUser?.id, authUser?.Id, activeChildRoleByUserId, kpiRowById]);
 
   const homeOfficeKpiRows = useMemo(() => {
-    const fromParentIds = new Set(allocatedAssignments.map((assignment) => assignment.Id));
+    const currentUserId = String(authUser?.Id || authUser?.id || '');
 
-    const activePerformanceAssignments = myAssignments.filter((assignment) => {
-      // Only show KPIs that the office assigned to itself
-      return Boolean(assignment.IncludeCurrentOffice);
+    // Deduplicate and combine my own assignments and those from parent
+    const assignmentById = new Map();
+    [...myAssignments, ...allocatedAssignments].forEach((assignment) => {
+      if (!assignment?.Id) return;
+      if (!assignmentById.has(assignment.Id)) {
+        assignmentById.set(assignment.Id, assignment);
+      }
+    });
+
+    const combinedAssignments = [...assignmentById.values()];
+
+    // Identify KPIs that have been delegated (sent to others)
+    const delegatedKpiKeys = new Set(
+      sentAssignments
+        .filter((a) => String(a.UserId) !== currentUserId)
+        .map((a) => `${a.KPIId}::${(a.Name || '').trim()}::${(a.Remark || '').trim()}`)
+    );
+
+    const activePerformanceAssignments = combinedAssignments.filter((assignment) => {
+      const currentUserId = String(authUser?.Id || authUser?.id || '');
+      const creatorId = String(assignment?.CreatedBy || '');
+
+      // 1. Visibility: Show if someone else created it OR explicitly activated for home office
+      const isVisible = (creatorId !== currentUserId) || !!assignment?.IncludeCurrentOffice;
+      if (!isVisible) return false;
+
+      // 2. Delegation: Hide if the user has assigned this same KPI to a child role
+      const assignmentKey = `${assignment.KPIId}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
+      if (delegatedKpiKeys.has(assignmentKey)) {
+        return false;
+      }
+
+      return true;
     });
 
     return activePerformanceAssignments
@@ -608,34 +632,43 @@ const KpiAllocationPage = () => {
         return {
           assignmentId: assignment.Id,
           no: kpiMeta.no,
-          kpi: kpiMeta.kpi,
+          kpi: assignment.Name || kpiMeta.kpi,
           theme: kpiMeta.theme,
           subTheme: kpiMeta.subTheme,
           baseline: formatValue(assignment.Baseline ?? kpiMeta.baseline),
           target: formatValue(assignment.AssignedTarget ?? kpiMeta.target),
+          rawBaseline: assignment.Baseline ?? kpiMeta.baselineValue,
+          rawTarget: assignment.AssignedTarget ?? kpiMeta.targetValue,
           remark: assignment.Remark || kpiMeta.remark,
         };
       })
       .filter(Boolean)
       .sort((left, right) => compareCodes(left.no, right.no));
-  }, [myAssignments, allocatedAssignments, canCascadeKpis, kpiRowById]);
+  }, [myAssignments, allocatedAssignments, sentAssignments, authUser, kpiRowById]);
 
-  const handleUnallocateHomeOfficeKpi = async (assignmentId) => {
-    updateUserKpiMutation.mutate(
-      {
-        id: assignmentId,
-        data: { IncludeCurrentOffice: false },
+  const handleUnallocateHomeOfficeKpi = async (assignmentId, kpiName) => {
+    setConfirmModal({
+      open: true,
+      title: 'Unallocate Home Office KPI',
+      message: `Are you sure you want to unallocate "${kpiName}" from your home office? It will be moved back to your Assigned KPIs list.`,
+      onConfirm: () => {
+        updateUserKpiMutation.mutate(
+          {
+            id: assignmentId,
+            data: { IncludeCurrentOffice: false },
+          },
+          {
+            onSuccess: () => {
+              notify('Home office KPI unallocated successfully and moved to Assigned KPI.', 'success');
+              emitReportDataChanged();
+            },
+            onError: (err) => {
+              notify(err?.response?.data?.message || 'Failed to unallocate home office KPI.', 'error');
+            },
+          }
+        );
       },
-      {
-        onSuccess: () => {
-          notify('Home office KPI unallocated successfully and moved to Assigned KPI.', 'success');
-          emitReportDataChanged();
-        },
-        onError: (err) => {
-          notify(err?.response?.data?.message || 'Failed to unallocate home office KPI.', 'error');
-        },
-      }
-    );
+    });
   };
 
   const startEditingAssignment = (kpiItem) => {
@@ -681,21 +714,47 @@ const KpiAllocationPage = () => {
     );
   };
 
-  const handleUnallocateSentAssignment = async (assignmentId) => {
-    setDeletingAssignmentId(assignmentId);
-    deleteUserKpiMutation.mutate(assignmentId, {
-      onSuccess: () => {
-        if (editingAssignmentId === assignmentId) {
-          cancelEditingAssignment();
-        }
-        notify('KPI assignment unallocated successfully.', 'success');
-        emitReportDataChanged();
+  const handleUnallocateSentAssignment = async (assignmentId, kpiLabel) => {
+    setConfirmModal({
+      open: true,
+      title: 'Unallocate KPI',
+      message: `Are you sure you want to unallocate "${kpiLabel}"? This will permanently delete any performance results submitted for this assignment.`,
+      onConfirm: () => {
+        setDeletingAssignmentId(assignmentId);
+        deleteUserKpiMutation.mutate(assignmentId, {
+          onSuccess: () => {
+            if (editingAssignmentId === assignmentId) {
+              cancelEditingAssignment();
+            }
+            notify('KPI assignment unallocated successfully.', 'success');
+            emitReportDataChanged();
+          },
+          onError: (err) => {
+            notify(err?.response?.data?.message || 'Failed to unallocate KPI assignment.', 'error');
+          },
+          onSettled: () => {
+            setDeletingAssignmentId(null);
+          },
+        });
       },
-      onError: (err) => {
-        notify(err?.response?.data?.message || 'Failed to unallocate KPI assignment.', 'error');
-      },
-      onSettled: () => {
-        setDeletingAssignmentId(null);
+    });
+  };
+
+  const handleBulkUnallocate = (ids, label) => {
+    setConfirmModal({
+      open: true,
+      title: 'Unallocate All KPIs',
+      message: `Are you sure you want to unallocate all ${ids.length} KPIs for ${label}? This action cannot be undone and will permanently delete all associated performance results.`,
+      onConfirm: () => {
+        bulkDeleteUserKpiMutation.mutate(ids, {
+          onSuccess: () => {
+            notify(`Successfully unallocated all KPIs for ${label}.`, 'success');
+            emitReportDataChanged();
+          },
+          onError: (err) => {
+            notify(err?.response?.data?.message || 'Failed to unallocate all KPIs.', 'error');
+          },
+        });
       },
     });
   };
@@ -714,7 +773,7 @@ const KpiAllocationPage = () => {
     const hasAnyTargetOffice = assignmentPreview.some((record) => record.targetRoleIds.length > 0);
 
     if (!hasAnyTargetOffice) {
-      notify('No target office found. Select sub unit(s) or enable Include current Office for at least one KPI.', 'warning');
+      notify('Please select at least one target office.', 'warning');
       return;
     }
 
@@ -748,7 +807,6 @@ const KpiAllocationPage = () => {
           UserId: userId,
           AssignedTarget: assignedTarget,
           IsTargetIndividual: kpiRecord.isTargetIndividual,
-          IncludeCurrentOffice: kpiRecord.includeCurrentRole && String(roleId) === String(currentRoleId),
           AssignmentBatchId: assignmentBatchId,
         }));
       });
@@ -759,44 +817,59 @@ const KpiAllocationPage = () => {
       return;
     }
 
+    // Identify existing assignments to skip them
+    const existingKeys = new Set(
+      sentAssignments
+        .filter((a) => !a.IsArchived)
+        .map((a) => `${String(a.KPIId)}::${String(a.UserId)}::${(a.Name || '').trim()}`)
+    );
+
+    // Deduplicate to prevent multiple assignments for the same user/kpi pair
+    const uniqueAssignments = [];
+    const seen = new Set();
+    let skipCount = 0;
+
+    assignmentData.forEach((item) => {
+      const key = `${String(item.UserId)}::${String(item.KPIId)}::${(item.Name || '').trim()}`;
+      if (existingKeys.has(key)) {
+        skipCount += 1;
+        return;
+      }
+
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueAssignments.push(item);
+      }
+    });
+
+    if (uniqueAssignments.length === 0 && skipCount > 0) {
+      notify(`All selected users already have these KPIs assigned. No new assignments created.`, 'info');
+      return;
+    }
+
     try {
-      setAssigning(true);
-      // Process assignments in parallel using mutateAsync
-      const outcomes = await Promise.allSettled(assignmentData.map((data) => createUserKpiMutation.mutateAsync(data)));
+      // Use mutateAsync to wait for completion
+      await Promise.all(uniqueAssignments.map((data) => createUserKpiMutation.mutateAsync(data)));
 
-      const successCount = outcomes.filter((outcome) => outcome.status === 'fulfilled').length;
-      const conflictCount = outcomes.filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status === 409).length;
-      const failureCount = outcomes.length - successCount - conflictCount;
-      const firstFailureMessage = outcomes
-        .filter((outcome) => outcome.status === 'rejected' && outcome.reason?.response?.status !== 409)
-        .map((outcome) => outcome.reason?.response?.data?.message || outcome.reason?.message)
-        .find(Boolean);
+      const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
 
-      if (successCount > 0) {
-        const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
-
-        notify(
-          `Assigned ${selectedKpiRecords.length} KPI(s) to ${uniqueReceiverRoles.size} office(s). Success: ${successCount}, Duplicate: ${conflictCount}, Failed: ${failureCount}.`,
-          failureCount > 0 ? 'warning' : 'success'
-        );
-
-        emitReportDataChanged();
-        setSelectedOffice([]);
-        setSelectedTheme([]);
-        setSelectedSubTheme([]);
-        setSelectedKpi([]);
-        setKpiAssignmentOptions({});
-        return;
+      let message = `KPI Successfully Allocated: ${uniqueAssignments.length} assignment(s) sent to ${uniqueReceiverRoles.size} office(s).`;
+      if (skipCount > 0) {
+        message += ` (Skipped ${skipCount} already assigned users)`;
       }
 
-      if (conflictCount > 0 && failureCount === 0) {
-        notify(`All selected KPI assignments already exist for this cycle year. Duplicate: ${conflictCount}.`, 'warning');
-        return;
-      }
-    } catch (error) {
-      notify(error?.message || 'Failed to complete KPI assignments.', 'error');
-    } finally {
-      setAssigning(false);
+      notify(message, 'success');
+
+      // Immediate UI Reset
+      emitReportDataChanged();
+      setSelectedOffice([]);
+      setSelectedTheme([]);
+      setSelectedSubTheme([]);
+      setSelectedKpi([]);
+      setKpiAssignmentOptions({});
+    } catch (err) {
+      console.error('Batch assignment error:', err);
+      notify(err?.response?.data?.message || 'Failed to complete some KPI allocations. Please check the Sent KPI Tracker.', 'error');
     }
   };
 
@@ -1058,24 +1131,6 @@ const KpiAllocationPage = () => {
                                 Create custom target
                               </Button>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Checkbox
-                                id={`include-current-${kpiRecord.id}`}
-                                checked={Boolean(kpiAssignmentOptions[kpiRecord.id]?.includeCurrentRole)}
-                                onCheckedChange={(checked) =>
-                                  setKpiAssignmentOptions((previous) => ({
-                                    ...previous,
-                                    [kpiRecord.id]: {
-                                      ...(previous[kpiRecord.id] || getDefaultAssignmentOption()),
-                                      includeCurrentRole: Boolean(checked),
-                                    },
-                                  }))
-                                }
-                              />
-                              <label htmlFor={`include-current-${kpiRecord.id}`} className="text-sm text-foreground cursor-pointer select-none">
-                                Include current Office
-                              </label>
-                            </div>
                           </div>
 
                           <p className="mt-2 text-xs text-muted-foreground">
@@ -1136,52 +1191,89 @@ const KpiAllocationPage = () => {
                       </TableHeader>
 
                       <TableBody>
-                        {sentToChildrenRows.map((recipient) => (
-                          <TableRow key={recipient.key} className="align-top">
-                            <TableCell className="border-r align-top">
-                              <p className="text-sm font-semibold text-foreground truncate max-w-62.5" title={recipient.roleName}>
-                                {recipient.roleName}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-1 truncate max-w-62.5" title={recipient.userName}>
-                                {recipient.userName}
-                              </p>
-                            </TableCell>
+                        {sentToChildrenRows.length > 0 ? (
+                          sentToChildrenRows.flatMap((recipient) =>
+                            recipient.kpis.map((kpiItem, kpiIndex) => {
+                              const isEditing = editingAssignmentId === kpiItem.assignmentId;
+                              const isSaving = savingAssignmentId === kpiItem.assignmentId;
+                              const isDeleting = deletingAssignmentId === kpiItem.assignmentId;
 
-                            <TableCell className="border-r align-top p-0">
-                              <div className="divide-y divide-border">
-                                {recipient.kpis.map((kpiItem) => {
-                                  const isEditing = editingAssignmentId === kpiItem.assignmentId;
+                              return (
+                                <TableRow key={kpiItem.assignmentId} className="align-top">
+                                  {kpiIndex === 0 && (
+                                    <TableCell rowSpan={recipient.kpis.length} className="border-r align-top w-70 bg-card/50">
+                                      <div className="flex flex-col h-full justify-between py-1">
+                                        <div>
+                                          <p className="text-sm font-semibold text-foreground truncate max-w-[260px]" title={recipient.roleName}>
+                                            {recipient.roleName}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground mt-1 truncate max-w-[260px]" title={recipient.userName}>
+                                            {recipient.userName}
+                                          </p>
+                                        </div>
+                                        {canManageSentAssignments && recipient.kpis.length > 1 && (
+                                          <div className="mt-4 pt-2 border-t border-border/50">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() =>
+                                                handleBulkUnallocate(
+                                                  recipient.kpis.map((k) => k.assignmentId),
+                                                  recipient.userName
+                                                )
+                                              }
+                                              className="w-full text-[10px] h-7 border-red-200 text-red-500 hover:bg-red-50"
+                                            >
+                                              Unallocate All ({recipient.kpis.length})
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  )}
 
-                                  return (
-                                    <div key={kpiItem.assignmentId} className="px-4 py-3">
+                                  <TableCell className="border-r align-top p-0 w-130">
+                                    <div className="px-4 py-3 h-full">
                                       <p className="text-sm font-medium text-foreground truncate max-w-117.5" title={kpiItem.label}>
                                         {kpiItem.label}
                                       </p>
 
                                       {isEditing ? (
-                                        <div className="mt-2 grid gap-2 md:grid-cols-3">
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={editForm.baseline}
-                                            onChange={(event) => setEditForm((previous) => ({ ...previous, baseline: event.target.value }))}
-                                            placeholder="Baseline"
-                                          />
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={editForm.target}
-                                            onChange={(event) => setEditForm((previous) => ({ ...previous, target: event.target.value }))}
-                                            placeholder="Target"
-                                          />
-                                          <Input
-                                            value={editForm.remark}
-                                            onChange={(event) => setEditForm((previous) => ({ ...previous, remark: event.target.value }))}
-                                            placeholder="Remark"
-                                          />
+                                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-medium text-muted-foreground uppercase pl-1">Baseline</label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              value={editForm.baseline}
+                                              onChange={(event) => setEditForm((previous) => ({ ...previous, baseline: event.target.value }))}
+                                              placeholder="Baseline"
+                                              className="h-8 text-xs"
+                                            />
+                                          </div>
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-medium text-muted-foreground uppercase pl-1">Target</label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              value={editForm.target}
+                                              onChange={(event) => setEditForm((previous) => ({ ...previous, target: event.target.value }))}
+                                              placeholder="Target"
+                                              className="h-8 text-xs"
+                                            />
+                                          </div>
+                                          <div className="space-y-1">
+                                            <label className="text-[10px] font-medium text-muted-foreground uppercase pl-1">Remark</label>
+                                            <Input
+                                              value={editForm.remark}
+                                              onChange={(event) => setEditForm((previous) => ({ ...previous, remark: event.target.value }))}
+                                              placeholder="Remark"
+                                              className="h-8 text-xs"
+                                            />
+                                          </div>
                                         </div>
                                       ) : (
-                                        <div className="mt-1 flex items-center gap-2">
+                                        <div className="mt-1.5 flex items-center gap-2">
                                           <p
                                             className="text-xs text-muted-foreground truncate max-w-105"
                                             title={`Baseline: ${kpiItem.baseline} | Target: ${kpiItem.target}${kpiItem.remark ? ` | Remark: ${kpiItem.remark}` : ''}`}
@@ -1205,35 +1297,25 @@ const KpiAllocationPage = () => {
                                                 },
                                               })
                                             }
-                                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border hover:bg-muted"
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-border hover:bg-muted text-muted-foreground"
                                             aria-label="View full KPI details"
                                           >
-                                            <Eye className="h-3.5 w-3.5" />
+                                            <Eye className="h-3 w-3" />
                                           </button>
                                         </div>
                                       )}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            </TableCell>
+                                  </TableCell>
 
-                            <TableCell className="align-top p-0">
-                              <div className="divide-y divide-border">
-                                {recipient.kpis.map((kpiItem) => {
-                                  const isEditing = editingAssignmentId === kpiItem.assignmentId;
-                                  const isSaving = savingAssignmentId === kpiItem.assignmentId;
-                                  const isDeleting = deletingAssignmentId === kpiItem.assignmentId;
-
-                                  return (
-                                    <div key={kpiItem.assignmentId} className="px-4 py-3 flex items-center gap-2">
+                                  <TableCell className="align-top p-0 w-40">
+                                    <div className="px-4 py-3 flex items-center gap-2 h-full">
                                       {isEditing ? (
                                         <>
                                           <Button
                                             size="sm"
                                             onClick={() => handleUpdateSentAssignment(kpiItem.assignmentId)}
                                             disabled={isSaving || isDeleting}
-                                            className="inline-flex items-center gap-1"
+                                            className="h-8 px-3 inline-flex items-center gap-1.5"
                                           >
                                             <Save className="h-3.5 w-3.5" />
                                             Save
@@ -1243,7 +1325,7 @@ const KpiAllocationPage = () => {
                                             variant="outline"
                                             onClick={cancelEditingAssignment}
                                             disabled={isSaving || isDeleting}
-                                            className="inline-flex items-center gap-1"
+                                            className="h-8 px-3 inline-flex items-center gap-1.5"
                                           >
                                             <X className="h-3.5 w-3.5" />
                                             Cancel
@@ -1256,7 +1338,7 @@ const KpiAllocationPage = () => {
                                             variant="outline"
                                             onClick={() => startEditingAssignment(kpiItem)}
                                             disabled={isDeleting}
-                                            className="inline-flex items-center gap-1"
+                                            className="h-8 px-3 inline-flex items-center gap-1.5"
                                           >
                                             <PencilLine className="h-3.5 w-3.5" />
                                             Edit
@@ -1264,29 +1346,34 @@ const KpiAllocationPage = () => {
                                           <Button
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => handleUnallocateSentAssignment(kpiItem.assignmentId)}
+                                            onClick={() => handleUnallocateSentAssignment(kpiItem.assignmentId, kpiItem.label)}
                                             disabled={isDeleting}
-                                            className="inline-flex items-center gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                            className="h-8 px-3 inline-flex items-center gap-1.5 border-red-300 text-red-600 hover:bg-red-50 whitespace-nowrap"
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
-                                            {isDeleting ? 'Un Allocating...' : 'Un Allocate'}
+                                            {isDeleting ? 'Unallocating...' : 'Unallocate'}
                                           </Button>
                                         </>
                                       ) : (
-                                        <p className="text-xs text-muted-foreground">No actions available</p>
+                                        <p className="text-xs text-muted-foreground italic">No actions</p>
                                       )}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-
-                        {sentToChildrenRows.length === 0 && (
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )
+                        ) : (
                           <TableRow>
-                            <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
-                              {loading ? 'Loading sent KPI assignments...' : 'No KPI has been sent to child roles/users yet.'}
+                            <TableCell colSpan={3} className="text-center py-12 text-muted-foreground">
+                              {loading ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                  Loading sent KPI assignments...
+                                </div>
+                              ) : (
+                                'No KPI has been sent to child roles/users yet.'
+                              )}
                             </TableCell>
                           </TableRow>
                         )}
@@ -1370,12 +1457,12 @@ const KpiAllocationPage = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleUnallocateHomeOfficeKpi(row.assignmentId)}
+                                    onClick={() => handleUnallocateHomeOfficeKpi(row.assignmentId, row.kpi)}
                                     disabled={deletingAssignmentId === row.assignmentId}
-                                    className="inline-flex items-center gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                    className="inline-flex items-center gap-1 border-red-300 text-red-600 hover:bg-red-50 whitespace-nowrap"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
-                                    {deletingAssignmentId === row.assignmentId ? 'Un Allocating...' : 'Un Allocate'}
+                                    {deletingAssignmentId === row.assignmentId ? 'Unallocating...' : 'Unallocate'}
                                   </Button>
                                 ) : (
                                   <p className="text-xs text-muted-foreground">No actions</p>
@@ -1434,6 +1521,41 @@ const KpiAllocationPage = () => {
         onSave={handleSaveCustomTargets}
         notify={notify}
       />
+
+      <Dialog
+        open={confirmModal.open}
+        onOpenChange={(open) => !open && setConfirmModal((prev) => ({ ...prev, open: false }))}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className={confirmModal.isDestructive ? 'text-red-600' : ''}>
+              {confirmModal.title}
+            </DialogTitle>
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground">
+                {confirmModal.message}
+              </p>
+            </div>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmModal((prev) => ({ ...prev, open: false }))}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={confirmModal.isDestructive ? 'destructive' : 'default'}
+              onClick={() => {
+                confirmModal.onConfirm?.();
+                setConfirmModal((prev) => ({ ...prev, open: false }));
+              }}
+            >
+              Confirm
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

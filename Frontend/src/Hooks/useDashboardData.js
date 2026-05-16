@@ -48,41 +48,41 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
       {
         queryKey: [...queryKeys.kpis.assignments({ scope: 'mine', fromParent: 'true' }), cycleYear],
         queryFn: () => api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', ...(cycleYear ? { cycleYear } : {}) } }).then(res => res.data?.data || []),
-        staleTime: 1000 * 60, // 1 minute
-        gcTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: [...queryKeys.kpis.list({}), cycleYear],
         queryFn: () => api.get('/kpis', fetchOptions).then(res => res.data?.data || []),
-        staleTime: 1000 * 60,
-        gcTime: 1000 * 60 * 5,
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: [...queryKeys.kpis.types, cycleYear],
         queryFn: () => api.get('/kpi-types', fetchOptions).then(res => res.data?.data || []),
-        staleTime: 1000 * 60 * 5, // Types change rarely
-        gcTime: 1000 * 60 * 30,
+        staleTime: 1000 * 60 * 15, // 15 minutes
+        gcTime: 1000 * 60 * 60, // 1 hour
       },
       {
         queryKey: [...queryKeys.kpis.assignments({}), cycleYear],
         queryFn: () => api.get('/user-kpis', fetchOptions).then(res => res.data?.data || []),
         retry: false,
-        staleTime: 1000 * 60,
-        gcTime: 1000 * 60 * 5,
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: ['user-roles', cycleYear],
         queryFn: () => api.get('/user-roles', fetchOptions).then(res => res.data?.data || []),
         retry: false,
-        staleTime: 1000 * 60 * 2,
-        gcTime: 1000 * 60 * 10,
+        staleTime: 1000 * 60 * 10, // 10 minutes
+        gcTime: 1000 * 60 * 30, // 30 minutes
       },
       {
         queryKey: [...queryKeys.roles.all, cycleYear],
         queryFn: () => api.get('/roles', fetchOptions).then(res => res.data?.data || []),
         retry: false,
-        staleTime: 1000 * 60 * 5, // Roles change rarely
-        gcTime: 1000 * 60 * 30,
+        staleTime: 1000 * 60 * 15, // 15 minutes
+        gcTime: 1000 * 60 * 60, // 1 hour
       }
     ]
   });
@@ -103,6 +103,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
     const roles = rolesRes.data || [];
 
     // Map child roles
+    // Map direct child roles only
     const childRoleIds = new Set(
       roles.filter((role) => String(role?.ParentRoleId || '') === currentRoleId).map((role) => String(role?.Id || ''))
     );
@@ -134,7 +135,15 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
     const assignmentsForSubUnits = assignments.filter((a) => {
       const assignedUserId = String(a.UserId || a.User?.Id || '');
       const createdBy = String(a.CreatedBy || '');
-      return childUserIds.has(assignedUserId) && createdBy === currentUserId;
+      
+      // Check if user is in a direct child role
+      const userRoles = a.User?.UserRoles || [];
+      const isDirectChild = userRoles.some(ur => childRoleIds.has(String(ur.RoleId || ur.Role?.Id)));
+      
+      // OR if it was explicitly assigned by the current user
+      const isAssignedByMe = createdBy === currentUserId;
+
+      return isDirectChild || isAssignedByMe;
     });
 
     const assignmentsForBreakdown = assignmentsForSubUnits.length > 0 ? assignmentsForSubUnits : parentReceivedAssignments;

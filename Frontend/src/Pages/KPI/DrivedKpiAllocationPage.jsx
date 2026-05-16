@@ -13,13 +13,15 @@ import { Input } from '../../Components/UI/Input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../Components/UI/Tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../Components/UI/Table';
 import { api } from '../../api/axios';
+import { emitReportDataChanged } from '../../lib/utils';
 import permissionUtils, { hasPermission } from '../../lib/permissionUtils';
 import ChildOfficesModal from '../../Components/KPI/ChildOfficesModal';
 import { useRolesQuery } from '../../Hooks/Queries/useRoles';
 import { useUserRolesQuery } from '../../Hooks/Queries/useUsers';
-import { 
-  useKpisQuery, 
+import {
+  useKpisQuery,
   useUserKpisQuery,
+  useUnitsQuery,
   useCreateUserKpiMutation,
   useUpdateUserKpiMutation,
   useDeleteUserKpiMutation
@@ -84,7 +86,6 @@ const DrivedKpiAllocationPage = () => {
   const [activeTab, setActiveTab] = useState('view-drived');
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
-  const [includeCurrentOfficeDrafts, setIncludeCurrentOfficeDrafts] = useState({});
   const [selectedDrivedKpi, setSelectedDrivedKpi] = useState(null);
   const [drivedKpiModalMode, setDrivedKpiModalMode] = useState('view');
   const [drivedTargetDraft, setDrivedTargetDraft] = useState('');
@@ -96,6 +97,7 @@ const DrivedKpiAllocationPage = () => {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deletingDrivedKpi, setDeletingDrivedKpi] = useState(null);
   const [assigning, setAssigning] = useState(false);
+  const [includeCurrentOfficeDrafts, setIncludeCurrentOfficeDrafts] = useState({});
   const [savingDrivedTarget, setSavingDrivedTarget] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
 
@@ -112,15 +114,16 @@ const DrivedKpiAllocationPage = () => {
   const { data: myAssignments = EMPTY_ARRAY, isLoading: loadingMy, error: myError } = useUserKpisQuery(MINE_PARAMS);
   const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery(SENT_DERIVED_PARAMS);
   const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
+  const { data: units = EMPTY_ARRAY, isLoading: loadingUnits, error: unitError } = useUnitsQuery();
 
-  const loadingCatalog = loadingRoles || loadingUserRoles || loadingMy || loadingSent || loadingKpis;
-  const catalogError = 
-    rolesError?.response?.data?.message || 
-    userRolesError?.response?.data?.message || 
-    myError?.response?.data?.message || 
-    sentError?.response?.data?.message || 
-    kpiError?.response?.data?.message || '';
-  const units = []; // Placeholder for now
+  const loadingCatalog = loadingRoles || loadingUserRoles || loadingMy || loadingSent || loadingKpis || loadingUnits;
+  const catalogError =
+    rolesError?.response?.data?.message ||
+    userRolesError?.response?.data?.message ||
+    myError?.response?.data?.message ||
+    sentError?.response?.data?.message ||
+    kpiError?.response?.data?.message ||
+    unitError?.response?.data?.message || '';
 
   const assignedKpis = useMemo(() => {
     const kpiById = new Map(kpis.map((kpi) => [String(kpi.Id), kpi]));
@@ -159,7 +162,7 @@ const DrivedKpiAllocationPage = () => {
     const myCreatedDrived = assignedKpis
       .filter((item) => item.name && !item.isAssigned)
       .map((item) => ({ ...item, mainKpiId: item.kpiId, parent: item.label, drived: item.name }));
-    
+
     const parentAssignedDrived = assignedKpis
       .filter((item) => item.name && item.isAssigned)
       .map((item) => ({ ...item, mainKpiId: item.kpiId, parent: item.label, drived: item.name }));
@@ -260,7 +263,6 @@ const DrivedKpiAllocationPage = () => {
         const targetDraft = assignmentTargetDrafts[String(selectedDrivenKpi.id)];
         const targetNumber = Number(targetDraft ?? selectedDrivenKpi.assignedTarget ?? selectedDrivenKpi.target);
         const remarkText = Array.isArray(selectedDrivenKpi.drived) ? selectedDrivenKpi.drived.join(' | ') : selectedDrivenKpi.drived;
-        const kpiIncludeCurrentRole = !!includeCurrentOfficeDrafts[String(selectedDrivenKpi.id)];
 
         const perUserTarget =
           targetIndividualDrafts[String(selectedDrivenKpi.id)]
@@ -279,7 +281,7 @@ const DrivedKpiAllocationPage = () => {
             Baseline: (isDistributable && formState.distributionMethod === 'equal') ? 0 : (Number.isFinite(baselineNumber) ? baselineNumber : null),
             AssignedTarget: Number.isFinite(finalTarget) ? finalTarget : null,
             IsTargetIndividual: !!targetIndividualDrafts[String(selectedDrivenKpi.id)],
-            IncludeCurrentOffice: kpiIncludeCurrentRole && userRoles.some(ur => String(ur.UserId) === String(userId) && String(ur.RoleId) === String(currentRoleId)),
+            IncludeCurrentOffice: !!includeCurrentOfficeDrafts[String(selectedDrivenKpi.id)],
             AssignmentBatchId: assignmentBatchId,
             Name: selectedDrivenKpi.name || remarkText,
             Remark: '',
@@ -287,20 +289,56 @@ const DrivedKpiAllocationPage = () => {
         });
       });
 
-      await Promise.all(assignmentBatchData.map(data => createUserKpiMutation.mutateAsync(data)));
+      // Identify existing assignments to skip them (Drived KPIs are distinguished by mainKpiId + UserId + Name)
+      const existingKeys = new Set(
+        sentDrivedKpis.map((item) => {
+          // item in sentDrivedKpis might have different structure than the API record
+          // Let's check how sentDrivedKpis is built
+          return `${item.mainKpiId}::${item.userId}::${(item.name || '').trim()}`;
+        })
+      );
+
+      const uniqueBatchData = [];
+      const seenBatchKeys = new Set();
+      let skipCount = 0;
+
+      assignmentBatchData.forEach((item) => {
+        const key = `${String(item.UserId)}::${String(item.KPIId)}::${(item.Name || '').trim()}`;
+        if (existingKeys.has(key)) {
+          skipCount += 1;
+          return;
+        }
+
+        if (!seenBatchKeys.has(key)) {
+          seenBatchKeys.add(key);
+          uniqueBatchData.push(item);
+        }
+      });
+
+      if (uniqueBatchData.length === 0 && skipCount > 0) {
+        notify(`The selected recipients already have these Drived KPIs assigned.`, 'info');
+        setAssigning(false);
+        return;
+      }
+
+      await Promise.all(uniqueBatchData.map(data => createUserKpiMutation.mutateAsync(data)));
 
       const totalUniqueRecipients = new Set(kpisWithRecipients.flatMap(item => item.recipientUserIds)).size;
-      notify(`Assigned ${selectedDrivenKpis.length} Drived KPI item(s) to ${totalUniqueRecipients} user(s).`, 'success');
-      
+      let successMessage = `KPI Successfully Allocated: ${uniqueBatchData.length} assignment(s) sent to ${totalUniqueRecipients} user(s).`;
+      if (skipCount > 0) {
+        successMessage += ` (Skipped ${skipCount} already assigned)`;
+      }
+      notify(successMessage, 'success');
+
+      emitReportDataChanged();
       setFormState((previous) => ({
         ...previous,
         staff: '',
         drivedKpiAssignment: [],
       }));
-      setAssignmentTargetDrafts({});
-      setCustomTargetEditors({});
     } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to assign Drived KPI.', 'error');
+      console.error('Drived KPI assignment error:', error);
+      notify(error?.response?.data?.message || 'Failed to complete Drived KPI allocation. Please check the tracker.', 'error');
     } finally {
       setAssigning(false);
     }
@@ -361,36 +399,30 @@ const DrivedKpiAllocationPage = () => {
 
   const getRecipientUserIdsForKpi = (kpiId) => {
     const targetRoleId = String(formState.staff || '');
-    const kpiIncludeCurrentRole = !!includeCurrentOfficeDrafts[String(kpiId)];
-    
-    if (!targetRoleId && !kpiIncludeCurrentRole) return [];
-    
-    const targetRoleIds = new Set();
-    if (targetRoleId) targetRoleIds.add(targetRoleId);
-    if (kpiIncludeCurrentRole && currentRoleId) targetRoleIds.add(String(currentRoleId));
+    const includeSelf = !!includeCurrentOfficeDrafts[String(kpiId)];
+    let recipients = [];
 
-    if (isDistributable) {
-      return [
-        ...new Set(
-          userRoles
-            .filter((assignment) => targetRoleIds.has(String(assignment?.RoleId || assignment?.Role?.Id || '')))
-            .map((assignment) => assignment?.UserId || assignment?.User?.Id)
-            .filter(Boolean)
-        ),
-      ];
-    } else {
-      // For non-distributable, we still might want to include the current user if includeCurrentRole is checked
-      const users = [...formState.selectedUserIds];
-      if (kpiIncludeCurrentRole && authUser?.id) {
-        users.push(String(authUser.id));
+    if (targetRoleId) {
+      if (isDistributable) {
+        recipients = userRoles
+          .filter((assignment) => String(assignment?.RoleId || assignment?.Role?.Id || '') === targetRoleId)
+          .map((assignment) => assignment?.UserId || assignment?.User?.Id)
+          .filter(Boolean);
+      } else {
+        recipients = formState.selectedUserIds.map(String);
       }
-      return [...new Set(users)];
     }
+
+    if (includeSelf && authUser?.Id) {
+      recipients.push(String(authUser.Id || authUser.id));
+    }
+
+    return [...new Set(recipients)];
   };
 
   const hasAnyRecipients = useMemo(() => {
     return formState.drivedKpiAssignment.some(kpiId => getRecipientUserIdsForKpi(kpiId).length > 0);
-  }, [formState.drivedKpiAssignment, includeCurrentOfficeDrafts, formState.staff, formState.selectedUserIds, isDistributable, userRoles, currentRoleId, authUser?.id]);
+  }, [formState.drivedKpiAssignment, formState.staff, formState.selectedUserIds, isDistributable, userRoles]);
 
   const handleRemoveSelectedDrivedKpi = (itemId) => {
     const itemKey = String(itemId);
@@ -407,6 +439,18 @@ const DrivedKpiAllocationPage = () => {
     });
 
     setCustomTargetEditors((previous) => {
+      const next = { ...previous };
+      delete next[itemKey];
+      return next;
+    });
+
+    setIncludeCurrentOfficeDrafts((previous) => {
+      const next = { ...previous };
+      delete next[itemKey];
+      return next;
+    });
+
+    setTargetIndividualDrafts((previous) => {
       const next = { ...previous };
       delete next[itemKey];
       return next;
@@ -496,11 +540,11 @@ const DrivedKpiAllocationPage = () => {
         UserId: authUser?.Id || authUser?.id,
         Baseline: parseNumericValue(formState.baseline),
         AssignedTarget: parseNumericValue(formState.target),
-        IncludeCurrentOffice: false,
         Name: remarkText,
         Remark: formState.remark || '',
       });
 
+      emitReportDataChanged();
       notify('Drived KPI created and saved successfully.', 'success');
       setActiveTab('view-drived');
       setFormState((previous) => ({
@@ -589,7 +633,7 @@ const DrivedKpiAllocationPage = () => {
             failCount++;
             continue;
           }
-          
+
           if (firstFailedName === String(mainKpiName || '')) firstFailedName = ''; // It didn't fail matching
 
           // Optional Unit matching
@@ -699,7 +743,7 @@ const DrivedKpiAllocationPage = () => {
 
   const handleDeleteAllDrivedKpis = async () => {
     if (drivedKpis.length === 0) return;
-    
+
     try {
       setDeletingAll(true);
       await Promise.all(drivedKpis.map(kpi => deleteUserKpiMutation.mutateAsync(kpi.id)));
@@ -777,10 +821,10 @@ const DrivedKpiAllocationPage = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>List Of Drived kpis</CardTitle>
               {hasExtraMeasures && drivedKpis.length > 0 && (
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
-                  onClick={() => setConfirmDeleteAll(true)} 
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setConfirmDeleteAll(true)}
                   disabled={deletingAll || deleting}
                   className="h-9 gap-2"
                 >
@@ -807,8 +851,8 @@ const DrivedKpiAllocationPage = () => {
                       {paginatedDrivedKpis.map((row, index) => (
                         <TableRow key={row.id}>
                           {rowSpans[index] > 0 && (
-                            <TableCell 
-                              className="font-medium text-primary/80 align-top border-r" 
+                            <TableCell
+                              className="font-medium text-primary/80 align-top border-r"
                               rowSpan={rowSpans[index]}
                             >
                               {row.parent || 'null'}
@@ -847,19 +891,19 @@ const DrivedKpiAllocationPage = () => {
                                 </button>
                               ) : null}
 
-                                <button
-                                  type="button"
-                                  className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                  title="Delete Drived KPI"
-                                  onClick={() =>
-                                    handleRequestDelete({
-                                      id: row.id,
-                                      title: Array.isArray(row.drived) ? row.drived.join(' | ') : row.drived,
-                                    })
-                                  }
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                              <button
+                                type="button"
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                title="Delete Drived KPI"
+                                onClick={() =>
+                                  handleRequestDelete({
+                                    id: row.id,
+                                    title: Array.isArray(row.drived) ? row.drived.join(' | ') : row.drived,
+                                  })
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -891,9 +935,8 @@ const DrivedKpiAllocationPage = () => {
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors ${
-                            currentPage === page ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground hover:bg-muted'
-                          }`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-md text-sm font-medium transition-colors ${currentPage === page ? 'bg-primary text-primary-foreground' : 'bg-background text-foreground hover:bg-muted'
+                            }`}
                         >
                           {page}
                         </button>
@@ -1169,8 +1212,9 @@ const DrivedKpiAllocationPage = () => {
                                   setIncludeCurrentOfficeDrafts((prev) => ({ ...prev, [String(item.id)]: !!checked }));
                                 }}
                               />
-                              Current Office
+                              Include current office in distribution
                             </label>
+
 
                             <Button
                               type="button"
@@ -1259,7 +1303,6 @@ const DrivedKpiAllocationPage = () => {
                         <TableHead>Target Role</TableHead>
                         <TableHead>Target User</TableHead>
                         <TableHead>Drived KPI</TableHead>
-                        <TableHead>Include Current Role</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1269,7 +1312,6 @@ const DrivedKpiAllocationPage = () => {
                           <TableCell>{item.targetRole}</TableCell>
                           <TableCell>{item.targetUser}</TableCell>
                           <TableCell>{item.drivedKpi}</TableCell>
-                          <TableCell>{item.includeCurrentRole ? 'Yes' : 'No'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <button
@@ -1280,10 +1322,10 @@ const DrivedKpiAllocationPage = () => {
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
-                                <button
-                                  type="button"
-                                  className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-                                  title="Unallocate Sent KPI"
+                              <button
+                                type="button"
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
+                                title="Unallocate Sent KPI"
                                 onClick={() =>
                                   handleRequestDelete({
                                     id: item.id,
@@ -1292,7 +1334,7 @@ const DrivedKpiAllocationPage = () => {
                                   })
                                 }
                               >
-                                  <UserX className="h-4 w-4" />
+                                <UserX className="h-4 w-4" />
                               </button>
                             </div>
                           </TableCell>
@@ -1396,8 +1438,8 @@ const DrivedKpiAllocationPage = () => {
             </DialogTitle>
             <DialogDescription>
               Are you sure you want to {deletingDrivedKpi?.type === 'unallocate' ? 'unallocate' : 'delete'}{' '}
-              <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>? 
-              {deletingDrivedKpi?.type === 'unallocate' 
+              <span className="font-semibold">{deletingDrivedKpi?.title || 'this Drived KPI'}</span>?
+              {deletingDrivedKpi?.type === 'unallocate'
                 ? ' This will remove the KPI from the recipient role.'
                 : ' This action cannot be undone.'}
             </DialogDescription>
@@ -1408,8 +1450,8 @@ const DrivedKpiAllocationPage = () => {
               Cancel
             </Button>
             <Button variant="destructive" onClick={confirmDeleteDrivedKpi} disabled={deleting}>
-              {deleting 
-                ? (deletingDrivedKpi?.type === 'unallocate' ? 'Unallocating...' : 'Deleting...') 
+              {deleting
+                ? (deletingDrivedKpi?.type === 'unallocate' ? 'Unallocating...' : 'Deleting...')
                 : (deletingDrivedKpi?.type === 'unallocate' ? 'Confirm Unallocate' : 'Delete')}
             </Button>
           </DialogFooter>
@@ -1441,7 +1483,7 @@ const DrivedKpiAllocationPage = () => {
           <DialogHeader>
             <DialogTitle>Delete All Drived KPIs</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <span className="font-bold text-red-600">ALL {drivedKpis.length}</span> Drived KPIs? 
+              Are you sure you want to delete <span className="font-bold text-red-600">ALL {drivedKpis.length}</span> Drived KPIs?
               This action will remove all local office measures and cannot be undone.
             </DialogDescription>
           </DialogHeader>

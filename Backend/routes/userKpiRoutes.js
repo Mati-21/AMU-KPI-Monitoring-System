@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect, hasModulePermission } = require('../middleware/authMiddleware');
-const { createUserKPI, getUserKPIs, getUserKPIById, updateUserKPI, deleteUserKPI } = require('../controllers/userKPIController');
+const { createUserKPI, getUserKPIs, getUserKPIById, updateUserKPI, deleteUserKPI, bulkDeleteUserKPIs } = require('../controllers/userKPIController');
 
 const router = express.Router();
 
@@ -61,6 +61,27 @@ router
     },
     getUserKPIs
   );
+
+router.post(
+  '/bulk-delete',
+  protect,
+  (req, res, next) => {
+    const canDeleteDrivedKpiAllocation = hasAnyModulePermission(req, [
+      ['Drived KPI Allocation', 'delete'],
+      ['Drived KPI', 'delete'],
+    ]);
+    const canDeleteKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'delete');
+    const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
+
+    if (canDeleteDrivedKpiAllocation || canDeleteKpiAllocation || canCreateKpiAllocation || hasExtraMeasuresAccess(req)) {
+      next();
+      return;
+    }
+
+    res.status(403).json({ message: 'Not authorized for bulk delete access' });
+  },
+  bulkDeleteUserKPIs
+);
 
 router
   .route('/:id')

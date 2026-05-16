@@ -5,7 +5,7 @@ import { AlertCircle, ArrowDownToLine, CheckCircle2, Clock3, Eye, FileText, Moni
 
 import Button from '../../Components/UI/Button';
 import { Badge } from '../../Components/UI/Badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../Components/UI/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../../Components/UI/dialog';
 import permissionUtils from '../../lib/permissionUtils';
 import { useNotification } from '../../Context/NotificationContext';
 import { 
@@ -39,7 +39,7 @@ const tabs = [
   { key: 'all', label: 'All' },
 ];
 
-const formatPercent = (value) => `${Number(value || 0).toLocaleString()}%`;
+const formatValue = (value) => `${Number(value || 0).toLocaleString()}`;
 
 const emitReportDataChanged = () => {
   const timestamp = String(Date.now());
@@ -60,6 +60,13 @@ const KpiApprovalsPage = () => {
   const canApprove = permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'KPI Approvals'));
   const [activeTab, setActiveTab] = useState('pending');
   const [viewingEvidenceFor, setViewingEvidenceFor] = useState(null);
+  const [actionModal, setActionModal] = useState({
+    open: false,
+    type: 'approve', // 'approve' | 'adjust'
+    approval: null,
+    adjustedValue: '',
+    remark: '',
+  });
 
   // Queries
   const { data: items = [], isLoading: loading, error: queryError } = useKpiApprovalsQuery();
@@ -98,52 +105,67 @@ const KpiApprovalsPage = () => {
     }, initial);
   }, [items]);
 
-  const handleApprove = async (approval) => {
+  const handleApprove = (approval) => {
     if (!canApprove) {
       notify('You do not have permission to approve KPI submissions.', 'error');
       return;
     }
-
-    const confirmed = window.confirm(
-      `Are you sure you want to approve the KPI submission for "${approval.title}" reported by ${approval.submitter}?`
-    );
-    if (!confirmed) return;
-
-    approveKpiMutation.mutate(approval.id, {
-      onSuccess: () => {
-        emitReportDataChanged();
-        notify('KPI submission approved successfully.', 'success');
-      },
-      onError: () => {
-        notify('Failed to approve KPI submission.', 'error');
-      }
+    setActionModal({
+      open: true,
+      type: 'approve',
+      approval,
+      adjustedValue: '',
+      remark: '',
     });
   };
 
-  const handleAdjustAndApprove = async (approval) => {
+  const handleAdjustAndApprove = (approval) => {
     if (!canApprove) {
       notify('You do not have permission to adjust KPI submissions.', 'error');
       return;
     }
-
-    const nextValue = window.prompt(`Adjust reported value for ${approval.title}`, String(approval.reported));
-    if (nextValue === null) return;
-
-    const parsedValue = Number(nextValue);
-    if (!Number.isFinite(parsedValue)) {
-      notify('Enter a valid adjusted value.', 'warning');
-      return;
-    }
-
-    adjustKpiMutation.mutate({ id: approval.id, adjustedValue: parsedValue }, {
-      onSuccess: () => {
-        emitReportDataChanged();
-        notify('KPI submission adjusted and approved.', 'success');
-      },
-      onError: () => {
-        notify('Failed to adjust KPI submission.', 'error');
-      }
+    setActionModal({
+      open: true,
+      type: 'adjust',
+      approval,
+      adjustedValue: String(approval.adjustedReported ?? approval.reported),
+      remark: '',
     });
+  };
+
+  const handleConfirmAction = async () => {
+    const { type, approval, adjustedValue, remark } = actionModal;
+    if (!approval) return;
+
+    if (type === 'approve') {
+      approveKpiMutation.mutate({ id: approval.id, remark }, {
+        onSuccess: () => {
+          emitReportDataChanged();
+          notify('KPI submission approved successfully.', 'success');
+          setActionModal(prev => ({ ...prev, open: false }));
+        },
+        onError: () => {
+          notify('Failed to approve KPI submission.', 'error');
+        }
+      });
+    } else {
+      const parsedValue = Number(adjustedValue);
+      if (adjustedValue === '' || !Number.isFinite(parsedValue)) {
+        notify('Enter a valid adjusted value.', 'warning');
+        return;
+      }
+
+      adjustKpiMutation.mutate({ id: approval.id, adjustedValue: parsedValue, remark }, {
+        onSuccess: () => {
+          emitReportDataChanged();
+          notify('KPI submission adjusted and approved.', 'success');
+          setActionModal(prev => ({ ...prev, open: false }));
+        },
+        onError: () => {
+          notify('Failed to adjust KPI submission.', 'error');
+        }
+      });
+    }
   };
 
   return (
@@ -278,15 +300,15 @@ const KpiApprovalsPage = () => {
                       <div className="mt-4 grid grid-cols-4 gap-4">
                         <div>
                           <p className="text-xs text-muted-foreground">Baseline</p>
-                          <p className="text-lg font-bold text-foreground">{formatPercent(approval.baseline)}</p>
+                          <p className="text-lg font-bold text-foreground">{formatValue(approval.baseline)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Target</p>
-                          <p className="text-lg font-bold text-foreground">{formatPercent(approval.target)}</p>
+                          <p className="text-lg font-bold text-foreground">{formatValue(approval.target)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Reported</p>
-                          <p className="text-lg font-bold text-primary">{formatPercent(approval.adjustedReported ?? approval.reported)}</p>
+                          <p className="text-lg font-bold text-primary">{formatValue(approval.adjustedReported ?? approval.reported)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Evidence</p>
@@ -426,6 +448,70 @@ const KpiApprovalsPage = () => {
               </div>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Action Modal (Approve / Adjust) */}
+      <Dialog open={actionModal.open} onOpenChange={(open) => setActionModal(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {actionModal.type === 'approve' ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  Approve Submission
+                </>
+              ) : (
+                <>
+                  <PencilLine className="h-5 w-5 text-sky-600" />
+                  Adjust & Approve
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Reviewing submission for <span className="font-semibold text-foreground">{actionModal.approval?.title}</span> by {actionModal.approval?.submitter}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {actionModal.type === 'adjust' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Adjusted Performance Value</label>
+                <input
+                  type="number"
+                  value={actionModal.adjustedValue}
+                  onChange={(e) => setActionModal(prev => ({ ...prev, adjustedValue: e.target.value }))}
+                  placeholder="Enter corrected value"
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  autoFocus
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Approver's Remark</label>
+              <textarea
+                value={actionModal.remark}
+                onChange={(e) => setActionModal(prev => ({ ...prev, remark: e.target.value }))}
+                placeholder="Add a note or feedback (optional)"
+                rows={3}
+                className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionModal(prev => ({ ...prev, open: false }))}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmAction} 
+              disabled={approveKpiMutation.isPending || adjustKpiMutation.isPending}
+              className={actionModal.type === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}
+            >
+              {(approveKpiMutation.isPending || adjustKpiMutation.isPending) ? 'Processing...' : 'Confirm Action'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

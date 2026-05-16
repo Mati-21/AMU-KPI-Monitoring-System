@@ -31,7 +31,17 @@ const { evidenceStorage } = require('../services/cloudinaryService');
 
 const upload = multer({
   storage: evidenceStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${ext}. Please upload a PDF, Word, Excel, or image file.`), false);
+    }
+  },
 });
 
 const canSubmitPerformanceResult = (req, res, next) => {

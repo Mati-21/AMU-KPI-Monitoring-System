@@ -57,6 +57,10 @@ const UserKPIResult = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    ApproverRemark: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     CreatedAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
