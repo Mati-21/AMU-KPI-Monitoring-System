@@ -59,12 +59,6 @@ const permissionRoutes = [
   },
 ];
 
-export const getDefaultRouteByRole = (_roleInput, userPermissions = []) => {
-  const permissionBasedRoute = permissionRoutes.find((entry) => permissionUtils.hasPermission(userPermissions, entry.permissions));
-
-  if (permissionBasedRoute) {
-    return permissionBasedRoute.route;
-  }
-
+export const getDefaultRouteByRole = (_roleInput, _userPermissions = []) => {
   return '/dashboard';
 };

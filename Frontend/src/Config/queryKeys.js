@@ -17,6 +17,7 @@ export const queryKeys = {
     all: ['kpis'],
     list: (params) => [...queryKeys.kpis.all, 'list', params],
     types: ['kpi-types'],
+    units: ['units'],
     assignments: (params) => [...queryKeys.kpis.all, 'assignments', params],
     approvals: ['kpis', 'approvals'],
   },

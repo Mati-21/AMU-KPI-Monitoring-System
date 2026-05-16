@@ -9,12 +9,17 @@ export const BASE_URL = 'http://localhost:5000';
 export const api = axios.create({
   baseURL: `${BASE_URL}/api`,
   withCredentials: true,
+  timeout: 60000, // 60 seconds default timeout
 });
 
 api.interceptors.request.use((config) => {
-  // Cookie-based auth is the primary mechanism.
-  // Avoid auto-sending stale Bearer tokens from local state,
-  // which can override the correct httpOnly cookie session.
+  // Cookie-based auth is the primary and only mechanism.
+  // withCredentials: true ensures cookies are sent automatically.
+
+  // Increase timeout for file uploads (FormData)
+  if (config.data instanceof FormData) {
+    config.timeout = 120000; // 120 seconds for evidence/file uploads
+  }
 
   return config;
 });
@@ -26,17 +31,11 @@ api.interceptors.response.use(
     const message = String(error?.response?.data?.message || '').toLowerCase();
     const requestUrl = String(error?.config?.url || '').toLowerCase();
 
-    const isAuthFailureMessage =
-      message.includes('not authorized, token failed') ||
-      message.includes('not authorized, no token') ||
-      message.includes('jwt') ||
-      message.includes('token expired');
-
-    const isAuthEndpoint = requestUrl.includes('/auth/me');
-
     // Only auto-logout on real authentication/session failures.
-    // Some endpoints may legitimately return 401 for other reasons; avoid kicking users out unnecessarily.
-    if (status === 401 && (isAuthFailureMessage || isAuthEndpoint)) {
+    // Avoid auto-logout on the login page itself (401 for wrong password).
+    const isLoginPage = window.location.pathname === '/signin';
+
+    if (status === 401 && !isLoginPage) {
       store.dispatch(logout());
       queryClient.clear();
     }

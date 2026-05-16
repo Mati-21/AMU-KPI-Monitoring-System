@@ -11,7 +11,7 @@ import { getDefaultRouteByRole } from '../../lib/authRouting';
 import { useNotification } from '../../Context/NotificationContext';
 import permissionUtils from '../../lib/permissionUtils';
 
-const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
 
 export const RequireAuth = () => {
@@ -110,6 +110,7 @@ export const AuthBootstrap = ({ children }) => {
   const queryClient = useQueryClient();
   const { notify } = useNotification();
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const systemSettings = useSelector((state) => state.auth.systemSettings);
   const [checking, setChecking] = useState(true);
   const idleTimerRef = useRef(null);
   const hasLoggedOutRef = useRef(false);
@@ -147,10 +148,15 @@ export const AuthBootstrap = ({ children }) => {
 
     const hydrate = async () => {
       try {
-        dispatch(setAuthLoading());
+        // Optimistic loading: If we already have a user in Redux from localStorage,
+        // we can stop showing the 'checking' screen immediately and verify in background.
+        if (isAuthenticated) {
+          setChecking(false);
+        } else {
+          dispatch(setAuthLoading());
+        }
         
         // Parallel fetch for session and comprehensive system status
-        // Use allSettled so if /auth/me fails (guest), we still get /settings/status
         const [authRes, systemRes] = await Promise.allSettled([
           api.get('/auth/me'),
           api.get('/settings/status')
@@ -158,11 +164,15 @@ export const AuthBootstrap = ({ children }) => {
 
         if (!mounted) return;
 
-        // 1. Sync branding and maintenance state (Always do this if it succeeds)
+        // 1. Sync branding and maintenance state
         if (systemRes.status === 'fulfilled') {
-          const { maintenanceMode, displayName, orgName, systemLogo } = systemRes.value.data;
+          const { maintenanceMode, displayName, orgName, systemLogo, system_logo } = systemRes.value.data;
           dispatch(setMaintenance(maintenanceMode));
-          dispatch(setSystemSettings({ displayName, orgName, systemLogo }));
+          dispatch(setSystemSettings({ 
+            displayName, 
+            orgName, 
+            systemLogo: systemLogo || system_logo 
+          }));
         }
 
         // 2. Handle Auth Session
@@ -170,7 +180,7 @@ export const AuthBootstrap = ({ children }) => {
           hasLoggedOutRef.current = false;
           dispatch(setUser(normalizeAuthUser(authRes.value.data.user, authRes.value.data.role)));
         } else {
-          // Not logged in or session expired
+          // session check failed (401)
           dispatch(logout());
           queryClient.clear();
         }
@@ -236,7 +246,34 @@ export const AuthBootstrap = ({ children }) => {
   }, [clearSession, isAuthenticated]);
 
   if (checking) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Checking session...</div>;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+        <div className="relative">
+          {/* Outer Ring */}
+          <div className="h-16 w-16 animate-spin rounded-full border-2 border-primary/20 border-t-primary"></div>
+          
+          {/* Inner Pulsing Logo/Icon */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-8 w-8 animate-pulse rounded-full bg-primary/10"></div>
+          </div>
+        </div>
+        
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <h2 className="text-sm font-bold tracking-widest text-foreground uppercase">
+            {systemSettings?.orgName || 'AMU'}
+          </h2>
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest animate-pulse">
+            Verifying Secure Session...
+          </p>
+        </div>
+
+        {/* Subtle background glow */}
+        <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+          <div className="absolute -top-[25%] -left-[25%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full" />
+          <div className="absolute -bottom-[25%] -right-[25%] w-[50%] h-[50%] bg-primary/5 blur-[120px] rounded-full" />
+        </div>
+      </div>
+    );
   }
 
   return children;

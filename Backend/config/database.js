@@ -21,11 +21,16 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('PostgreSQL database connected successfully');
 
-    if (process.env.NODE_ENV === 'development') {
-      // Using basic sync() instead of sync({ alter: true }) to speed up startup.
-      // Use { alter: true } only when you've modified model definitions.
-      await sequelize.sync();
-      console.log('Database models synced');
+    // Optimization: Skip expensive 'alter' sync on every startup unless specifically requested.
+    // This significantly speeds up server start times during development.
+    const shouldSync = String(process.env.DB_SYNC_ALTER || 'false').toLowerCase() === 'true';
+    
+    if (shouldSync && process.env.NODE_ENV === 'development') {
+      console.log('Syncing database models (alter: true)...');
+      await sequelize.sync({ alter: true });
+      console.log('Database models synced successfully');
+    } else if (process.env.NODE_ENV === 'development') {
+      console.log('Database sync skipped (set DB_SYNC_ALTER=true to update schema)');
     }
   } catch (error) {
     console.error('❌ Unable to connect to database:', error);

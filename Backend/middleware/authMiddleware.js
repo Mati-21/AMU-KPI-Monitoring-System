@@ -295,65 +295,12 @@ const protect = async (req, res, next) => {
       next();
       return;
     } catch (error) {
-      console.error('Auth error (cookie):', error);
-      return res.status(401).json({ message: 'Not authorized, token failed' });
-    }
-  }
-
-  // Fallback to Bearer token for API clients
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    try {
-      token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      req.user = await User.findByPk(decoded.Id, {
-        attributes: { exclude: ['password'] },
-        include: [
-          {
-            model: UserRole,
-            where: {
-              IsArchived: false,
-              [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
-            },
-            required: false,
-            include: [
-              {
-                model: Role,
-                where: { IsArchived: false },
-                required: false,
-              },
-            ],
-          },
-        ],
-      });
-
-      if (!req.user) {
-        return res.status(401).json({ message: 'User not found' });
+      console.error('Auth error (cookie):', error.message);
+      
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Session expired, please login again', expired: true });
       }
-
-      if (Array.isArray(req.user.UserRoles) && req.user.UserRoles.length > 0) {
-        const activeRole = selectPrimaryRole(req.user.UserRoles);
-
-        req.user.currentRole = activeRole;
-        req.user.roleName = activeRole?.RoleName || null;
-        if (typeof activeRole?.PermissionVersion !== 'undefined') {
-          const tokenRoleVersion = typeof decoded.roleVersion !== 'undefined' ? decoded.roleVersion : 0;
-          if (tokenRoleVersion !== activeRole.PermissionVersion) {
-            req.authStaleRoleVersion = true;
-            res.set('X-Role-Permissions-Updated', '1');
-          }
-        }
-      }
-
-      if (await checkMaintenance(req.user)) {
-        return res.status(503).json({ message: 'System is under maintenance', maintenance: true });
-      }
-
-      trackActivity(req.user.Id);
-      next();
-      return;
-    } catch (error) {
-      console.error('Auth error:', error);
+      
       return res.status(401).json({ message: 'Not authorized, token failed' });
     }
   }

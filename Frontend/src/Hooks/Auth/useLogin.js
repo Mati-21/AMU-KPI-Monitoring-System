@@ -21,9 +21,8 @@ export const useLogin = () => {
     },
 
     onSuccess: (data) => {
-      // Server sets HTTP-only cookie. Use cookie-based auth flag.
       const normalizedUser = normalizeAuthUser(data.user, data.role);
-      dispatch(setCredentials({ user: normalizedUser, useCookie: true }));
+      dispatch(setCredentials({ user: normalizedUser }));
 
       // Save user in React Query cache
       queryClient.setQueryData(['user'], normalizedUser);

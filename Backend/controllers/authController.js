@@ -131,7 +131,7 @@ const registerUser = async (req, res) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 1000 * 60 * 60 * 24, // 1 day
+        maxAge: 1000 * 60 * 30, // 30 minutes
       });
     }
 
@@ -183,7 +183,7 @@ const loginUser = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      maxAge: 1000 * 60 * 30, // 30 minutes
     });
 
     await logActivity({
@@ -229,20 +229,23 @@ const getCurrentUser = async (req, res) => {
 };
 
 const logoutUser = async (req, res) => {
+  // Clear the cookie first for instant effect
+  res.cookie('token', '', {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+
+  // Log activity in the background (fire and forget)
   if (req.user) {
-    await logActivity({
+    logActivity({
       userId: req.user.Id,
       action: 'LOGOUT',
       resource: 'Auth',
       description: `User logged out: ${req.user.UserName}`,
       ipAddress: req.ip
-    });
+    }).catch(err => console.error('Logout logging failed:', err));
   }
 
-  res.cookie('token', '', {
-    httpOnly: true,
-    expires: new Date(0),
-  });
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 };
 
