@@ -1223,8 +1223,31 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         if (!submittedKpis.has(String(row.id))) return;
 
         childColumnIds.forEach((childColId) => {
-          // Retrieve live aggregation metrics for this child and KPI
-          const metrics = aggregation.get(`${childColId}::${String(row.id)}`);
+          const col = reportColumns.find((c) => String(c.id) === String(childColId));
+          let metrics;
+
+          if (col && col.isUserColumn) {
+            const userKey = `${childColId}::${String(row.id)}`;
+            const assignmentId = userAssignmentMap.get(userKey);
+            const details = assignmentId ? userKpiSums.get(assignmentId) : undefined;
+            if (details) {
+              metrics = {
+                approved: details.isApproved,
+                isApproved: details.isApproved,
+                hasPendingPerformance: details.hasPending && (details.pendingPerformance || 0) > 0,
+                aggregatedPerformance: details.performance,
+                aggregatedPendingTotal: details.totalPerformance,
+                evidenceUrls: Array.from(details.evidenceUrls || []),
+                hasAnySubmission: true,
+              };
+            }
+          }
+
+          if (!metrics) {
+            const lookupRoleId = col && col.isUserColumn ? col.roleId : childColId;
+            metrics = aggregation.get(`${lookupRoleId}::${String(row.id)}`);
+          }
+
           if (!metrics) {
             // Fallback to static snapshot cell if live metrics are unavailable
             const submittedCell = payload.rows.find((pr) => String(pr.id) === String(row.id))?.cellValue;
