@@ -159,17 +159,21 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
     if (q3 !== null) raw.q3s.push(q3);
     if (q4 !== null) raw.q4s.push(q4);
 
+    // A KPI is only "achieved" if total performance meets the target AND
+    // all quarters with data have been approved (no pending evidence/results).
+    const hasAnyPendingQuarter = !!(assignment.q1Pending || assignment.q2Pending || assignment.q3Pending || assignment.q4Pending);
+
     if (!hasSubmission) {
       group.inProgress += 1;
     } else if (totalNeeded > 0) {
-      if (totalPerformance >= totalNeeded) {
+      if (totalPerformance >= totalNeeded && !hasAnyPendingQuarter) {
         group.achieved += 1;
       } else {
         group.inProgress += 1;
       }
     } else {
       // If no target increment, assume >= 20 points (80%) is achieved
-      if (totalPerformance >= 20) group.achieved += 1;
+      if (totalPerformance >= 20 && !hasAnyPendingQuarter) group.achieved += 1;
       else group.inProgress += 1;
     }
   });
