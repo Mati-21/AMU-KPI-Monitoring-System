@@ -1208,15 +1208,9 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         .filter((column) => String(column.id) === String(childRoleId) || String(column.roleId || '') === String(childRoleId))
         .map((column) => String(column.id));
 
-      // Build a map of submitted results by KPI ID for this child to respect the submission gate
       const submittedKpis = new Set();
       payload.rows.forEach((pRow) => {
-        // Prefer the full cell object (has evidence URLs, approval status) over the simple value string
-        const cell = pRow.cellValue || pRow.values?.[childRoleId] || pRow.value;
-        const cellStr = typeof cell === 'object' ? cell?.value : cell;
-        if (cellStr !== undefined && cellStr !== null && cellStr !== '—' && cellStr !== 'N/A' && cellStr !== '') {
-          submittedKpis.add(String(pRow.id));
-        }
+        submittedKpis.add(String(pRow.id));
       });
 
       reportRows.forEach((row) => {
