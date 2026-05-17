@@ -1423,8 +1423,19 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     const subQ = activeQuarter;
     const subQIdx = subQ ? (quarterMap[subQ] || 0) : 0;
     const dataQIdx = quarterMap[targetDataQuarter] || 1;
+
+    // Also consider the highest quarter from child submissions
+    // so that when a child submits e.g. Q2, the parent quarter advances to at least Q2
+    let childSubMaxIdx = 0;
+    childSubmissions.forEach((sub) => {
+      const childQ = getSubmissionQuarter(sub);
+      const childQIdx = childQ ? (quarterMap[childQ] || 0) : 0;
+      if (childQIdx > childSubMaxIdx) {
+        childSubMaxIdx = childQIdx;
+      }
+    });
     
-    const maxIdx = Math.max(subQIdx, dataQIdx);
+    const maxIdx = Math.max(subQIdx, dataQIdx, childSubMaxIdx);
     return invQuarterMap[maxIdx] || 'Q1';
   })();
 
