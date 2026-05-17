@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { 
-  RefreshCw, 
-  Clock3, 
-  ChevronDown, 
-  ChevronUp, 
-  Plus, 
+import {
+  RefreshCw,
+  Clock3,
+  ChevronDown,
+  ChevronUp,
+  Plus,
   Eye,
   Send,
-  Check 
+  Check,
+  ShieldCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
 import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
-import { useSubmitPerformanceMutation, useReportQuery, useSubmitReportMutation } from '../../Hooks/Queries/useKpis';
+import { useSubmitPerformanceMutation, useReportQuery, useSubmitReportMutation, useCycleReadinessQuery, useCloseCycleMutation } from '../../Hooks/Queries/useKpis';
 import { useNotification } from '../../Context/NotificationContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../Config/queryKeys';
@@ -39,7 +41,8 @@ const formatCellValue = (value) => {
   const rawValue = value && typeof value === 'object' ? value.value : value;
 
   if (rawValue === 'N/A') return 'N/A';
-  if (rawValue === null || rawValue === undefined || rawValue === '' || rawValue === '—') {
+  if (rawValue === '' || rawValue === ' ') return '';
+  if (rawValue === null || rawValue === undefined || rawValue === '—') {
     return '-';
   }
 
@@ -112,6 +115,7 @@ const OfficeReport = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [activeKpi, setActiveKpi] = useState(null);
   const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
 
   const submitPerformanceMutation = useSubmitPerformanceMutation();
 
@@ -129,6 +133,7 @@ const OfficeReport = () => {
   // Mutations
   const submitReportMutation = useSubmitReportMutation();
   const submittingReport = submitReportMutation.isPending;
+  const closeCycleMutation = useCloseCycleMutation();
 
   const toggleColumnExpand = (columnId) => {
     setExpandedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
@@ -169,18 +174,35 @@ const OfficeReport = () => {
   const currentOfficeName = reportData?.scopeRole?.name || authUser?.roleName || authUser?.role || 'Current Office';
   const scopeRoleOptions = reportData?.availableScopeRoles || [];
   const showScopeSelector = scopeRoleOptions.length > 0;
+  const showReportModeSelector = reportData?.scopeRoleIsDistributable || reportData?.availableScopeRoles?.length > 0;
 
   const isMeasurer = reportData?.scopeRoleHasExtraMeasures;
   const isSubordinateOfMeasurer = reportData?.isSubordinateOfMeasurer;
 
-  // Show Original/Derived tabs only if role is a "measurer" (hasExtraMeasures)
-  const showReportTypeSelector = isMeasurer;
+  // Root role = the one with no parent role (Strategic Office)
+  // We check the authenticated user's normalized role hierarchy
+  const isRootRole = authUser && authUser.parentRoleId === null;
+  const activeCycleYear = selectedCycleYear || (availableYears[0] || '2018');
 
+  // Cycle readiness — only fetch for root roles
+  const { data: cycleReadiness } = useCycleReadinessQuery(activeCycleYear, isRootRole);
+  const cycleReady = cycleReadiness?.ready === true;
+  const pendingRoles = cycleReadiness?.pendingRoles || [];
+  const pendingResultCount = cycleReadiness?.pendingResultCount || 0;
 
-  // Show Individual/Combined dropdown if role is distributable OR if it has multiple columns (children)
-  const showReportModeSelector = reportData?.scopeRoleIsDistributable || (columns.length > 1 && !reportData?.reportMode === 'combined');
+  const handleCloseCycle = () => {
+    closeCycleMutation.mutate(activeCycleYear, {
+      onSuccess: (data) => {
+        notify(`Cycle ${activeCycleYear} closed. New cycle ${data?.data?.nextCycleYear} is now active.`, 'success');
+        setIsCloseDialogOpen(false);
+      },
+      onError: (err) => {
+        notify(err?.response?.data?.message || 'Failed to close cycle.', 'error');
+        setIsCloseDialogOpen(false);
+      },
+    });
+  };
 
-  const isDerivedView = selectedReportType === 'derived';
   const isCombinedMode = reportData?.reportMode === 'combined';
 
   // Calculate if the entire view has pending items
@@ -286,7 +308,7 @@ const OfficeReport = () => {
                   onChange={(event) => setSelectedCycleYear(event.target.value)}
                   className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
                 >
-                  <option value="">Current Cycle</option>
+                  <option value="">2018</option>
                   {availableYears.map((year) => (
                     <option key={year} value={year}>
                       {year}
@@ -320,10 +342,29 @@ const OfficeReport = () => {
                 Report Submitted
               </div>
             ) : null}
-            <Button type="button" variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={() => {}}>
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
+            {isRootRole ? (
+              <Button
+                type="button"
+                size="sm"
+                className={cn(
+                  'flex items-center gap-2 h-9 transition-all',
+                  cycleReady
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20'
+                    : 'bg-muted text-muted-foreground cursor-not-allowed'
+                )}
+                disabled={!cycleReady || closeCycleMutation.isPending}
+                title={!cycleReady ? `Not ready: ${pendingRoles.length} roles pending, ${pendingResultCount} results unapproved` : 'All reports approved — close this cycle'}
+                onClick={() => setIsCloseDialogOpen(true)}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                {closeCycleMutation.isPending ? 'Closing...' : 'Validate & Close Cycle'}
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all })}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -333,201 +374,195 @@ const OfficeReport = () => {
       <Card className="border-border shadow-sm">
         <CardHeader className="shrink-0 space-y-2">
           <CardTitle className="text-lg">
-            {selectedReportType === 'derived' ? 'Derived KPI Report' : 'Original KPI Report'} for {currentOfficeName}
+            KPI Report for {currentOfficeName}
           </CardTitle>
         </CardHeader>
 
         <CardContent className="p-0">
           <div className="overflow-hidden rounded-b-lg border-t border-border">
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {!isDerivedView && <TableHead className="w-16 text-center font-bold">No.</TableHead>}
-                  <TableHead className="min-w-50 font-bold">KPI</TableHead>
-                  <TableHead className="w-24 text-center font-bold">Unit</TableHead>
-                  {!isDerivedView && <TableHead className="w-24 text-center font-bold">Weight</TableHead>}
-                  <TableHead className="w-24 text-center font-bold">Baseline</TableHead>
-                  <TableHead className="w-24 text-center font-bold">Target</TableHead>
-                  {columns.map((column) => {
-                    const fullName = String(column.name || '').trim();
-                    const isLong = fullName.length > MAX_COLUMN_NAME_LENGTH;
-                    const isExpanded = expandedColumns[column.id];
-                    const displayName = isExpanded ? fullName : truncateColumnName(fullName);
-                    const isSubmitted = column.isSubmitted;
-
-                    return (
-                      <TableHead key={column.id} className="min-w-[120px] max-w-[200px] text-center font-bold" title={fullName}>
-                        <div className="flex flex-col items-center justify-center gap-1 py-1">
-                          <div className="flex items-start justify-center gap-1">
-                            {isSubmitted && reportData?.reportMode !== 'combined' && (
-                              <span className="text-emerald-500 font-bold shrink-0 mt-0.5" title="Report Submitted">
-                                ✓
-                              </span>
-                            )}
-                            <span 
-                              className={cn(
-                                "text-xs leading-tight transition-all duration-200",
-                                !isExpanded && "line-clamp-2"
-                              )}
-                            >
-                              {fullName}
-                            </span>
-                          </div>
-                          {fullName.length > 20 && (
-                            <button
-                              type="button"
-                              onClick={() => toggleColumnExpand(column.id)}
-                              className="inline-flex items-center justify-center w-6 h-4 rounded hover:bg-muted text-primary transition-colors mt-0.5"
-                              title={isExpanded ? "Show less" : "Show more"}
-                            >
-                              {isExpanded ? (
-                                <ChevronUp className="h-3 w-3" />
-                              ) : (
-                                <span className="text-sm leading-none font-bold">...</span>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </TableHead>
-                    );
-                  })}
-                  <TableHead className="min-w-37.5 font-bold">Remark</TableHead>
-                  <TableHead className="w-24 text-center font-bold">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-
-              <TableBody>
-                {loading ? (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={10 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
-                      Loading report data...
-                    </TableCell>
-                  </TableRow>
-                ) : rows.length ? (
-                  allRows.map((row) => {
-                    const rowType = String(row?.rowType || 'kpi');
-                    const isSubTotal = rowType === 'subTotal';
-                    const compactPad = isSubTotal ? { paddingTop: '4px', paddingBottom: '4px' } : undefined;
+                    <TableHead className="w-16 text-center font-bold">No.</TableHead>
+                    <TableHead className="min-w-50 font-bold">KPI</TableHead>
+                    <TableHead className="w-24 text-center font-bold">Unit</TableHead>
+                    <TableHead className="w-24 text-center font-bold">Weight</TableHead>
+                    <TableHead className="w-24 text-center font-bold">Baseline</TableHead>
+                    <TableHead className="w-24 text-center font-bold">Target</TableHead>
+                    {columns.map((column) => {
+                      const fullName = String(column.name || '').trim();
+                      const isLong = fullName.length > MAX_COLUMN_NAME_LENGTH;
+                      const isExpanded = expandedColumns[column.id];
+                      const displayName = isExpanded ? fullName : truncateColumnName(fullName);
+                      const isSubmitted = column.isSubmitted;
 
-                    return (
-                      <TableRow key={row.id} className={getRowClassName(rowType)}>
-                        {!isDerivedView && (
+                      return (
+                        <TableHead key={column.id} className="min-w-[120px] max-w-[200px] text-center font-bold" title={fullName}>
+                          <div className="flex flex-col items-center justify-center gap-1 py-1">
+                            <div className="flex items-start justify-center gap-1">
+                              {isSubmitted && reportData?.reportMode !== 'combined' && (
+                                <span className="text-emerald-500 font-bold shrink-0 mt-0.5" title="Report Submitted">
+                                  ✓
+                                </span>
+                              )}
+                              <span
+                                className={cn(
+                                  "text-xs leading-tight transition-all duration-200",
+                                  !isExpanded && "line-clamp-2"
+                                )}
+                              >
+                                {fullName}
+                              </span>
+                            </div>
+                            {fullName.length > 20 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleColumnExpand(column.id)}
+                                className="inline-flex items-center justify-center w-6 h-4 rounded hover:bg-muted text-primary transition-colors mt-0.5"
+                                title={isExpanded ? "Show less" : "Show more"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-3 w-3" />
+                                ) : (
+                                  <span className="text-sm leading-none font-bold">...</span>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </TableHead>
+                      );
+                    })}
+                    <TableHead className="min-w-37.5 font-bold">Remark</TableHead>
+                    <TableHead className="w-24 text-center font-bold">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={10 + columns.length} className="py-10 text-center text-sm text-muted-foreground">
+                        Loading report data...
+                      </TableCell>
+                    </TableRow>
+                  ) : rows.length ? (
+                    allRows.map((row) => {
+                      const rowType = String(row?.rowType || 'kpi');
+                      const isSubTotal = rowType === 'subTotal';
+                      const compactPad = isSubTotal ? { paddingTop: '4px', paddingBottom: '4px' } : undefined;
+
+                      return (
+                        <TableRow key={row.id} className={getRowClassName(rowType)}>
                           <TableCell style={compactPad} className="text-center text-sm font-medium">
                             {row.no || ''}
                           </TableCell>
-                        )}
-                        <TableCell style={compactPad} className={`text-sm ${isDerivedView ? '' : getRowLabelClassName(rowType)}`}>
-                          <div className="flex items-center gap-2">
-                            <span>{row.kpi}</span>
-                            {isCombinedMode && row.isEvidenceRequired && (
-                              <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[9px] font-bold uppercase tracking-wider border border-amber-200">
-                                Required
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell style={compactPad} className="text-center text-sm">
-                          {row.unit}
-                        </TableCell>
-                        {!isDerivedView && (
+                          <TableCell style={compactPad} className={`text-sm ${getRowLabelClassName(rowType)}`}>
+                            <div className="flex items-center gap-2">
+                              <span>{row.kpi}</span>
+                              {isCombinedMode && row.isEvidenceRequired && (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[9px] font-bold uppercase tracking-wider border border-amber-200">
+                                  Required
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell style={compactPad} className="text-center text-sm">
+                            {row.unit}
+                          </TableCell>
                           <TableCell style={compactPad} className="text-center text-sm font-medium">
                             {row.weight}
                           </TableCell>
-                        )}
-                        <TableCell style={compactPad} className="text-center text-sm">
-                          {row.baseline}
-                        </TableCell>
-                        <TableCell style={compactPad} className="text-center text-sm">
-                          {row.target}
-                        </TableCell>
-                        {columns.map((column) => {
-                        const cellValue = row.values?.[column.id];
-                          const isMissingValue =
-                            cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A'
-                            || (typeof cellValue === 'object' && cellValue?.value === '—');
-                          const showPendingValue = isPendingDisplayCell(cellValue);
-                          const displayValue = formatCellValue(cellValue);
+                          <TableCell style={compactPad} className="text-center text-sm">
+                            {row.baseline}
+                          </TableCell>
+                          <TableCell style={compactPad} className="text-center text-sm">
+                            {row.target}
+                          </TableCell>
+                          {columns.map((column) => {
+                            const cellValue = row.values?.[column.id];
+                            const isMissingValue =
+                              cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A'
+                              || (typeof cellValue === 'object' && cellValue?.value === '—');
+                            const showPendingValue = isPendingDisplayCell(cellValue);
+                            const displayValue = formatCellValue(cellValue);
 
-                          return (
-                            <TableCell
-                              key={column.id}
-                              style={compactPad}
-                              className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
-                            >
-                              <div className="flex flex-col items-center gap-1">
-                                 {showPendingValue ? (
-                                   <div className="flex flex-col items-center leading-none gap-0.5">
-                                     {displayValue === 'Pending' ? (
-                                       <span className="text-amber-600 font-bold italic text-xs py-1">Pending</span>
-                                     ) : (
-                                       <>
-                                         <span className="font-semibold text-sm">{displayValue}</span>
-                                         <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50">
-                                           Pending
-                                         </span>
-                                       </>
-                                     )}
-                                   </div>
-                                 ) : (
-                                   <span>{displayValue}</span>
-                                 )}
-                              </div>
-                            </TableCell>
-                          );
-                        })}
-                        <TableCell className="text-xs leading-relaxed italic text-muted-foreground whitespace-pre-wrap">
-                          {row.remark}
-                        </TableCell>
-                        <TableCell style={compactPad} className="text-center border-l border-border/50">
-                          {(row.rowType === 'kpi' || !row.rowType) && (
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenDetail(row)}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-primary hover:bg-muted transition-colors shadow-sm"
-                                title="View details"
+                            return (
+                              <TableCell
+                                key={column.id}
+                                style={compactPad}
+                                className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
                               >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              {row.isHomeOfficeKpi && row.isEvidenceRequired && (
+                                <div className="flex flex-col items-center gap-1">
+                                  {showPendingValue ? (
+                                    <div className="flex flex-col items-center leading-none gap-0.5">
+                                      {displayValue === 'Pending' ? (
+                                        <span className="text-amber-600 font-bold italic text-xs py-1">Pending</span>
+                                      ) : (
+                                        <>
+                                          {cellValue?.approvedValue !== undefined && cellValue?.approvedValue !== displayValue ? (
+                                            <div className="flex items-baseline gap-1">
+                                              <span className="text-muted-foreground text-xs" title="Previously approved">{cellValue.approvedValue}</span>
+                                              <span className="text-muted-foreground text-xs">(</span>
+                                              <span className="font-bold text-sm text-amber-600" title="Total with pending updates">{displayValue}</span>
+                                              <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5">
+                                                Pending
+                                              </span>
+                                              <span className="text-muted-foreground text-xs">)</span>
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <span className="font-semibold text-sm">{displayValue}</span>
+                                              <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50">
+                                                Pending
+                                              </span>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span>{displayValue}</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-xs leading-relaxed italic text-muted-foreground whitespace-pre-wrap">
+                            {row.remark}
+                          </TableCell>
+                          <TableCell style={compactPad} className="text-center border-l border-border/50">
+                            {(row.rowType === 'kpi' || !row.rowType) && (
+                              <div className="flex items-center justify-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => handleOpenSubmit(row)}
-                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors shadow-sm"
-                                  title="Add/Update Action"
+                                  onClick={() => handleOpenDetail(row)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-primary hover:bg-muted transition-colors shadow-sm"
+                                  title="View details"
                                 >
-                                  <Plus className="h-4 w-4" />
+                                  <Eye className="h-4 w-4" />
                                 </button>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={20} className="py-20 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <p className="text-base font-medium text-muted-foreground">
-                          {selectedReportType === 'derived'
-                            ? 'No Derived KPIs found for this office.'
-                            : selectedReportType === 'original'
-                              ? 'No Original KPIs found for this office.'
-                              : 'No report data available for this office.'}
-                        </p>
-                        <p className="text-sm text-muted-foreground/60">
-                          {selectedReportType === 'derived'
-                            ? 'Try switching to "Original" or "All KPIs" to see standard metrics.'
-                            : 'Ensure KPIs have been allocated and performance has been submitted.'}
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={20} className="py-20 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <p className="text-base font-medium text-muted-foreground">
+                            No report data available for this office.
+                          </p>
+                          <p className="text-sm text-muted-foreground/60">
+                            Ensure KPIs have been allocated and performance has been submitted.
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </CardContent>
@@ -595,25 +630,86 @@ const OfficeReport = () => {
               className="bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={submittingReport}
               onClick={async () => {
-                // New Requirement: Block submission if any KPI that requires evidence has no evidence uploaded
-                const missingEvidence = rows.filter(row => {
-                  if (!row.isEvidenceRequired) return false;
-                  
-                  // If it's a KPI that requires evidence, check if any evidence exists globally for this row
-                  const hasAggregatedEvidence = row.allEvidenceUrls && row.allEvidenceUrls.length > 0;
-                  const hasLocalEvidence = row.quarterlyResults && row.quarterlyResults.some(r => r.evidenceURL || r.EvidenceURL);
-                  
-                  return !hasAggregatedEvidence && !hasLocalEvidence;
+                // Dynamic Quarter Detection: Check the quarter the user is actually working on
+                const qMap = { 'Q1': 1, 'Q2': 2, 'Q3': 3, 'Q4': 4 };
+                const invQMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
+                
+                let latestIdx = 0;
+                rows.forEach(row => {
+                  if (!row.isHomeOfficeKpi) return;
+
+                  (row.allQuarterlyResults || row.quarterlyResults || []).forEach(r => {
+                    const qStr = (r.Quarter || r.quarter || '').toUpperCase();
+                    const qIdx = qMap[qStr] || 0;
+                    const val = r.AdjustedResult ?? r.KPIResult ?? r.kpiResult ?? r.value;
+                    if (val !== null && val !== undefined && val !== '' && val !== '—' && qIdx > latestIdx) {
+                      latestIdx = qIdx;
+                    }
+                  });
                 });
 
-                if (missingEvidence.length > 0) {
-                  const names = missingEvidence.map(r => r.kpi).join(', ');
-                  notify(`Submission blocked: Evidence is required for ${missingEvidence.length} KPIs: ${names}. Please use the '+' icon to upload evidence first.`, 'error');
+                // Fallback to system current quarter if no data found
+                const getSysQuarter = () => {
+                  const month = new Date().getMonth() + 1;
+                  if (month >= 8 && month <= 10) return 'Q1';
+                  if (month >= 11 || month <= 1) return 'Q2';
+                  if (month >= 2 && month <= 4) return 'Q3';
+                  return 'Q4';
+                };
+                
+                const targetQuarter = latestIdx > 0 ? invQMap[latestIdx] : getSysQuarter();
+
+                const missingPerf = rows.filter(row => {
+                  if (!row.isHomeOfficeKpi) return false;
+
+                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(r => 
+                    (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
+                  );
+                  
+                  const columnId = isCombinedMode ? 'combined' : String(reportData?.scopeRole?.id);
+                  const cellValue = row.values?.[columnId];
+                  const cellRawValue = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
+
+                  const val = qRes?.AdjustedResult ?? qRes?.KPIResult ?? qRes?.kpiResult ?? qRes?.value;
+                  const hasData = (val !== null && val !== undefined && val !== '' && val !== '—') ||
+                                  (cellRawValue !== null && cellRawValue !== undefined && cellRawValue !== '' && cellRawValue !== '—');
+
+                  return !hasData;
+                });
+
+                const missingEvid = rows.filter(row => {
+                  if (!row.isHomeOfficeKpi || !row.isEvidenceRequired) return false;
+
+                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(r => 
+                    (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
+                  );
+                  
+                  const hasEvidence = qRes?.EvidenceURL || qRes?.evidenceURL || qRes?.evidenceUrl || (row.allEvidenceUrls || []).length > 0;
+                  return !hasEvidence;
+                });
+
+                if (missingPerf.length > 0 || missingEvid.length > 0) {
+                  let msg = `Submission blocked for ${targetQuarter}. `;
+                  if (missingPerf.length > 0) msg += `Missing performance for ${missingPerf.length} KPIs. `;
+                  if (missingEvid.length > 0) msg += `Missing evidence for ${missingEvid.length} KPIs. `;
+                  
+                  notify(msg + `Please fill in all metrics for ${targetQuarter} before submitting.`, 'error');
                   setIsSubmitDialogOpen(false);
                   return;
                 }
 
                 setIsSubmitDialogOpen(false);
+                
+                console.log(`[REPORT_SUBMIT] Submitting KPIs for ${targetQuarter}:`, rows.map(r => ({
+                  kpi: r.kpi,
+                  quarter: targetQuarter,
+                  value: (() => {
+                    const qRes = (r.quarterlyResults || []).find(qr => 
+                      (qr.Quarter || qr.quarter || '').toUpperCase() === targetQuarter
+                    );
+                    return qRes?.KPIResult ?? qRes?.kpiResult ?? '—';
+                  })()
+                })));
                 submitReportMutation.mutate(
                   {
                     year: reportData?.year,
@@ -631,6 +727,46 @@ const OfficeReport = () => {
               }}
             >
               {submittingReport ? 'Submitting...' : 'Yes, Submit Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Validate & Close Cycle Confirmation Dialog */}
+      <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+              <ShieldCheck className="h-5 w-5" />
+              Close Cycle {activeCycleYear}
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <p className="text-sm text-foreground">
+                You are about to close the <strong>{activeCycleYear}</strong> cycle and activate <strong>{String(Number(activeCycleYear) + 1)}</strong>.
+              </p>
+              <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1 text-xs text-muted-foreground">
+                <p className="font-semibold text-foreground mb-1">KPI Transition Rules:</p>
+                <p>• <strong>Progressive KPIs</strong> — Final performance becomes new baseline &amp; target</p>
+                <p>• <strong>Recursive KPIs</strong> — Baseline resets to 0, target resets to default</p>
+                <p>• <strong>One-Time KPIs</strong> — Archived, do not carry forward</p>
+              </div>
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                This action cannot be undone. Historical data will be preserved.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsCloseDialogOpen(false)} disabled={closeCycleMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleCloseCycle}
+              disabled={closeCycleMutation.isPending}
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              {closeCycleMutation.isPending ? 'Closing Cycle...' : `Confirm & Close ${activeCycleYear}`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import LandingPage from './Pages/Authentication/LandingPage';
 
 import KpiAllocationPage from './Pages/KPI/KpiAllocationPage';
-import DrivedKpiAllocationPage from './Pages/KPI/DrivedKpiAllocationPage';
 import SignIn from './Pages/Authentication/LoginPage';
 import NotFoundPage from './Pages/PageNotFound/PageNotFound';
 import UserManagment from './Pages/Admin/User-Managment/UserManagment';
@@ -78,20 +77,6 @@ function App() {
                       }
                     >
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
-                    </Route>
-
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'Drived KPI Allocation'),
-                            permissionUtils.permissionKey('create', 'Drived KPI Allocation'),
-                            permissionUtils.permissionKey('assign', 'Drived KPI Allocation'),
-                          ]}
-                        />
-                      }
-                    >
-                      <Route path="/drived-kpi-allocation" element={<DrivedKpiAllocationPage />} />
                     </Route>
 
                     <Route

@@ -79,23 +79,18 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
   }, [form.quarter, kpi, open]);
 
   const evidenceRequired = Boolean(kpi?.evidenceRequired);
-  const isDerivedKpi = Boolean(kpi?.isDerived);
 
   const detailItems = useMemo(
     () => [
       { label: 'KPI Name', value: kpi?.name || '—' },
       { label: 'Baseline', value: formatValue(kpi?.baseline) },
       { label: 'Target', value: formatValue(kpi?.target) },
-      ...(isDerivedKpi
-        ? []
-        : [
-            { label: 'Theme', value: kpi?.theme || '—' },
-            { label: 'Sub-theme', value: kpi?.subTheme || '—' },
-          ]),
+      { label: 'Theme', value: kpi?.theme || '—' },
+      { label: 'Sub-theme', value: kpi?.subTheme || '—' },
       { label: 'Unit', value: kpi?.unit || '—' },
       { label: 'Remark', value: kpi?.remark || '—' },
     ],
-    [kpi, isDerivedKpi]
+    [kpi]
   );
 
   const handleSubmit = async () => {

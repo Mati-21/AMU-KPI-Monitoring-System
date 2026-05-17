@@ -77,7 +77,6 @@ export const roleNavigation = {
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
         { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
-        { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: BarChart3, label: 'Dept. KPIs', path: 'dept-kpis' },
         { icon: Users, label: 'Staff Performance', path: 'staff-performance' },
         { icon: UserCheck, label: 'KPI Assignment', path: 'kpi-assignment' },
@@ -96,7 +95,6 @@ export const roleNavigation = {
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
         { icon: Target, label: 'Faculty KPIs', path: 'faculty-kpis' },
-        { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: FileText, label: 'Report', path: 'report' },
         { icon: Building2, label: 'Departments', path: 'departments' },
@@ -116,7 +114,6 @@ export const roleNavigation = {
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
         { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
-        { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Award, label: 'Institution KPIs', path: 'institution-kpis' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
         { icon: Eye, label: 'Oversight', path: 'oversight' },
@@ -136,7 +133,6 @@ export const roleNavigation = {
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
         { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
-        { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },
         { icon: FileText, label: 'Report', path: 'report' },
@@ -155,7 +151,6 @@ export const roleNavigation = {
       items: [
         { icon: Target, label: 'Performance', path: 'assigned-kpis' },
         { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
-        { icon: ClipboardList, label: 'Drived KPI Allocation', path: 'drived-kpi-allocation' },
         { icon: Users, label: 'Sub Unit', path: 'sub-unit' },
         { icon: FileText, label: 'Report', path: 'report' },
         { icon: Settings2, label: 'Registered Kpis', path: 'registered-kpis' },

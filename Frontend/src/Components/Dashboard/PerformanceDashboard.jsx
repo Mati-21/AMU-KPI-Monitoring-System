@@ -177,7 +177,7 @@ const PerformanceDashboard = ({
               )}
 
               <div className="w-40 text-xs shrink-0">
-                <CustomSelect options={config.yearOptions || ['Current Cycle']} value={selectedCycleYear || 'Current Cycle'} onChange={(val) => onYearChange(val === 'Current Cycle' ? '' : val)} placeholder="Current Cycle" />
+                <CustomSelect options={config.yearOptions || ['2018']} value={selectedCycleYear || '2018'} onChange={(val) => onYearChange(val === '2018' ? '' : val)} placeholder="2018" />
               </div>
 
               <div className="w-40 text-xs shrink-0">

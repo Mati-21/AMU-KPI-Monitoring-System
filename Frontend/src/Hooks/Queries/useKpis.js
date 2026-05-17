@@ -307,3 +307,38 @@ export const useKpiYearPlansQuery = () => {
     gcTime: 1000 * 60 * 60, // 1 hour
   });
 };
+
+/**
+ * Hook for checking if the current cycle is ready to close (all reports submitted + all results approved).
+ */
+export const useCycleReadinessQuery = (cycleYear, enabled = true) => {
+  return useQuery({
+    queryKey: ['kpi-year-plans', 'cycle-readiness', cycleYear],
+    queryFn: async () => {
+      const response = await api.get('/kpi-year-plans/cycle-readiness', {
+        params: cycleYear ? { cycleYear } : {},
+      });
+      return response.data?.data || { ready: false, pendingRoles: [], pendingResultCount: 0 };
+    },
+    enabled,
+    staleTime: 1000 * 30, // 30 seconds — poll frequently for live status
+    gcTime: 1000 * 60 * 2,
+  });
+};
+
+/**
+ * Hook for closing the current KPI cycle and creating the next one.
+ */
+export const useCloseCycleMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (cycleYear) => {
+      const response = await api.post('/kpi-year-plans/close-year', cycleYear ? { cycleYear } : {});
+      return response.data;
+    },
+    onSuccess: () => {
+      // Invalidate everything — new cycle means all data changes
+      queryClient.invalidateQueries();
+    },
+  });
+};

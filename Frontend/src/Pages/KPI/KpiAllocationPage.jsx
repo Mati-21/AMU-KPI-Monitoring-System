@@ -26,6 +26,7 @@ import {
   useUpdateUserKpiMutation,
   useDeleteUserKpiMutation,
   useBulkDeleteUserKpisMutation,
+  useKpiYearPlansQuery,
 } from '../../Hooks/Queries/useKpis';
 
 const CompactCellText = ({ value, maxWidth = 'max-w-[220px]' }) => (
@@ -110,6 +111,7 @@ const KpiAllocationPage = () => {
     onConfirm: null,
     isDestructive: true,
   });
+  const [isAssigning, setIsAssigning] = useState(false);
   const [selectedOffice, setSelectedOffice] = useState([]);
   const [selectedTheme, setSelectedTheme] = useState([]);
   const [selectedSubTheme, setSelectedSubTheme] = useState([]);
@@ -126,6 +128,7 @@ const KpiAllocationPage = () => {
   const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery(SENT_PARAMS);
   const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
   const { data: kpiTypes = EMPTY_ARRAY, isLoading: loadingTypes, error: typeError } = useKpiTypesQuery();
+  const { data: yearPlans = EMPTY_ARRAY } = useKpiYearPlansQuery();
 
   // Mutations
   const createUserKpiMutation = useCreateUserKpiMutation();
@@ -366,8 +369,13 @@ const KpiAllocationPage = () => {
     () =>
       [
         {
+          key: 'active-kpis',
+          label: 'Active KPIs',
+          enabled: !hasParentRole && canViewKpiTab,
+        },
+        {
           key: 'view',
-          label: hasParentRole ? 'Assigned KPI' : 'Registerd Kpis',
+          label: hasParentRole ? 'Assigned KPI' : 'Registered KPIs',
           enabled: canViewKpiTab,
         },
         {
@@ -848,17 +856,13 @@ const KpiAllocationPage = () => {
     }
 
     try {
+      setIsAssigning(true);
       // Use mutateAsync to wait for completion
       await Promise.all(uniqueAssignments.map((data) => createUserKpiMutation.mutateAsync(data)));
 
       const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
 
-      let message = `KPI Successfully Allocated: ${uniqueAssignments.length} assignment(s) sent to ${uniqueReceiverRoles.size} office(s).`;
-      if (skipCount > 0) {
-        message += ` (Skipped ${skipCount} already assigned users)`;
-      }
-
-      notify(message, 'success');
+      notify('Kpi Successfully Dispatched', 'success');
 
       // Immediate UI Reset
       emitReportDataChanged();
@@ -870,6 +874,8 @@ const KpiAllocationPage = () => {
     } catch (err) {
       console.error('Batch assignment error:', err);
       notify(err?.response?.data?.message || 'Failed to complete some KPI allocations. Please check the Sent KPI Tracker.', 'error');
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -974,6 +980,78 @@ const KpiAllocationPage = () => {
           <p className="mt-4 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
             No tab is available for your current permissions.
           </p>
+        ) : null}
+
+        {/* Active KPIs Tab — current cycle KPIs from KPIYearPlan */}
+        {!hasParentRole && canViewKpiTab ? (
+          <TabsContent value="active-kpis" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                KPIs active in the current cycle — each carries baseline, target, and final performance.
+              </p>
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {yearPlans.filter(p => p.Status === 'ACTIVE').length} Active KPIs
+              </span>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-4 py-2 text-left font-semibold">No.</th>
+                    <th className="px-4 py-2 text-left font-semibold">KPI Name</th>
+                    <th className="px-4 py-2 text-center font-semibold">Type</th>
+                    <th className="px-4 py-2 text-center font-semibold">Cycle Year</th>
+                    <th className="px-4 py-2 text-center font-semibold">Baseline</th>
+                    <th className="px-4 py-2 text-center font-semibold">Target</th>
+                    <th className="px-4 py-2 text-center font-semibold">Final Performance</th>
+                    <th className="px-4 py-2 text-center font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearPlans.length === 0 ? (
+                    <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No active KPI plans found.</td></tr>
+                  ) : (
+                    yearPlans.map((plan, index) => {
+                      const kpiRow = kpiRows.find(r => r.id === plan.KPIId);
+                      return (
+                        <tr key={plan.Id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2 text-muted-foreground text-xs">{index + 1}</td>
+                          <td className="px-4 py-2 font-medium">{plan.KPI?.KPIType?.KPIName || kpiRow?.kpi || '—'}</td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              plan.KPI?.LifecycleType === 'PROGRESSIVE' ? 'bg-blue-100 text-blue-700' :
+                              plan.KPI?.LifecycleType === 'ONE_TIME' ? 'bg-amber-100 text-amber-700' :
+                              'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {plan.KPI?.LifecycleType === 'PROGRESSIVE' ? 'Progressive' :
+                               plan.KPI?.LifecycleType === 'ONE_TIME' ? 'One-Time' : 'Recursive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-center text-xs font-mono">{plan.CycleYear}</td>
+                          <td className="px-4 py-2 text-center">{plan.Baseline ?? '—'}</td>
+                          <td className="px-4 py-2 text-center">{plan.Target ?? '—'}</td>
+                          <td className="px-4 py-2 text-center">
+                            {plan.FinalPerformance !== null && plan.FinalPerformance !== undefined
+                              ? plan.FinalPerformance
+                              : <span className="text-muted-foreground text-xs">Pending</span>}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              plan.Status === 'COMPLETED' ? 'bg-gray-100 text-gray-600' :
+                              plan.Status === 'LOCKED' ? 'bg-orange-100 text-orange-700' :
+                              'bg-emerald-100 text-emerald-700'
+                            }`}>
+                              {plan.Status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </TabsContent>
         ) : null}
 
         {canViewKpiTab ? (
@@ -1161,8 +1239,8 @@ const KpiAllocationPage = () => {
                       <p className="mt-1 text-xs text-primary">Each selected unit will receive the KPI target shown above.</p>
                     </div>
 
-                    <Button onClick={handleAssign} disabled={loading || !isReadyToAssign}>
-                      Assign KPI
+                    <Button onClick={handleAssign} disabled={loading || !isReadyToAssign || isAssigning}>
+                      {isAssigning ? 'Assigning...' : 'Assign KPI'}
                     </Button>
                   </CardContent>
                 </Card>

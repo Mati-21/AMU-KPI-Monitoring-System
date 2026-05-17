@@ -101,28 +101,17 @@ function AssignedKpisPage() {
     const delegatedKpiKeys = new Set(
       sentAssignments
         .filter((a) => String(a.UserId) !== currentUserId)
-        .map((a) => `${a.KPIId}::${(a.Name || '').trim()}::${(a.Remark || '').trim()}`)
+        .map((a) => String(a.KPIId))
     );
 
     const assignments = combinedAssignments.filter((assignment) => {
-      const remark = String(assignment?.Remark || assignment?.KPI?.Remark || '').trim();
-      const name = String(assignment?.Name || '').trim();
-      const isDerived = (remark.length > 0 && remark.toLowerCase() !== 'null') || (name.length > 0);
-
       // Delegation Logic: If the user has assigned this same KPI to a child role,
       // remove it from their own performance page (hand-off).
-      const assignmentKey = `${assignment.KPIId}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
-      if (delegatedKpiKeys.has(assignmentKey)) {
+      if (delegatedKpiKeys.has(String(assignment.KPIId))) {
         return false;
       }
 
-      // If the user doesn't have "Extra Measures", we show all assignments together.
-      if (!hasExtraMeasures) {
-        return true;
-      }
-
-      // We no longer support the 'derived' view tab, so we only show original KPIs here.
-      return !isDerived;
+      return true;
     });
 
     const isDerivedView = false; // Forced to false after removal of tab
@@ -135,7 +124,6 @@ function AssignedKpisPage() {
       const kpiRecord = kpiById.get(assignment.KPIId);
       if (!kpiRecord) return;
 
-      const isDerived = Boolean(assignment.Name || (assignment.Remark && assignment.Remark.toLowerCase() !== 'null'));
       const targetValue = assignment.AssignedTarget ?? kpiRecord.Target;
 
       const quarterlyResults = Array.isArray(assignment.quarterlyResults) ? assignment.quarterlyResults : [];
@@ -155,8 +143,8 @@ function AssignedKpisPage() {
       const subTheme = leaf?.ParentKPIID ? typeById.get(leaf.ParentKPIID) : null;
       const theme = subTheme?.ParentKPIID ? typeById.get(subTheme.ParentKPIID) : null;
 
-      const themeName = isDerivedView ? 'Drived KPI' : theme?.KPIName || 'Uncategorized Theme';
-      const subThemeName = isDerivedView ? 'Drived KPI' : subTheme?.KPIName || 'Uncategorized Sub-Theme';
+      const themeName = theme?.KPIName || 'Uncategorized Theme';
+      const subThemeName = subTheme?.KPIName || 'Uncategorized Sub-Theme';
 
       if (!groupedThemes.has(themeName)) {
         groupedThemes.set(themeName, new Map());
@@ -175,7 +163,6 @@ function AssignedKpisPage() {
         target: formatValue(targetValue),
         theme: themeName,
         subTheme: subThemeName,
-        isDerived,
         unit: kpiRecord.Unit?.Code || kpiRecord.Unit?.Name || '—',
         remark: assignment.Remark || kpiRecord.Description || '—',
         evidenceRequired: Boolean(kpiRecord.IsEvedenceRequired || kpiRecord.IsEvidenceRequired),

@@ -69,16 +69,6 @@ export const navigationSections = [
         permissions: [permissionUtils.permissionKey('view', 'KPI Allocation'), permissionUtils.permissionKey('create', 'KPI Allocation')],
       },
       {
-        icon: ClipboardList,
-        label: 'Drived KPI Allocation',
-        path: '/drived-kpi-allocation',
-        permissions: [
-          permissionUtils.permissionKey('view', 'Drived KPI Allocation'),
-          permissionUtils.permissionKey('create', 'Drived KPI Allocation'),
-          permissionUtils.permissionKey('assign', 'Drived KPI Allocation'),
-        ],
-      },
-      {
         icon: Users,
         label: 'Sub Unit',
         path: '/sub-unit',

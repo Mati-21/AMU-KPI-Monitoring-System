@@ -10,31 +10,7 @@ import { api } from '../api/axios';
 import { buildDashboardData, safePercent } from '../lib/dashboardUtils';
 import { queryKeys } from '../Config/queryKeys';
 
-const DEFAULT_DERIVED_KPI_FILTER = '__ALL__';
-
-const isDerivedAssignment = (assignment) => {
-  // Backend rule (see userKPIController): Derived if it has either a local Name or a local Remark.
-  const directRemark = String(assignment?.Remark || '').trim();
-  const directName = String(assignment?.Name || '').trim();
-  return Boolean(directRemark || directName);
-};
-
-const getAssignmentId = (assignment) => {
-  return String(assignment?.Id || '');
-};
-
-const getDerivedKpiLabel = (assignment) => {
-  return (
-    assignment?.Name ||
-    assignment?.KPI?.Description ||
-    assignment?.KPI?.KPIType?.KPIName ||
-    assignment?.KPI?.KPIType?.KPIName ||
-    assignment?.KPI?.Description ||
-    `KPI ${getAssignmentId(assignment)}`
-  );
-};
-
-export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cycleYear, focusedRoleId = '__ALL__' } = {}) => {
+export const useDashboardData = ({ cycleYear, focusedRoleId = '__ALL__' } = {}) => {
   const authUser = useSelector((state) => state.auth?.user);
   const currentUserId = String(authUser?.id || authUser?.Id || '');
   const currentRoleId = String(authUser?.roleId || authUser?.RoleId || authUser?.currentRole?.Id || authUser?.currentRole?.RoleId || '');
@@ -47,53 +23,56 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
     queries: [
       {
         queryKey: [...queryKeys.kpis.assignments({ scope: 'mine', fromParent: 'true' }), cycleYear],
-        queryFn: () => api.get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', ...(cycleYear ? { cycleYear } : {}) } }).then(res => res.data?.data || []),
+        queryFn: () =>
+          api
+            .get('/user-kpis', { params: { scope: 'mine', fromParent: 'true', ...(cycleYear ? { cycleYear } : {}) } })
+            .then((res) => res.data?.data || []),
         staleTime: 1000 * 60 * 5, // 5 minutes
         gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: [...queryKeys.kpis.list({}), cycleYear],
-        queryFn: () => api.get('/kpis', fetchOptions).then(res => res.data?.data || []),
+        queryFn: () => api.get('/kpis', fetchOptions).then((res) => res.data?.data || []),
         staleTime: 1000 * 60 * 5, // 5 minutes
         gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: [...queryKeys.kpis.types, cycleYear],
-        queryFn: () => api.get('/kpi-types', fetchOptions).then(res => res.data?.data || []),
+        queryFn: () => api.get('/kpi-types', fetchOptions).then((res) => res.data?.data || []),
         staleTime: 1000 * 60 * 15, // 15 minutes
         gcTime: 1000 * 60 * 60, // 1 hour
       },
       {
         queryKey: [...queryKeys.kpis.assignments({}), cycleYear],
-        queryFn: () => api.get('/user-kpis', fetchOptions).then(res => res.data?.data || []),
+        queryFn: () => api.get('/user-kpis', fetchOptions).then((res) => res.data?.data || []),
         retry: false,
         staleTime: 1000 * 60 * 5, // 5 minutes
         gcTime: 1000 * 60 * 15, // 15 minutes
       },
       {
         queryKey: ['user-roles', cycleYear],
-        queryFn: () => api.get('/user-roles', fetchOptions).then(res => res.data?.data || []),
+        queryFn: () => api.get('/user-roles', fetchOptions).then((res) => res.data?.data || []),
         retry: false,
         staleTime: 1000 * 60 * 10, // 10 minutes
         gcTime: 1000 * 60 * 30, // 30 minutes
       },
       {
         queryKey: [...queryKeys.roles.all, cycleYear],
-        queryFn: () => api.get('/roles', fetchOptions).then(res => res.data?.data || []),
+        queryFn: () => api.get('/roles', fetchOptions).then((res) => res.data?.data || []),
         retry: false,
         staleTime: 1000 * 60 * 15, // 15 minutes
         gcTime: 1000 * 60 * 60, // 1 hour
-      }
-    ]
+      },
+    ],
   });
 
   const [parentReceivedAssignmentsRes, kpisRes, kpiTypesRes, assignmentsRes, userRolesRes, rolesRes] = results;
 
-  const loading = results.some(r => r.isLoading);
-  const error = results.find(r => r.error)?.error?.message || '';
+  const loading = results.some((r) => r.isLoading);
+  const error = results.find((r) => r.error)?.error?.message || '';
 
   const data = useMemo(() => {
-    if (loading || error || !results.every(r => r.data)) return { child: null, parentReceived: null, raw: null };
+    if (loading || error || !results.every((r) => r.data)) return { child: null, parentReceived: null, raw: null };
 
     const parentReceivedAssignmentsRaw = parentReceivedAssignmentsRes.data || [];
     const kpis = kpisRes.data || [];
@@ -104,9 +83,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
 
     // Map child roles
     // Map direct child roles only
-    const childRoleIds = new Set(
-      roles.filter((role) => String(role?.ParentRoleId || '') === currentRoleId).map((role) => String(role?.Id || ''))
-    );
+    const childRoleIds = new Set(roles.filter((role) => String(role?.ParentRoleId || '') === currentRoleId).map((role) => String(role?.Id || '')));
 
     const roleNameByUserId = new Map();
     const roleMap = new Map(roles.map((r) => [String(r.Id), r]));
@@ -128,20 +105,19 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
 
     let parentReceivedAssignments = [...parentReceivedAssignmentsRaw];
 
-    if (isChildOfExtraMeasure) {
-      parentReceivedAssignments = parentReceivedAssignments.filter((a) => isDerivedAssignment(a));
-    }
-
     const assignmentsForSubUnits = assignments.filter((a) => {
       const assignedUserId = String(a.UserId || a.User?.Id || '');
       const createdBy = String(a.CreatedBy || '');
-      
+
+      // Never include the scope holder's own assignments in sub-unit data
+      if (assignedUserId === currentUserId) return false;
+
       // Check if user is in a direct child role
-      const userRoles = a.User?.UserRoles || [];
-      const isDirectChild = userRoles.some(ur => childRoleIds.has(String(ur.RoleId || ur.Role?.Id)));
-      
-      // OR if it was explicitly assigned by the current user
-      const isAssignedByMe = createdBy === currentUserId;
+      const userRolesForAssignment = a.User?.UserRoles || [];
+      const isDirectChild = userRolesForAssignment.some((ur) => childRoleIds.has(String(ur.RoleId || ur.Role?.Id)));
+
+      // OR if it was explicitly assigned by the current user to someone else
+      const isAssignedByMe = createdBy === currentUserId && assignedUserId !== currentUserId;
 
       return isDirectChild || isAssignedByMe;
     });
@@ -173,46 +149,26 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
   }, [results, currentUserId, currentRoleId, loading, error]);
 
   const config = useMemo(() => {
-    const normalizedRole = roleName.toLowerCase();
-    const unitLabel = normalizedRole.includes('staff') ? 'Personal Goals' : normalizedRole.includes('chair') ? 'Teams' : 'Sub Units';
-    // A user is in "Staff View" if explicitly marked non-distributable OR their role name contains 'staff'
-    const isStaffView = authUser?.isDistributable === false || normalizedRole.includes('staff');
+    const normalizedRole = String(roleName || '').toLowerCase();
+    const isStaffView = normalizedRole.includes('staff');
+    const unitLabel = isStaffView ? 'Staff' : 'Sub-Units';
 
-    const derivedFilterId = String(derivedKpiId || DEFAULT_DERIVED_KPI_FILTER);
+    const applyFilters = (list) => {
+      let filtered = Array.isArray(list) ? list : [];
 
-    const derivedKpiOptions = (() => {
-      const assignments = data.raw?.parentReceivedAssignments || [];
-      const derived = assignments.filter((a) => isDerivedAssignment(a));
-      const out = [];
-      derived.forEach((a) => {
-        const assignmentId = getAssignmentId(a);
-        if (!assignmentId) return;
-        out.push({ value: assignmentId, label: getDerivedKpiLabel(a) });
-      });
-      return out;
-    })();
-
-    const applyFilters = (assignments) => {
-      let list = Array.isArray(assignments) ? assignments : [];
-      
-      // Filter by Derived KPI if requested
-      if (derivedFilterId && derivedFilterId !== DEFAULT_DERIVED_KPI_FILTER) {
-        list = list.filter((a) => getAssignmentId(a) === derivedFilterId);
-      }
-      
-      // Filter by Focused Role if requested
       if (focusedRoleId && focusedRoleId !== '__ALL__') {
         const targetRoleId = String(focusedRoleId);
-        // Find users in this role
         const usersInRole = new Set(
           (data.raw?.userRoles || [])
-            .filter(ur => String(ur.RoleId || ur.Role?.Id) === targetRoleId)
-            .map(ur => String(ur.UserId))
+            .filter((ur) => String(ur.RoleId || ur.Role?.Id) === targetRoleId)
+            .map((ur) => String(ur.UserId || ur.User?.Id || ''))
+            .filter(Boolean)
         );
-        list = list.filter(a => usersInRole.has(String(a.UserId)));
+
+        filtered = filtered.filter((assignment) => usersInRole.has(String(assignment.UserId || assignment.User?.Id || '')));
       }
 
-      return list;
+      return filtered;
     };
 
     const computed = (() => {
@@ -253,13 +209,12 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
     return {
       title: `${roleName} Dashboard`,
       subtitle: `Real-time KPI performance tracking for ${roleName}`,
-      yearOptions: ['Current Cycle'],
+      yearOptions: ['2018'],
       isLoading: loading,
       loadError: error,
       hasData,
       childRoleOptions: data.childRoleOptions || [],
       focusedRoleId,
-      derivedKpiOptions,
       isDistributable: !isStaffView,
       stats: [
         {
@@ -302,7 +257,7 @@ export const useDashboardData = ({ derivedKpiId = DEFAULT_DERIVED_KPI_FILTER, cy
       achievementGap: computed.child?.achievementGap || [],
       quarterlyComparison: computed.child?.quarterlyComparison || [],
     };
-  }, [roleName, data, loading, error, authUser, derivedKpiId, focusedRoleId]);
+  }, [roleName, data, loading, error, focusedRoleId]);
 
   return { config, rawData: data, loading, error };
 };

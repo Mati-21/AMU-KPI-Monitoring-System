@@ -96,11 +96,6 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                 <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground border-border">
                   KPI Performance Detail
                 </Badge>
-                {kpi.isDerived && (
-                  <Badge className="bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 border-0 text-[10px] font-bold uppercase">
-                    Derived
-                  </Badge>
-                )}
               </div>
               <DialogTitle className="text-xl font-bold text-foreground leading-tight">
                 {kpi.name}

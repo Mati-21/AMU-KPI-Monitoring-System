@@ -31,7 +31,7 @@ function UnifiedDashboard() {
 
   return (
     <PerformanceDashboard
-      config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : ['Current Cycle'] }}
+      config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : ['2018'] }}
       derivedKpiId={derivedKpiId}
       onDerivedKpiChange={setDerivedKpiId}
       focusedRoleId={selectedRoleId}
