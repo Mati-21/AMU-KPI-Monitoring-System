@@ -1425,6 +1425,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   if (directCol) {
     directCol.isSubmitted = ownSubmissions.length > 0 && !canSubmit;
   }
+  const isSubmitted = ownSubmissions.length > 0 && !canSubmit;
 
   return {
     year: cycleYear,
@@ -1447,12 +1448,13 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     scopeRoleIsDistributable: !!selectedScopeRole.IsDistributable,
     isSubordinateOfMeasurer: isSubordinateOfMeasurer(scopeRoleId, roleById),
     canSubmit,
+    isSubmitted,
   };
 };
 
 const getAffiliatedOfficeReport = async (req, res) => {
   try {
-    const { year, parentRoleId } = req.query;
+    const { year, parentRoleId, quarter } = req.query;
     const cycleYear = year || getCurrentCycleYear();
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const canSeeOtherAffiliatedOfficeReports = hasPermission(req.user?.currentRole?.Permissions, AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS);
@@ -1496,8 +1498,10 @@ const getAffiliatedOfficeReport = async (req, res) => {
           cycleYear,
           scopeRoleId: selectedScopeRole.Id,
           viewerUserId: req.user?.Id,
+          viewerRoleId: currentRoleId,
           reportType: req.query.reportType || undefined,
           reportMode: req.query.reportMode || 'individual',
+          quarter: req.query.quarter || undefined,
         })
       : (async () => {
           // For leaf roles, check if they have submitted to the requester if the requester is the parent
@@ -1517,6 +1521,7 @@ const getAffiliatedOfficeReport = async (req, res) => {
                 currentRoleId: selectedScopeRole.Id,
                 viewerUserId: req.user?.Id,
                 reportType: req.query.reportType || undefined,
+                quarter: quarter || undefined,
                 forceEmpty: true,
               });
             }
@@ -1526,6 +1531,7 @@ const getAffiliatedOfficeReport = async (req, res) => {
             currentRoleId: selectedScopeRole.Id,
             viewerUserId: req.user?.Id,
             reportType: req.query.reportType || undefined,
+            quarter: quarter || undefined,
           });
         })();
 
@@ -1931,6 +1937,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
     scopeRoleIsDistributable: !!currentRole.IsDistributable,
     isSubordinateOfMeasurer: subordinateOfMeasurer,
     canSubmit,
+    isSubmitted,
   };
 };
 
@@ -2003,7 +2010,7 @@ const getCurrentOfficeReport = async (req, res) => {
         })
       : await (async () => {
           // For leaf roles, check if they have submitted to the requester if the requester is the parent
-          if (String(selectedScopeRole => selectedScopeRole.Id) !== String(requesterRoleId)) {
+          if (String(selectedRoleId) !== String(requesterRoleId)) {
             const submissions = await OfficeReportSubmission.findAll({
               where: {
                 SourceRoleId: selectedRoleId,

@@ -353,7 +353,7 @@ const OfficeReport = () => {
                 <Send className="h-4 w-4" />
                 {submittingReport ? 'Submitting...' : 'Submit Report'}
               </Button>
-            ) : reportData && !reportData.canSubmit && reportData.parentRole ? (
+            ) : reportData?.isSubmitted && reportData.parentRole ? (
               <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-600 border border-emerald-500/20">
                 <Check className="h-4 w-4" />
                 Report Submitted
