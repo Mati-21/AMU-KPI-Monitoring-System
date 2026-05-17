@@ -81,15 +81,27 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
   const evidenceRequired = Boolean(kpi?.evidenceRequired);
 
   const detailItems = useMemo(
-    () => [
-      { label: 'KPI Name', value: kpi?.name || '—' },
-      { label: 'Baseline', value: formatValue(kpi?.baseline) },
-      { label: 'Target', value: formatValue(kpi?.target) },
-      { label: 'Theme', value: kpi?.theme || '—' },
-      { label: 'Sub-theme', value: kpi?.subTheme || '—' },
-      { label: 'Unit', value: kpi?.unit || '—' },
-      { label: 'Remark', value: kpi?.remark || '—' },
-    ],
+    () => {
+      const items = [
+        { label: 'KPI Name', value: kpi?.name || '—' },
+        { label: 'Baseline', value: formatValue(kpi?.baseline) },
+        { label: 'Target', value: formatValue(kpi?.target) },
+        { label: 'Theme', value: kpi?.theme || '—' },
+        { label: 'Sub-theme', value: kpi?.subTheme || '—' },
+        { label: 'Unit', value: kpi?.unit || '—' },
+        { label: 'Remark', value: kpi?.remark || '—' },
+      ];
+
+      if (kpi?.aggregatedValue !== undefined && kpi?.aggregatedValue !== null && kpi?.aggregatedValue !== '—') {
+        items.splice(1, 0, {
+          label: 'Aggregated Performance (Children)',
+          value: formatValue(kpi.aggregatedValue),
+          isHighlighted: true
+        });
+      }
+
+      return items;
+    },
     [kpi]
   );
 
@@ -133,9 +145,9 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
             <div className="grid gap-2.5 sm:grid-cols-2">
               {detailItems.map((item) => (
-                <div key={item.label} className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{item.label}</div>
-                  <div className="mt-1.5 wrap-break-word text-sm font-semibold leading-5 text-foreground">{item.value}</div>
+                <div key={item.label} className={`rounded-2xl border p-3.5 shadow-sm ${item.isHighlighted ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
+                  <div className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${item.isHighlighted ? 'text-primary' : 'text-muted-foreground'}`}>{item.label}</div>
+                  <div className={`mt-1.5 wrap-break-word text-sm font-semibold leading-5 ${item.isHighlighted ? 'text-primary' : 'text-foreground'}`}>{item.value}</div>
                 </div>
               ))}
             </div>

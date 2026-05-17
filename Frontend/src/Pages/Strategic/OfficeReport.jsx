@@ -221,6 +221,9 @@ const OfficeReport = () => {
       target: row.target,
       baseline: row.baseline,
       quarterlyResults: row.quarterlyResults || [],
+      aggregatedValue: isCombinedMode 
+        ? (typeof row.values?.['combined'] === 'object' ? row.values['combined']?.value : row.values?.['combined']) 
+        : undefined,
     });
     setSubmissionInitialValues({
       quarter: '',
