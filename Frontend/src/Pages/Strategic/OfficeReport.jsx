@@ -359,7 +359,7 @@ const OfficeReport = () => {
                 Report Submitted
               </div>
             ) : null}
-            {isRootRole ? (
+            {isRootRole && (
               <Button
                 type="button"
                 size="sm"
@@ -381,11 +381,6 @@ const OfficeReport = () => {
               >
                 <ShieldCheck className="h-4 w-4" />
                 {closeCycleMutation.isPending ? 'Closing...' : 'Validate & Close Cycle'}
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" size="sm" className="flex items-center gap-2 h-9" onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all })}>
-                <RefreshCw className="h-4 w-4" />
-                Refresh
               </Button>
             )}
           </div>
