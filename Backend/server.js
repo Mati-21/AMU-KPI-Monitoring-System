@@ -33,7 +33,12 @@ const messageRoutes = require('./routes/messageRoutes');
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
 
-const defaultAllowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
+const defaultAllowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+];
 const envOrigins = (process.env.CLIENT_URL || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -124,6 +129,9 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDB();
+
+    const { loadCycleYearFromDB } = require('./utils/kpiCycle');
+    await loadCycleYearFromDB();
 
     const server = http.createServer(app);
     initSocket(server, { allowedOrigins });

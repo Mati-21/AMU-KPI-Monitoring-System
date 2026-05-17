@@ -28,14 +28,40 @@ const getYearPlans = async (req, res) => {
   }
 };
 
+/**
+ * GET /kpi-year-plans/cycle-readiness
+ * Returns whether all reports are submitted and all results approved for the current cycle.
+ */
+const getCycleReadiness = async (req, res) => {
+  try {
+    const cycleYear = req.query.cycleYear || getCurrentCycleYear();
+    const readiness = await KPIClosureService.checkCycleReadiness(cycleYear);
+    res.json({ success: true, data: { cycleYear, ...readiness } });
+  } catch (error) {
+    console.error('Cycle Readiness error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+/**
+ * POST /kpi-year-plans/close-year
+ * Close the current cycle and create the next one.
+ * Body: { cycleYear? } — defaults to current active cycle year.
+ */
 const closeCycleYear = async (req, res) => {
   try {
-    const { cycleYear, nextCycleYear } = req.body;
-    if (!cycleYear || !nextCycleYear) {
-      return res.status(400).json({ message: 'Both current cycle year and next cycle year are required.' });
+    const cycleYear = req.body?.cycleYear || getCurrentCycleYear();
+
+    // Enforce readiness check before closing
+    const readiness = await KPIClosureService.checkCycleReadiness(cycleYear);
+    if (!readiness.ready) {
+      return res.status(400).json({
+        message: 'Cycle cannot be closed. All reports must be submitted and all KPI results must be approved.',
+        data: readiness,
+      });
     }
 
-    const result = await KPIClosureService.closeYear(cycleYear, nextCycleYear);
+    const result = await KPIClosureService.closeYear(cycleYear);
     res.json({ success: true, data: result });
   } catch (error) {
     console.error('Close Cycle Year error:', error);
@@ -56,6 +82,7 @@ const refreshPlanPerformance = async (req, res) => {
 
 module.exports = {
   getYearPlans,
+  getCycleReadiness,
   closeCycleYear,
   refreshPlanPerformance
 };

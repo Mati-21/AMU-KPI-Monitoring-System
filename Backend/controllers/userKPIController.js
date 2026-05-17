@@ -76,14 +76,11 @@ const getActiveRoleUserIds = async (roleId) => {
   return [...new Set(assignments.map((assignment) => assignment.UserId).filter(Boolean))];
 };
 
-const hasExtraMeasuresAccess = (req) =>
-  Boolean(
-    req.user?.currentRole?.HasExtraMeasures || req.user?.currentRole?.hasExtraMeasures || req.user?.hasExtraMeasures || req.user?.HasExtraMeasures
-  );
+const hasExtraMeasuresAccess = (req) => false;
 
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark, Name, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } =
+    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } =
       req.body;
     const cycleYear = CycleYear || getCurrentCycleYear();
     const assignmentBatchId = parseUuidValue(AssignmentBatchId);
@@ -104,23 +101,13 @@ const createUserKPI = async (req, res) => {
         UserId,
         CycleYear: cycleYear,
         IsArchived: false,
-        Name: Name || null, // Name identifies the specific derivation (for Derived KPIs)
       },
     });
 
     if (existingAssignment) {
-      const canEditAny =
-        hasModulePermission(req, 'KPI Allocation', 'edit') ||
-        hasModulePermission(req, 'Drived KPI', 'edit') ||
-        hasModulePermission(req, 'Drived KPI Allocation', 'edit');
-      const canAssignAny =
-        hasModulePermission(req, 'KPI Allocation', 'assign') ||
-        hasModulePermission(req, 'Drived KPI', 'assign') ||
-        hasModulePermission(req, 'Drived KPI Allocation', 'assign');
-      const canCreateKpiAllocation =
-        hasModulePermission(req, 'KPI Allocation', 'create') ||
-        hasModulePermission(req, 'Drived KPI', 'create') ||
-        hasModulePermission(req, 'Drived KPI Allocation', 'create');
+      const canEditAny = hasModulePermission(req, 'KPI Allocation', 'edit');
+      const canAssignAny = hasModulePermission(req, 'KPI Allocation', 'assign');
+      const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
       const canUseExtraMeasures = hasExtraMeasuresAccess(req);
       const isCreator = String(existingAssignment.CreatedBy || '') === String(req.user?.Id || '');
       const includeCurrentOffice = Boolean(IncludeCurrentOffice);
@@ -196,7 +183,6 @@ const createUserKPI = async (req, res) => {
       IsTargetIndividual: Boolean(IsTargetIndividual),
       AssignmentBatchId: assignmentBatchId,
       Remark,
-      Name,
       CreatedBy: req.user?.Id,
     });
 
@@ -238,23 +224,7 @@ const getUserKPIs = async (req, res) => {
       where.UserId = req.user?.Id;
     } else if (scope === 'sent') {
       where.CreatedBy = req.user?.Id;
-      // Filter out self-assignments so the parent's source isn't accidentally deleted from the sent tracker
       where.UserId = { [Op.ne]: req.user?.Id };
-    }
-
-    const { isDerived } = req.query;
-    if (isDerived !== undefined) {
-      if (String(isDerived).toLowerCase() === 'true') {
-        // Derived: Has either a local Name or a local Remark
-        where[Op.or] = [
-          { Remark: { [Op.not]: null }, [Op.and]: [{ Remark: { [Op.ne]: '' } }] },
-          { Name: { [Op.not]: null }, [Op.and]: [{ Name: { [Op.ne]: '' } }] },
-        ];
-      } else if (String(isDerived).toLowerCase() === 'false') {
-        // Original: Has neither a local Name nor a local Remark
-        where.Remark = { [Op.or]: [null, ''] };
-        where.Name = { [Op.or]: [null, ''] };
-      }
     }
 
     if (String(fromParent).toLowerCase() === 'true') {
@@ -321,26 +291,17 @@ const getUserKPIs = async (req, res) => {
           })
         : [];
 
-    // Dashboard Submission-Gating:
-    // If the requester is a parent, they should only see child data if the child has submitted.
-    // Self-data is always visible.
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const currentUserId = String(req.user?.Id || '');
     
-    // Fetch all roles to build the hierarchy in-memory
     const allRoles = await require('../models').Role.findAll({
       where: { IsArchived: false },
       attributes: ['Id', 'ParentRoleId'],
     });
     
-    const roleMap = new Map(allRoles.map(r => [String(r.Id), r]));
-    
-    // Find all direct children
     const directChildRoleIds = allRoles
       .filter((r) => String(r.ParentRoleId || '') === currentRoleId)
       .map((r) => String(r.Id));
-
-
 
     const submissions = directChildRoleIds.length
       ? await require('../models').OfficeReportSubmission.findAll({
@@ -361,7 +322,6 @@ const getUserKPIs = async (req, res) => {
     });
     const roleIdByUserId = new Map(userRoles.map((ur) => [String(ur.UserId), String(ur.RoleId)]));
 
-    // Map assignment ID to its creator
     const assignmentCreatorMap = new Map(userKpis.map(a => [String(a.Id), String(a.CreatedBy || '')]));
 
     const filteredResults = quarterlyResults.filter((r) => {
@@ -371,10 +331,8 @@ const getUserKPIs = async (req, res) => {
       const isDirectChild = directChildRoleIds.includes(resultRoleId);
       
       if (isDirectChild) {
-        // Direct child data only visible after submission
         return submittedChildRoleIds.has(resultRoleId);
       } else {
-        // For non-direct children (descendants/peers), only show if the current user assigned it
         const assignmentCreator = assignmentCreatorMap.get(String(r.UserKPIId));
         return assignmentCreator === currentUserId;
       }
@@ -522,13 +480,9 @@ const updateUserKPI = async (req, res) => {
     const previousIncludeCurrentOffice = Boolean(userKPI.IncludeCurrentOffice);
 
     const canEditAny =
-      hasModulePermission(req, 'KPI Allocation', 'edit') ||
-      hasModulePermission(req, 'Drived KPI', 'edit') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'edit');
+      hasModulePermission(req, 'KPI Allocation', 'edit');
     const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create') ||
-      hasModulePermission(req, 'Drived KPI', 'create') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+      hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
 
@@ -559,7 +513,6 @@ const updateUserKPI = async (req, res) => {
     const includeCurrentOfficeBoolean = IncludeCurrentOffice !== undefined ? Boolean(IncludeCurrentOffice) : userKPI.IncludeCurrentOffice;
     let nextCreatedBy = userKPI.CreatedBy;
 
-    // When unallocating from home office, restore parent ownership so it becomes visible in Assigned KPI.
     if (IncludeCurrentOffice !== undefined && includeCurrentOfficeBoolean === false && userKPI.IncludeCurrentOffice === true) {
       const parentRoleId = req.user?.currentRole?.ParentRoleId || null;
       const parentUserIds = await getActiveRoleUserIds(parentRoleId);
@@ -599,13 +552,9 @@ const deleteUserKPI = async (req, res) => {
     }
 
     const canDeleteAny =
-      hasModulePermission(req, 'KPI Allocation', 'delete') ||
-      hasModulePermission(req, 'Drived KPI', 'delete') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'delete');
+      hasModulePermission(req, 'KPI Allocation', 'delete');
     const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create') ||
-      hasModulePermission(req, 'Drived KPI', 'create') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+      hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
 
@@ -613,7 +562,6 @@ const deleteUserKPI = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to delete this KPI allocation item' });
     }
 
-    // Permanently delete the performance results associated with this specific assignment ID
     await UserKPIResult.destroy({
       where: {
         UserKPIId: userKPI.Id,
@@ -642,7 +590,6 @@ const deleteUserKPI = async (req, res) => {
       console.warn('Failed to create KPI unallocation notification:', notifErr.message);
     }
 
-    // Find the user's role so we can clear their report submission
     const userRole = await UserRole.findOne({
       where: {
         UserId: userKPI.UserId,
@@ -651,7 +598,6 @@ const deleteUserKPI = async (req, res) => {
       attributes: ['RoleId'],
     });
 
-    // If this user belongs to a child role, clear any office report submission for that role
     if (userRole) {
       await OfficeReportSubmission.destroy({
         where: {
@@ -661,7 +607,6 @@ const deleteUserKPI = async (req, res) => {
       console.log(`[DELETE_KPI] Cleared report submission for role: ${userRole.RoleId} (user: ${userKPI.UserId})`);
     }
 
-    // Permanently delete the KPI allocation item
     await userKPI.destroy();
 
     res.json({ success: true, message: 'User KPI and associated results deleted successfully' });
@@ -689,17 +634,12 @@ const bulkDeleteUserKPIs = async (req, res) => {
     }
 
     const canDeleteAny =
-      hasModulePermission(req, 'KPI Allocation', 'delete') ||
-      hasModulePermission(req, 'Drived KPI', 'delete') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'delete');
+      hasModulePermission(req, 'KPI Allocation', 'delete');
     const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create') ||
-      hasModulePermission(req, 'Drived KPI', 'create') ||
-      hasModulePermission(req, 'Drived KPI Allocation', 'create');
+      hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const currentUserId = String(req.user?.Id || '');
 
-    // Filter assignments that the user is authorized to delete
     const authorizedAssignments = assignments.filter((a) => {
       const isCreator = String(a.CreatedBy || '') === currentUserId;
       return canDeleteAny || canUseExtraMeasures || (canCreateKpiAllocation && isCreator);

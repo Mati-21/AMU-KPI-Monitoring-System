@@ -14,12 +14,7 @@ router
       permissionKey('view', 'Assigned KPI'),
       permissionKey('view', 'KPI Allocation'),
       permissionKey('create', 'KPI Allocation'),
-      permissionKey('view', 'Drived KPI Allocation'),
-      permissionKey('create', 'Drived KPI Allocation'),
-      permissionKey('assign', 'Drived KPI Allocation'),
-      permissionKey('view', 'Drived KPI'),
-      permissionKey('create', 'Drived KPI'),
-      permissionKey('assign', 'Drived KPI'),
+      permissionKey('create', 'KPI Allocation'),
     ]),
     getKPIs
   );
@@ -33,12 +28,7 @@ router
       permissionKey('view', 'Assigned KPI'),
       permissionKey('view', 'KPI Allocation'),
       permissionKey('create', 'KPI Allocation'),
-      permissionKey('view', 'Drived KPI Allocation'),
-      permissionKey('create', 'Drived KPI Allocation'),
-      permissionKey('assign', 'Drived KPI Allocation'),
-      permissionKey('view', 'Drived KPI'),
-      permissionKey('create', 'Drived KPI'),
-      permissionKey('assign', 'Drived KPI'),
+      permissionKey('create', 'KPI Allocation'),
     ]),
     getKPIById
   )
