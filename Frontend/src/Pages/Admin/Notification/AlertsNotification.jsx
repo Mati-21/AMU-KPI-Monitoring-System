@@ -70,6 +70,12 @@ const formatDateLabel = (value) => {
   });
 };
 
+const getTime = (d) => {
+  if (!d) return 0;
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? 0 : dt.getTime();
+};
+
 
 
 /* -------------------- Main Component -------------------- */
