@@ -1371,7 +1371,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   console.log('[GLOBAL_REPORT_TRACE] Sample Rows:', JSON.stringify(flatRows.slice(0, 5), null, 2));
 
-  const latestSub = childSubmissions[0] || ownSubmissions[0];
+  const latestSub = ownSubmissions[0];
   const activeQuarter = latestSub ? getSubmissionQuarter(latestSub) : null;
 
   const getTargetDataQuarter = (rows) => {
