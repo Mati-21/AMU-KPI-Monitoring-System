@@ -16,6 +16,23 @@ class KPIClosureService {
     // Get all roles in the system (non-archived)
     const allRoles = await Role.findAll({ where: { IsArchived: false }, attributes: ['Id', 'RoleName', 'ParentRoleId'] });
 
+    // Find all unique user IDs that received KPIs for this cycle year
+    const activeAssignments = await UserKPI.findAll({
+      where: { CycleYear: cycleYear, IsArchived: false },
+      attributes: ['UserId'],
+    });
+    const assignedUserIds = [...new Set(activeAssignments.map(a => String(a.UserId)))];
+
+    // Find all roles associated with these assigned users
+    let assignedRoleIds = new Set();
+    if (assignedUserIds.length > 0) {
+      const userRoles = await UserRole.findAll({
+        where: { UserId: { [Op.in]: assignedUserIds }, IsArchived: false },
+        attributes: ['RoleId'],
+      });
+      userRoles.forEach(ur => assignedRoleIds.add(String(ur.RoleId)));
+    }
+
     // Get all submitted OfficeReportSubmissions for this cycle
     const submissions = await OfficeReportSubmission.findAll({
       where: { CycleYear: cycleYear, IsArchived: false },
@@ -23,10 +40,10 @@ class KPIClosureService {
     });
     const submittedRoleIds = new Set(submissions.map(s => String(s.SourceRoleId)));
 
-    // All non-root roles must have submitted
+    // Only non-root roles that HAVE received a KPI are required to submit
     const nonRootRoles = allRoles.filter(r => r.ParentRoleId);
     const pendingRoles = nonRootRoles
-      .filter(r => !submittedRoleIds.has(String(r.Id)))
+      .filter(r => assignedRoleIds.has(String(r.Id)) && !submittedRoleIds.has(String(r.Id)))
       .map(r => r.RoleName || String(r.Id));
 
     // Check for any pending KPI results this cycle

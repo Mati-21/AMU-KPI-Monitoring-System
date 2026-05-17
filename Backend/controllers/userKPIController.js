@@ -238,7 +238,6 @@ const getUserKPIs = async (req, res) => {
         where: {
           RoleId: parentRoleId,
           IsArchived: false,
-          [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
         },
         attributes: ['UserId'],
       });

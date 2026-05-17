@@ -110,6 +110,7 @@ const OfficeReport = () => {
   const [availableYears, setAvailableYears] = useState([]);
   const [selectedCycleYear, setSelectedCycleYear] = useState('');
   const [selectedReportMode, setSelectedReportMode] = useState('individual');
+  const [selectedQuarter, setSelectedQuarter] = useState('');
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -125,6 +126,7 @@ const OfficeReport = () => {
     roleId: selectedScopeRoleId,
     cycleYear: selectedCycleYear,
     reportMode: selectedReportMode,
+    quarter: selectedQuarter || undefined,
   };
 
   const { data: reportData, isLoading: loading, error: queryError } = useReportQuery(reportParams);
@@ -207,7 +209,7 @@ const OfficeReport = () => {
 
   // Calculate if the entire view has pending items
   const hasPendingItems = rows.some((row) =>
-    columns.some((col) => row.values?.[col.id]?.approved === false || row.values?.[col.id]?.isApproved === false)
+    columns.some((col) => isPendingDisplayCell(row.values?.[col.id]))
   );
 
   const handleOpenSubmit = (row) => {
@@ -317,6 +319,21 @@ const OfficeReport = () => {
                 </select>
               </>
             )}
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Quarter</span>
+              <select
+                value={selectedQuarter}
+                onChange={(event) => setSelectedQuarter(event.target.value)}
+                className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+              >
+                <option value="">Progressive</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
+            </div>
           </div>
 
           <div className="ml-auto flex items-center gap-3">
@@ -348,12 +365,18 @@ const OfficeReport = () => {
                 size="sm"
                 className={cn(
                   'flex items-center gap-2 h-9 transition-all',
-                  cycleReady
+                  cycleReady && reportData?.quarter === 'Q4'
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'
                 )}
-                disabled={!cycleReady || closeCycleMutation.isPending}
-                title={!cycleReady ? `Not ready: ${pendingRoles.length} roles pending, ${pendingResultCount} results unapproved` : 'All reports approved — close this cycle'}
+                disabled={!cycleReady || reportData?.quarter !== 'Q4' || closeCycleMutation.isPending}
+                title={
+                  reportData?.quarter !== 'Q4'
+                    ? 'Not ready: All 4 quarters must be submitted to validate and close.'
+                    : !cycleReady
+                      ? `Not ready: ${pendingRoles.length} roles pending, ${pendingResultCount} results unapproved`
+                      : 'All reports approved — close this cycle'
+                }
                 onClick={() => setIsCloseDialogOpen(true)}
               >
                 <ShieldCheck className="h-4 w-4" />
@@ -372,10 +395,17 @@ const OfficeReport = () => {
       {error ? <p className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
       <Card className="border-border shadow-sm">
-        <CardHeader className="shrink-0 space-y-2">
-          <CardTitle className="text-lg">
-            KPI Report for {currentOfficeName}
-          </CardTitle>
+        <CardHeader className="shrink-0 pb-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <CardTitle className="text-xl font-bold">
+              KPI Report for {currentOfficeName}
+            </CardTitle>
+            {reportData?.quarter && (
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-4 py-1.5 rounded-md shadow-sm text-sm uppercase tracking-widest whitespace-nowrap">
+                {reportData.quarter === 'Q4' ? 'Full Year' : reportData.quarter}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
 
         <CardContent className="p-0">
