@@ -732,8 +732,8 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   // Keep the raw (non-deduplicated) list for result filtering — child assignment IDs
   // must be found even when a parent assignment for the same KPI takes priority in the
   // deduplicated row-building list.
-  // Raw assignments for result-lookup — only child assignments
-  const allRawAssignments = [...childAssignments];
+  // Raw assignments for result-lookup — both parent and child assignments
+  const allRawAssignments = [...officialParentAssignments, ...childAssignments];
 
   const allAssignments = [];
   const seenAssignmentKeys = new Set();
