@@ -105,6 +105,35 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
     [kpi]
   );
 
+  const targetNum = useMemo(() => {
+    if (!kpi?.target) return NaN;
+    const str = String(kpi.target).replace(/,/g, '').trim();
+    return parseFloat(str);
+  }, [kpi?.target]);
+
+  const previousTotal = useMemo(() => {
+    if (!kpi?.quarterlyResults) return 0;
+    const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+    const currentQIdx = quarterMap[String(form.quarter || '').toUpperCase()] || 1;
+    
+    let sum = 0;
+    kpi.quarterlyResults.forEach((r) => {
+      const qIdx = quarterMap[String(r.quarter || r.Quarter || '').toUpperCase()] || 0;
+      if (qIdx > 0 && qIdx < currentQIdx) {
+        const val = r.AdjustedResult ?? r.KPIResult ?? r.kpiResult ?? r.result ?? r.value;
+        const num = parseFloat(String(val).replace(/,/g, '').trim());
+        if (!isNaN(num)) sum += num;
+      }
+    });
+    return sum;
+  }, [kpi?.quarterlyResults, form.quarter]);
+
+  const currentValue = parseFloat(String(form.result).replace(/,/g, '').trim()) || 0;
+  const projectedTotal = previousTotal + currentValue;
+  const hasValidTarget = !isNaN(targetNum);
+  const remainingGap = hasValidTarget ? Math.max(0, targetNum - projectedTotal) : null;
+  const progressPercent = hasValidTarget ? Math.min(100, Math.max(0, (projectedTotal / targetNum) * 100)) : 0;
+
   const handleSubmit = async () => {
     if (form.result === '' || form.result === null || form.result === undefined) {
       notify('Please enter a performance result value.', 'warning');
@@ -187,7 +216,7 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
                 </select>
               </div>
 
-              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-sm flex flex-col">
                 <label className="mb-2.5 block text-sm font-semibold text-foreground/80">Performance Result</label>
                 <Input
                   type="number"
@@ -199,6 +228,31 @@ const PerformanceSubmitModal = ({ open, onOpenChange, kpi, initialValues, onSubm
                 />
               </div>
             </div>
+
+            {hasValidTarget && (
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-foreground/80">Cumulative Progress (Including Previous Quarters)</span>
+                  <span className="text-sm font-bold text-primary">{formatValue(projectedTotal)} / {formatValue(targetNum)}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-primary/10">
+                  <div 
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="mt-2.5 flex justify-between text-xs font-medium">
+                  {remainingGap !== null && remainingGap > 0 ? (
+                    <span className="text-muted-foreground">Remaining Gap: <span className="text-foreground font-bold">{formatValue(remainingGap)}</span></span>
+                  ) : remainingGap === 0 ? (
+                    <span className="text-emerald-600 font-bold">Target Achieved! 🎉</span>
+                  ) : projectedTotal > targetNum ? (
+                    <span className="text-emerald-600 font-bold">Overachieved by {formatValue(projectedTotal - targetNum)}! 🚀</span>
+                  ) : null}
+                  <span className="text-primary font-bold">{progressPercent.toFixed(1)}%</span>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <label className="mb-2.5 block text-sm font-semibold text-foreground/80">Remarks</label>
