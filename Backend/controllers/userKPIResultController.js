@@ -1208,26 +1208,62 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         .filter((column) => String(column.id) === String(childRoleId) || String(column.roleId || '') === String(childRoleId))
         .map((column) => String(column.id));
 
-      // Build a map of submitted results by KPI ID for this child
-      const submittedByKpi = new Map();
+      // Build a map of submitted results by KPI ID for this child to respect the submission gate
+      const submittedKpis = new Set();
       payload.rows.forEach((pRow) => {
         // Prefer the full cell object (has evidence URLs, approval status) over the simple value string
         const cell = pRow.cellValue || pRow.values?.[childRoleId] || pRow.value;
-        // Only include cells with actual performance data — skip placeholders
         const cellStr = typeof cell === 'object' ? cell?.value : cell;
         if (cellStr !== undefined && cellStr !== null && cellStr !== '—' && cellStr !== 'N/A' && cellStr !== '') {
-          submittedByKpi.set(String(pRow.id), cell);
+          submittedKpis.add(String(pRow.id));
         }
       });
 
       reportRows.forEach((row) => {
-        const submittedCell = submittedByKpi.get(String(row.id));
-        if (!submittedCell) return;
+        if (!submittedKpis.has(String(row.id))) return;
 
         childColumnIds.forEach((childColId) => {
-          // The submitted payload is the authoritative source — always overwrite
-          row.values[childColId] =
-            typeof submittedCell === 'object' ? { ...submittedCell, isSubmitted: true } : { value: submittedCell, isSubmitted: true };
+          // Retrieve live aggregation metrics for this child and KPI
+          const metrics = aggregation.get(`${childColId}::${String(row.id)}`);
+          if (!metrics) {
+            // Fallback to static snapshot cell if live metrics are unavailable
+            const submittedCell = payload.rows.find((pr) => String(pr.id) === String(row.id))?.cellValue;
+            if (submittedCell) {
+              row.values[childColId] =
+                typeof submittedCell === 'object' ? { ...submittedCell, isSubmitted: true } : { value: submittedCell, isSubmitted: true };
+            }
+            return;
+          }
+
+          const isApproved = metrics.approved ?? metrics.isApproved;
+          const isEvidenceKpi = row.isEvidenceRequired;
+          const hasPending = metrics.hasPendingPerformance;
+
+          // Build dynamic, live-updated cell values for the parent report
+          let cellValue;
+          if (isEvidenceKpi && hasPending) {
+            // For parents viewing a child column with pending evidence: only show approved value
+            cellValue = {
+              value: formatNumericValue(metrics.aggregatedPerformance),
+              approvedValue: formatNumericValue(metrics.aggregatedPerformance),
+              approved: isApproved,
+              isApproved: isApproved,
+              showPendingValue: false,
+              evidenceUrls: metrics.evidenceUrls || [],
+              isSubmitted: true,
+            };
+          } else {
+            cellValue = {
+              value: formatNumericValue(isEvidenceKpi ? metrics.aggregatedPerformance : (metrics.aggregatedPendingTotal ?? metrics.aggregatedPerformance)),
+              approved: isApproved,
+              isApproved: isApproved,
+              showPendingValue: false,
+              evidenceUrls: metrics.evidenceUrls || [],
+              isSubmitted: true,
+            };
+          }
+
+          row.values[childColId] = cellValue;
         });
       });
     });
