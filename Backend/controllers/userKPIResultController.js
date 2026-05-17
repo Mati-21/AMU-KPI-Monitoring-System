@@ -1052,6 +1052,10 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         // Combined mode values will be recalculated after overlay
         row.values[String(column.id)] = '—';
       } else if (column.isUserColumn) {
+        if (!column.isSubmitted) {
+          row.values[String(column.id)] = '—';
+          return;
+        }
         const userKey = `${String(column.id)}::${String(row.id)}`;
         const assignmentId = userAssignmentMap.get(userKey);
         const details = assignmentId ? userKpiSums.get(assignmentId) : undefined;
