@@ -626,8 +626,8 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   const activeUserRoles = await UserRole.findAll({
     where: {
-      IsArchived: false,
       RoleId: { [Op.in]: Array.from(visibleRoleIds) },
+      ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
     },
     attributes: ['UserId', 'RoleId', 'CreatedAt'],
     include: [
@@ -676,7 +676,10 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   let parentOfParentUserIds = [];
   if (parentRoleIdOfScope) {
     const pUserRoles = await UserRole.findAll({
-      where: { RoleId: parentRoleIdOfScope, IsArchived: false },
+      where: {
+        RoleId: parentRoleIdOfScope,
+        ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
+      },
       attributes: ['UserId'],
     });
     parentOfParentUserIds = pUserRoles.map((ur) => String(ur.UserId));
@@ -1219,15 +1222,16 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       } else {
         // Current Office column: check if the KPI has been delegated
         if (column.isCurrentOffice) {
-          if (!row.isHomeOfficeKpi) {
-            // KPI was delegated to a child — show N/A, not a dash
+          const metrics = aggregation.get(`${String(column.id)}::${String(row.id)}`);
+          const hasDirectPerformance = metrics && metrics.hasAnySubmission;
+
+          if (!row.isHomeOfficeKpi && !hasDirectPerformance) {
+            // KPI was delegated to a child and parent has no direct performance — show N/A, not a dash
             row.values[String(column.id)] = 'N/A';
             return;
           }
 
           // Otherwise, use the aggregated performance for the scope role
-          const metrics = aggregation.get(`${String(column.id)}::${String(row.id)}`);
-
           if (!metrics || !metrics.hasAnySubmission) {
             row.values[String(column.id)] = '—';
           } else {
@@ -1744,8 +1748,8 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
           (
             await UserRole.findAll({
               where: {
-                IsArchived: false,
                 RoleId: parentRole.Id,
+                ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
               },
               attributes: ['UserId'],
             })
@@ -1758,8 +1762,8 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const activeUserRoles = await UserRole.findAll({
     where: {
-      IsArchived: false,
       RoleId: currentRoleId,
+      ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
     },
     attributes: ['UserId', 'RoleId', 'CreatedAt'],
     include: [
@@ -2335,7 +2339,10 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
           const roleId = String(role.Id);
 
           const userRoles = await UserRole.findAll({
-            where: { RoleId: roleId, IsArchived: false },
+            where: {
+              RoleId: roleId,
+              ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
+            },
             attributes: ['UserId'],
           });
           const userIds = userRoles.map((ur) => ur.UserId);

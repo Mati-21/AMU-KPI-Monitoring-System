@@ -236,7 +236,7 @@ const getUserKPIs = async (req, res) => {
         const parentRoleUserAssignments = await UserRole.findAll({
           where: {
             RoleId: parentRoleId,
-            IsArchived: false,
+            ...(resolvedYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
           },
           attributes: ['UserId'],
         });
@@ -328,7 +328,10 @@ const getUserKPIs = async (req, res) => {
     const submittedChildRoleIds = new Set(submissions.map((s) => String(s.SourceRoleId)));
 
     const userRoles = await require('../models').UserRole.findAll({
-      where: { UserId: { [Op.in]: assignmentUserIds }, IsArchived: false },
+      where: {
+        UserId: { [Op.in]: assignmentUserIds },
+        ...(resolvedYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
+      },
       attributes: ['UserId', 'RoleId'],
     });
     const roleIdByUserId = new Map(userRoles.map((ur) => [String(ur.UserId), String(ur.RoleId)]));
