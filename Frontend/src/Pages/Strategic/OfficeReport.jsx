@@ -263,15 +263,15 @@ const OfficeReport = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-4">
-            {showScopeSelector ? (
-              <>
-                <span className="text-xs font-medium text-muted-foreground">Report Scope</span>
+        <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-6 mt-6 space-y-6">
+          <div className="flex flex-wrap items-end gap-6">
+            {showScopeSelector && (
+              <div className="flex-1 min-w-[240px] space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">REPORT SCOPE</span>
                 <select
                   value={selectedScopeRoleId || String(reportData?.scopeRole?.id || '')}
                   onChange={(event) => setSelectedScopeRoleId(event.target.value)}
-                  className="min-w-70 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   {scopeRoleOptions.map((scopeRole) => (
                     <option key={scopeRole.id} value={scopeRole.id}>
@@ -279,30 +279,30 @@ const OfficeReport = () => {
                     </option>
                   ))}
                 </select>
-              </>
-            ) : null}
+              </div>
+            )}
 
-            {showReportModeSelector ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground">View Mode</span>
+            {showReportModeSelector && (
+              <div className="flex-1 min-w-[160px] space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">VIEW MODE</span>
                 <select
                   value={selectedReportMode}
                   onChange={(event) => setSelectedReportMode(event.target.value)}
-                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   <option value="individual">Individual</option>
                   <option value="combined">Combined</option>
                 </select>
               </div>
-            ) : null}
+            )}
 
             {availableYears.length > 0 && (
-              <>
-                <span className="text-xs font-medium text-muted-foreground">Year</span>
+              <div className="flex-1 min-w-[140px] space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">YEAR</span>
                 <select
                   value={selectedCycleYear || activeCycleYearFromServer || ''}
                   onChange={(event) => setSelectedCycleYear(event.target.value)}
-                  className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   {availableYears.map((year) => (
                     <option key={year} value={year}>
@@ -310,15 +310,15 @@ const OfficeReport = () => {
                     </option>
                   ))}
                 </select>
-              </>
+              </div>
             )}
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Quarter</span>
+            <div className="flex-1 min-w-[160px] space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">QUARTER</span>
               <select
                 value={selectedQuarter}
                 onChange={(event) => setSelectedQuarter(event.target.value)}
-                className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
               >
                 <option value="">Progressive</option>
                 <option value="Q1">Q1</option>
@@ -328,7 +328,8 @@ const OfficeReport = () => {
               </select>
             </div>
 
-            <div className="flex items-center gap-2 border-l pl-4 border-border/60">
+            <div className="flex items-center justify-between border border-slate-200 rounded-xl px-4 py-2.5 min-w-[180px] bg-slate-50/30 h-[46px] self-end">
+              <span className="text-sm font-semibold text-slate-700">Color code</span>
               <label className="relative inline-flex items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -336,13 +337,12 @@ const OfficeReport = () => {
                   onChange={(e) => setColorCode(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                <span className="ml-2 text-xs font-semibold text-foreground">Color code</span>
+                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3 pt-2">
             {hasPendingItems && (
               <Badge className="bg-amber-100 text-amber-700 border-amber-200 animate-pulse">
                 <Clock3 className="mr-1 h-3 w-3" />
@@ -352,7 +352,7 @@ const OfficeReport = () => {
             {loading ? <Badge variant="secondary">Loading...</Badge> : null}
             {reportData?.canSubmit ? (
               <Button
-                className="flex items-center gap-2 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-5 rounded-xl shadow-sm transition-all"
                 disabled={submittingReport}
                 onClick={() => setIsSubmitDialogOpen(true)}
               >
@@ -368,12 +368,11 @@ const OfficeReport = () => {
             {isRootRole && (
               <Button
                 type="button"
-                size="sm"
                 className={cn(
-                  'flex items-center gap-2 h-9 transition-all',
+                  'flex items-center gap-2 py-2.5 px-5 rounded-xl transition-all font-semibold text-sm',
                   cycleReady && reportData?.quarter === 'Q4'
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50'
                 )}
                 disabled={!cycleReady || reportData?.quarter !== 'Q4' || closeCycleMutation.isPending}
                 title={
