@@ -232,25 +232,23 @@ const getUserKPIs = async (req, res) => {
     if (String(fromParent).toLowerCase() === 'true') {
       const parentRoleId = req.user?.currentRole?.ParentRoleId;
 
-      if (!parentRoleId) {
-        return res.json({ success: true, data: [] });
+      if (parentRoleId) {
+        const parentRoleUserAssignments = await UserRole.findAll({
+          where: {
+            RoleId: parentRoleId,
+            IsArchived: false,
+          },
+          attributes: ['UserId'],
+        });
+
+        const parentUserIds = [...new Set(parentRoleUserAssignments.map((assignment) => assignment.UserId).filter(Boolean))];
+
+        if (!parentUserIds.length) {
+          return res.json({ success: true, data: [] });
+        }
+
+        where.CreatedBy = { [Op.in]: parentUserIds };
       }
-
-      const parentRoleUserAssignments = await UserRole.findAll({
-        where: {
-          RoleId: parentRoleId,
-          IsArchived: false,
-        },
-        attributes: ['UserId'],
-      });
-
-      const parentUserIds = [...new Set(parentRoleUserAssignments.map((assignment) => assignment.UserId).filter(Boolean))];
-
-      if (!parentUserIds.length) {
-        return res.json({ success: true, data: [] });
-      }
-
-      where.CreatedBy = { [Op.in]: parentUserIds };
     }
 
     const userKpis = await UserKPI.findAll({
@@ -344,6 +342,9 @@ const getUserKPIs = async (req, res) => {
       const isDirectChild = directChildRoleIds.includes(resultRoleId);
 
       if (isDirectChild) {
+        if (resolvedYear !== getCurrentCycleYear()) {
+          return true;
+        }
         return submittedChildRoleIds.has(resultRoleId);
       } else {
         const assignmentCreator = assignmentCreatorMap.get(String(r.UserKPIId));

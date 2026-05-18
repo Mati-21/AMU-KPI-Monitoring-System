@@ -87,7 +87,7 @@ function KpiList({ refreshKey }) {
 
     try {
       const [kpiRes, typeRes, unitRes] = await Promise.all([
-        api.get('/kpis', { params: { t: Date.now() } }),
+        api.get('/kpis', { params: { t: Date.now(), includeArchived: 'true' } }),
         api.get('/kpi-types'),
         api.get('/units'),
       ]);
@@ -245,7 +245,9 @@ function KpiList({ refreshKey }) {
 
   const filteredKpis = useMemo(() => {
     const term = search.toLowerCase();
-    return kpiRows.filter((row) => `${row.no} ${row.kpiName} ${row.theme} ${row.subTheme} ${row.unit} ${row.remark}`.toLowerCase().includes(term));
+    return kpiRows
+      .filter((row) => row.no && !row.no.includes('NaN'))
+      .filter((row) => `${row.no} ${row.kpiName} ${row.theme} ${row.subTheme} ${row.unit} ${row.remark}`.toLowerCase().includes(term));
   }, [kpiRows, search]);
 
   const filteredThemes = useMemo(() => {

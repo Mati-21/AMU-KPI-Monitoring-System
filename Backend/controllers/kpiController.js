@@ -69,8 +69,15 @@ const getKPIs = async (req, res) => {
   try {
     const activeYear = getCurrentCycleYear();
     const selectedYear = req.query?.year || req.query?.cycleYear || activeYear;
+    const includeArchived = req.query?.includeArchived === 'true';
+
+    const whereClause = {};
+    if (!includeArchived) {
+      whereClause.IsArchived = false;
+    }
+
     const kpis = await KPI.findAll({
-      where: { IsArchived: false },
+      where: whereClause,
       include: [
         {
           model: KPIType,
@@ -244,9 +251,23 @@ const deleteKPI = async (req, res) => {
       return res.status(404).json({ message: 'KPI not found' });
     }
 
-    await kpi.update({ IsArchived: true });
+    const { KPITypeId } = kpi;
 
-    res.json({ success: true, message: 'KPI archived successfully' });
+    // Delete associated records first to avoid foreign key violations
+    const { UserKPI, UserKPIResult, KPIYearPlan, KPIDocument, KPIType } = require('../models');
+
+    await UserKPIResult.destroy({ where: { KPIId: id } });
+    await UserKPI.destroy({ where: { KPIId: id } });
+    await KPIYearPlan.destroy({ where: { KPIId: id } });
+    await KPIDocument.destroy({ where: { KPIId: id } });
+
+    await kpi.destroy();
+
+    if (KPITypeId) {
+      await KPIType.destroy({ where: { Id: KPITypeId } });
+    }
+
+    res.json({ success: true, message: 'KPI permanently deleted successfully' });
   } catch (error) {
     console.error('Delete KPI error:', error);
     res.status(500).json({ message: 'Server error' });

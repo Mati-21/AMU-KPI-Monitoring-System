@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Users, BarChart3, Palette, Shield, Activity } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import UserStatsCharts from '../components/UserStatsCharts';
@@ -5,6 +6,7 @@ import QuickActions from '../components/QuickActions';
 import ActivityLog from '../components/ActivityLog';
 import { useNavigate } from 'react-router-dom';
 import { useAdminDashboardQuery } from '../../../Hooks/Queries/useDashboard';
+import { useCycleYearsQuery } from '../../../Hooks/Queries/useKpis';
 import { useSelector } from 'react-redux';
 import permissionUtils from '../../../lib/permissionUtils';
 
@@ -17,7 +19,18 @@ const iconMap = {
 };
 
 function AdminDashboard() {
-  const { data, isLoading: loading, error: queryError } = useAdminDashboardQuery();
+  const [selectedCycleYear, setSelectedCycleYear] = useState('');
+  const { data: cycleYearsData } = useCycleYearsQuery();
+  const activeCycleYearFromServer = cycleYearsData?.activeCycleYear || '';
+  const availableYears = Array.isArray(cycleYearsData?.years) ? cycleYearsData.years : [];
+
+  useEffect(() => {
+    if (!selectedCycleYear && activeCycleYearFromServer) {
+      setSelectedCycleYear(activeCycleYearFromServer);
+    }
+  }, [activeCycleYearFromServer, selectedCycleYear]);
+
+  const { data, isLoading: loading, error: queryError } = useAdminDashboardQuery(selectedCycleYear);
   const error = queryError?.response?.data?.message || '';
   const navigate = useNavigate();
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
@@ -69,13 +82,22 @@ function AdminDashboard() {
           <h1 className="text-2xl font-bold text-foreground">Executive Dashboard</h1>
           <p className="text-sm text-muted-foreground">Monitor Operational excellence and manage organizational assets</p>
         </div>
-        <div className="flex gap-3">
-          <button className="px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors">
-            Export Data
-          </button>
-          <button className="px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors">
-            History
-          </button>
+        <div className="flex gap-3 items-center">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Cycle Year:</span>
+            <select
+              value={selectedCycleYear || activeCycleYearFromServer || ''}
+              onChange={(e) => setSelectedCycleYear(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-lg bg-background text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none min-w-[120px] font-medium"
+            >
+              <option value="" disabled>Select Year</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year} {year === activeCycleYearFromServer && '(Active)'}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

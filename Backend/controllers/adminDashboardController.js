@@ -4,6 +4,8 @@ const { getCurrentCycleYear } = require('../utils/kpiCycle');
 
 const getAdminSummary = async (req, res) => {
   try {
+    const resolvedYear = req.query.cycleYear || getCurrentCycleYear();
+
     // 1. Core Stats
     const [totalUsers, totalKpis, totalThemes, totalRoles] = await Promise.all([
       User.count({ where: { IsArchived: false } }),
@@ -12,18 +14,10 @@ const getAdminSummary = async (req, res) => {
       Role.count({ where: { IsArchived: false } }),
     ]);
 
-    // 2. Active KPIs (Top-level dispatched)
-    const topRoles = await Role.findAll({ where: { ParentRoleId: null, IsArchived: false }, attributes: ['Id'] });
-    const topRoleIds = topRoles.map((r) => r.Id);
-    const topUsers = await UserRole.findAll({
-      where: { RoleId: { [Op.in]: topRoleIds }, IsArchived: false, [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }] },
-      attributes: ['UserId'],
-    });
-    const topUserIds = [...new Set(topUsers.map((u) => u.UserId))];
+    // 2. Active KPIs (System-wide assigned KPIs for the selected cycle year)
     const activeAssignments = await UserKPI.count({
       where: {
-        CreatedBy: { [Op.in]: topUserIds },
-        CycleYear: getCurrentCycleYear(),
+        CycleYear: resolvedYear,
         IsArchived: false,
       },
     });
