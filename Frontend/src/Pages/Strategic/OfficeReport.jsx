@@ -113,6 +113,7 @@ const OfficeReport = () => {
   const [activeKpi, setActiveKpi] = useState(null);
   const [submissionInitialValues, setSubmissionInitialValues] = useState(null);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [colorCode, setColorCode] = useState(false);
 
   const submitPerformanceMutation = useSubmitPerformanceMutation();
 
@@ -326,6 +327,19 @@ const OfficeReport = () => {
                 <option value="Q4">Q4</option>
               </select>
             </div>
+
+            <div className="flex items-center gap-2 border-l pl-4 border-border/60">
+              <label className="relative inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={colorCode}
+                  onChange={(e) => setColorCode(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                <span className="ml-2 text-xs font-semibold text-foreground">Color code</span>
+              </label>
+            </div>
           </div>
 
           <div className="ml-auto flex items-center gap-3">
@@ -497,39 +511,73 @@ const OfficeReport = () => {
                               cellValue === 'N/A' ||
                               (typeof cellValue === 'object' && cellValue?.value === '—');
                             const showPendingValue = isPendingDisplayCell(cellValue);
-                            const displayValue = formatCellValue(cellValue);
+                            let displayValue = formatCellValue(cellValue);
+                            let formattedApprovedValue = cellValue?.approvedValue;
+                            let cellBgClass = '';
+
+                            if ((row.rowType === 'kpi' || !row.rowType) && !isMissingValue) {
+                              const targetVal = parseFloat(String(row.target).replace(/,/g, ''));
+                              const rawVal = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
+                              const currentVal = parseFloat(String(rawVal).replace(/,/g, ''));
+
+                              if (!isNaN(targetVal) && !isNaN(currentVal)) {
+                                const divisor = selectedQuarter ? (targetVal / 4) : targetVal;
+                                if (divisor > 0) {
+                                  const percentage = (currentVal / divisor) * 100;
+                                  
+                                  if (colorCode) {
+                                    displayValue = `${percentage.toFixed(1)}%`;
+                                    
+                                    if (cellValue?.approvedValue !== undefined) {
+                                      const approvedNum = parseFloat(String(cellValue.approvedValue).replace(/,/g, ''));
+                                      if (!isNaN(approvedNum)) {
+                                        formattedApprovedValue = `${((approvedNum / divisor) * 100).toFixed(1)}%`;
+                                      }
+                                    }
+
+                                    if (percentage >= 95) {
+                                      cellBgClass = 'bg-emerald-600 text-white font-bold dark:bg-emerald-700 dark:text-white';
+                                    } else if (percentage >= 50) {
+                                      cellBgClass = 'bg-amber-500 text-white font-bold dark:bg-amber-600 dark:text-white';
+                                    } else {
+                                      cellBgClass = 'bg-rose-600 text-white font-bold dark:bg-rose-700 dark:text-white';
+                                    }
+                                  }
+                                }
+                              }
+                            }
 
                             return (
                               <TableCell
                                 key={column.id}
                                 style={compactPad}
-                                className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'}`}
+                                className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'} ${cellBgClass}`}
                               >
                                 <div className="flex flex-col items-center gap-1">
                                   {showPendingValue ? (
                                     <div className="flex flex-col items-center leading-none gap-0.5">
                                       {displayValue === 'Pending' ? (
-                                        <span className="text-amber-600 font-bold italic text-xs py-1">Pending</span>
+                                        <span className={colorCode ? "text-white font-bold italic text-xs py-1" : "text-amber-600 font-bold italic text-xs py-1"}>Pending</span>
                                       ) : (
                                         <>
-                                          {cellValue?.approvedValue !== undefined && cellValue?.approvedValue !== displayValue ? (
+                                          {formattedApprovedValue !== undefined && formattedApprovedValue !== displayValue ? (
                                             <div className="flex items-baseline gap-1">
-                                              <span className="text-muted-foreground text-xs" title="Previously approved">
-                                                {cellValue.approvedValue}
+                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"} title="Previously approved">
+                                                {formattedApprovedValue}
                                               </span>
-                                              <span className="text-muted-foreground text-xs">(</span>
-                                              <span className="font-bold text-sm text-amber-600" title="Total with pending updates">
+                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"}>(</span>
+                                              <span className={colorCode ? "font-bold text-sm text-white" : "font-bold text-sm text-amber-600"} title="Total with pending updates">
                                                 {displayValue}
                                               </span>
-                                              <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5">
+                                              <span className={colorCode ? "text-white/90 text-[9px] font-extrabold uppercase tracking-tight ml-0.5" : "text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5"}>
                                                 Pending
                                               </span>
-                                              <span className="text-muted-foreground text-xs">)</span>
+                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"}>)</span>
                                             </div>
                                           ) : (
                                             <div className="flex flex-col items-center gap-0.5">
                                               <span className="font-semibold text-sm">{displayValue}</span>
-                                              <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50">
+                                              <span className={colorCode ? "text-white/90 text-[9px] font-extrabold uppercase tracking-tight bg-white/20 px-1 rounded-sm border border-white/20" : "text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50"}>
                                                 Pending
                                               </span>
                                             </div>
