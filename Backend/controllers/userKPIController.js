@@ -80,9 +80,14 @@ const hasExtraMeasuresAccess = (req) => false;
 
 const createUserKPI = async (req, res) => {
   try {
-    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } =
-      req.body;
+    const { KPIId, UserId, Remark, CycleYear, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = req.body;
     const cycleYear = CycleYear || getCurrentCycleYear();
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(cycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${cycleYear} is closed. KPI allocations can only be created/updated for the active cycle (${activeCycleYear}).`,
+      });
+    }
     const assignmentBatchId = parseUuidValue(AssignmentBatchId);
 
     const user = await User.findByPk(UserId);
@@ -213,12 +218,9 @@ const createUserKPI = async (req, res) => {
 
 const getUserKPIs = async (req, res) => {
   try {
-    const { year, scope, fromParent } = req.query;
-    const where = { IsArchived: false };
-
-    if (year) {
-      where.CycleYear = year;
-    }
+    const { year, cycleYear, scope, fromParent } = req.query;
+    const resolvedYear = year || cycleYear || getCurrentCycleYear();
+    const where = { IsArchived: false, CycleYear: resolvedYear };
 
     if (scope === 'mine') {
       where.UserId = req.user?.Id;
@@ -281,31 +283,43 @@ const getUserKPIs = async (req, res) => {
         ? await UserKPIResult.findAll({
             where: {
               IsArchived: false,
-              CycleYear: year || getCurrentCycleYear(),
+              CycleYear: resolvedYear,
               UserId: { [Op.in]: assignmentUserIds },
               KPIId: { [Op.in]: assignmentKpiIds },
             },
-            attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'Description', 'ApproverRemark', 'PerformanceTitle', 'EvidenceURL'],
+            attributes: [
+              'Id',
+              'UserId',
+              'KPIId',
+              'UserKPIId',
+              'KPIResult',
+              'AdjustedResult',
+              'Status',
+              'Quarter',
+              'CreatedAt',
+              'Description',
+              'ApproverRemark',
+              'PerformanceTitle',
+              'EvidenceURL',
+            ],
             order: [['CreatedAt', 'DESC']],
           })
         : [];
 
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const currentUserId = String(req.user?.Id || '');
-    
+
     const allRoles = await require('../models').Role.findAll({
       where: { IsArchived: false },
       attributes: ['Id', 'ParentRoleId'],
     });
-    
-    const directChildRoleIds = allRoles
-      .filter((r) => String(r.ParentRoleId || '') === currentRoleId)
-      .map((r) => String(r.Id));
+
+    const directChildRoleIds = allRoles.filter((r) => String(r.ParentRoleId || '') === currentRoleId).map((r) => String(r.Id));
 
     const submissions = directChildRoleIds.length
       ? await require('../models').OfficeReportSubmission.findAll({
           where: {
-            CycleYear: year || getCurrentCycleYear(),
+            CycleYear: resolvedYear,
             SourceRoleId: { [Op.in]: directChildRoleIds },
             ParentRoleId: currentRoleId,
             IsArchived: false,
@@ -321,14 +335,14 @@ const getUserKPIs = async (req, res) => {
     });
     const roleIdByUserId = new Map(userRoles.map((ur) => [String(ur.UserId), String(ur.RoleId)]));
 
-    const assignmentCreatorMap = new Map(userKpis.map(a => [String(a.Id), String(a.CreatedBy || '')]));
+    const assignmentCreatorMap = new Map(userKpis.map((a) => [String(a.Id), String(a.CreatedBy || '')]));
 
     const filteredResults = quarterlyResults.filter((r) => {
       const resultRoleId = roleIdByUserId.get(String(r.UserId));
       if (!resultRoleId || resultRoleId === currentRoleId) return true;
-      
+
       const isDirectChild = directChildRoleIds.includes(resultRoleId);
-      
+
       if (isDirectChild) {
         return submittedChildRoleIds.has(resultRoleId);
       } else {
@@ -342,9 +356,10 @@ const getUserKPIs = async (req, res) => {
 
     filteredResults.forEach((result) => {
       const normalizedQuarter = String(result.Quarter || '').toUpperCase();
-      const effectiveResult = result.Status === 'adjusted' && result.AdjustedResult !== null && result.AdjustedResult !== undefined
-        ? result.AdjustedResult
-        : result.KPIResult;
+      const effectiveResult =
+        result.Status === 'adjusted' && result.AdjustedResult !== null && result.AdjustedResult !== undefined
+          ? result.AdjustedResult
+          : result.KPIResult;
 
       const item = {
         id: result.Id,
@@ -476,12 +491,23 @@ const updateUserKPI = async (req, res) => {
       return res.status(404).json({ message: 'User KPI not found' });
     }
 
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(userKPI.CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${userKPI.CycleYear} is closed. KPI allocations can only be updated for the active cycle (${activeCycleYear}).`,
+      });
+    }
+
+    if (CycleYear && String(CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cannot change KPI allocation CycleYear to ${CycleYear}. Only the active cycle (${activeCycleYear}) is writable.`,
+      });
+    }
+
     const previousIncludeCurrentOffice = Boolean(userKPI.IncludeCurrentOffice);
 
-    const canEditAny =
-      hasModulePermission(req, 'KPI Allocation', 'edit');
-    const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create');
+    const canEditAny = hasModulePermission(req, 'KPI Allocation', 'edit');
+    const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
 
@@ -550,10 +576,8 @@ const deleteUserKPI = async (req, res) => {
       return res.status(404).json({ message: 'User KPI not found' });
     }
 
-    const canDeleteAny =
-      hasModulePermission(req, 'KPI Allocation', 'delete');
-    const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create');
+    const canDeleteAny = hasModulePermission(req, 'KPI Allocation', 'delete');
+    const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const isCreator = String(userKPI.CreatedBy || '') === String(req.user?.Id || '');
 
@@ -632,10 +656,8 @@ const bulkDeleteUserKPIs = async (req, res) => {
       return res.status(404).json({ message: 'No assignments found for the provided IDs.' });
     }
 
-    const canDeleteAny =
-      hasModulePermission(req, 'KPI Allocation', 'delete');
-    const canCreateKpiAllocation =
-      hasModulePermission(req, 'KPI Allocation', 'create');
+    const canDeleteAny = hasModulePermission(req, 'KPI Allocation', 'delete');
+    const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
     const canUseExtraMeasures = hasExtraMeasuresAccess(req);
     const currentUserId = String(req.user?.Id || '');
 

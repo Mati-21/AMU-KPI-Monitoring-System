@@ -87,14 +87,14 @@ const heatColor = (v) => {
   return 'bg-red-100 text-red-800'; // Critical (Red)
 };
 
-const PerformanceDashboard = ({ 
-  config, 
-  derivedKpiId = '__ALL__', 
-  onDerivedKpiChange, 
+const PerformanceDashboard = ({
+  config,
+  derivedKpiId = '__ALL__',
+  onDerivedKpiChange,
   focusedRoleId = '__ALL__',
   onRoleChange,
-  selectedCycleYear, 
-  onYearChange 
+  selectedCycleYear,
+  onYearChange,
 }) => {
   const [quarter, setQuarter] = useState('All Quarters');
   const comparisonTitlePrefix = config.comparisonTitlePrefix || config.subUnitLabel || 'Sub Unit';
@@ -164,7 +164,9 @@ const PerformanceDashboard = ({
                   />
                 </div>
               ) : (
-                Array.isArray(config.derivedKpiOptions) && config.derivedKpiOptions.length > 0 && typeof onDerivedKpiChange === 'function' && (
+                Array.isArray(config.derivedKpiOptions) &&
+                config.derivedKpiOptions.length > 0 &&
+                typeof onDerivedKpiChange === 'function' && (
                   <div className="w-56 text-xs shrink-0">
                     <CustomSelect
                       options={[{ label: 'Total Performance (All KPIs)', value: '__ALL__' }, ...config.derivedKpiOptions]}
@@ -177,7 +179,7 @@ const PerformanceDashboard = ({
               )}
 
               <div className="w-40 text-xs shrink-0">
-                <CustomSelect options={config.yearOptions || ['2018']} value={selectedCycleYear || '2018'} onChange={(val) => onYearChange(val === '2018' ? '' : val)} placeholder="2018" />
+                <CustomSelect options={config.yearOptions || []} value={selectedCycleYear || ''} onChange={onYearChange} placeholder="Select year" />
               </div>
 
               <div className="w-40 text-xs shrink-0">

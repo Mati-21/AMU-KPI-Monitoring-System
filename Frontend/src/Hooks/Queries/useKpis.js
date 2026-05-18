@@ -309,6 +309,22 @@ export const useKpiYearPlansQuery = () => {
 };
 
 /**
+ * Hook for fetching cycle years (closed years + current year) and the active cycle year.
+ * Response shape: { activeCycleYear: string, years: string[] }
+ */
+export const useCycleYearsQuery = () => {
+  return useQuery({
+    queryKey: ['kpi-year-plans', 'cycle-years'],
+    queryFn: async () => {
+      const response = await api.get('/kpi-year-plans/cycle-years');
+      return response.data?.data || { activeCycleYear: '', years: [] };
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
+  });
+};
+
+/**
  * Hook for checking if the current cycle is ready to close (all reports submitted + all results approved).
  */
 export const useCycleReadinessQuery = (cycleYear, enabled = true) => {

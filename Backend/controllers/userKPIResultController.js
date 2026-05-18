@@ -1275,7 +1275,9 @@ const buildAffiliatedOfficeReportDataForScope = async ({
             };
           } else {
             cellValue = {
-              value: formatNumericValue(isEvidenceKpi ? metrics.aggregatedPerformance : (metrics.aggregatedPendingTotal ?? metrics.aggregatedPerformance)),
+              value: formatNumericValue(
+                isEvidenceKpi ? metrics.aggregatedPerformance : (metrics.aggregatedPendingTotal ?? metrics.aggregatedPerformance)
+              ),
               approved: isApproved,
               isApproved: isApproved,
               showPendingValue: false,
@@ -1308,7 +1310,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
           const cell = row.values[String(col.id)];
           if (cell === 'N/A') return;
           hasAnyAssignment = true;
-          
+
           if (cell !== '—' && cell !== undefined && cell !== null && cell !== '') {
             const cellVal = typeof cell === 'object' ? cell.value : cell;
             if (cellVal !== '—' && cellVal !== undefined && cellVal !== null && cellVal !== '') {
@@ -1415,29 +1417,31 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     return maxIdx > 0 ? invQuarterMap[maxIdx] : 'Q1';
   };
 
-  const targetQuarter = quarter || (() => {
-    const targetDataQuarter = getTargetDataQuarter(flatRows);
-    const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
-    const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
-    
-    const subQ = activeQuarter;
-    const subQIdx = subQ ? (quarterMap[subQ] || 0) : 0;
-    const dataQIdx = quarterMap[targetDataQuarter] || 1;
+  const targetQuarter =
+    quarter ||
+    (() => {
+      const targetDataQuarter = getTargetDataQuarter(flatRows);
+      const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+      const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
 
-    // Also consider the highest quarter from child submissions
-    // so that when a child submits e.g. Q2, the parent quarter advances to at least Q2
-    let childSubMaxIdx = 0;
-    childSubmissions.forEach((sub) => {
-      const childQ = getSubmissionQuarter(sub);
-      const childQIdx = childQ ? (quarterMap[childQ] || 0) : 0;
-      if (childQIdx > childSubMaxIdx) {
-        childSubMaxIdx = childQIdx;
-      }
-    });
-    
-    const maxIdx = Math.max(subQIdx, dataQIdx, childSubMaxIdx);
-    return invQuarterMap[maxIdx] || 'Q1';
-  })();
+      const subQ = activeQuarter;
+      const subQIdx = subQ ? quarterMap[subQ] || 0 : 0;
+      const dataQIdx = quarterMap[targetDataQuarter] || 1;
+
+      // Also consider the highest quarter from child submissions
+      // so that when a child submits e.g. Q2, the parent quarter advances to at least Q2
+      let childSubMaxIdx = 0;
+      childSubmissions.forEach((sub) => {
+        const childQ = getSubmissionQuarter(sub);
+        const childQIdx = childQ ? quarterMap[childQ] || 0 : 0;
+        if (childQIdx > childSubMaxIdx) {
+          childSubMaxIdx = childQIdx;
+        }
+      });
+
+      const maxIdx = Math.max(subQIdx, dataQIdx, childSubMaxIdx);
+      return invQuarterMap[maxIdx] || 'Q1';
+    })();
 
   const canSubmit = (() => {
     if (String(scopeRoleId) !== String(viewerRoleId)) return false;
@@ -1446,14 +1450,14 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
     const subQ = activeQuarter;
     if (!subQ) return true;
-    
+
     const targetQIdx = quarterMap[targetQuarter] || 1;
     const subQIdx = quarterMap[subQ] || 0;
-    
+
     return targetQIdx > subQIdx;
   })();
 
-  const directCol = reportColumns.find(c => c.isCurrentOffice && String(c.id) === String(scopeRoleId));
+  const directCol = reportColumns.find((c) => c.isCurrentOffice && String(c.id) === String(scopeRoleId));
   if (directCol) {
     directCol.isSubmitted = ownSubmissions.length > 0 && !canSubmit;
   }
@@ -1486,8 +1490,8 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
 const getAffiliatedOfficeReport = async (req, res) => {
   try {
-    const { year, parentRoleId, quarter } = req.query;
-    const cycleYear = year || getCurrentCycleYear();
+    const { year, cycleYear: cycleYearParam, parentRoleId, quarter } = req.query;
+    const cycleYear = year || cycleYearParam || getCurrentCycleYear();
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const canSeeOtherAffiliatedOfficeReports = hasPermission(req.user?.currentRole?.Permissions, AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS);
 
@@ -1902,28 +1906,30 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const activeQuarter = existingSubmission ? getSubmissionQuarter(existingSubmission) : null;
 
-  const targetQuarter = quarter || (() => {
-    const targetDataQuarter = getTargetDataQuarter(flatRows);
-    const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
-    const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
-    
-    const subQ = activeQuarter;
-    const subQIdx = subQ ? (quarterMap[subQ] || 0) : 0;
-    const dataQIdx = quarterMap[targetDataQuarter] || 1;
-    
-    const maxIdx = Math.max(subQIdx, dataQIdx);
-    return invQuarterMap[maxIdx] || 'Q1';
-  })();
+  const targetQuarter =
+    quarter ||
+    (() => {
+      const targetDataQuarter = getTargetDataQuarter(flatRows);
+      const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+      const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
+
+      const subQ = activeQuarter;
+      const subQIdx = subQ ? quarterMap[subQ] || 0 : 0;
+      const dataQIdx = quarterMap[targetDataQuarter] || 1;
+
+      const maxIdx = Math.max(subQIdx, dataQIdx);
+      return invQuarterMap[maxIdx] || 'Q1';
+    })();
 
   const canSubmit = (() => {
     if (!currentRole.ParentRoleId) return false;
     const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
     const subQ = activeQuarter;
     if (!subQ) return true;
-    
+
     const targetQIdx = quarterMap[targetQuarter] || 1;
     const subQIdx = quarterMap[subQ] || 0;
-    
+
     return targetQIdx > subQIdx;
   })();
 
@@ -1975,8 +1981,8 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
 const getCurrentOfficeReport = async (req, res) => {
   try {
-    const { year, roleId, reportType, quarter } = req.query;
-    const cycleYear = year || getCurrentCycleYear();
+    const { year, cycleYear: cycleYearParam, roleId, reportType, quarter } = req.query;
+    const cycleYear = year || cycleYearParam || getCurrentCycleYear();
     const requesterRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
 
     if (!requesterRoleId) {
@@ -2123,7 +2129,13 @@ const getCurrentOfficeReport = async (req, res) => {
 
 const submitCurrentOfficeReportToParent = async (req, res) => {
   try {
-    const cycleYear = req.body?.year || req.query?.year || getCurrentCycleYear();
+    const cycleYear = req.body?.year || req.body?.cycleYear || req.query?.year || req.query?.cycleYear || getCurrentCycleYear();
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(cycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${cycleYear} is closed. You can only submit office reports for the active cycle (${activeCycleYear}).`,
+      });
+    }
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const currentRole = await Role.findByPk(currentRoleId, {
       attributes: ['Id', 'RoleName', 'ParentRoleId'],
@@ -2310,10 +2322,12 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
       );
 
       // 1. Check for performance data
-      const hasPerformance = targetResults.length > 0 && targetResults.some((r) => {
-        const val = r.AdjustedResult ?? r.KPIResult ?? r.kpiResult ?? r.value;
-        return val !== null && val !== undefined && val !== '' && val !== '—';
-      });
+      const hasPerformance =
+        targetResults.length > 0 &&
+        targetResults.some((r) => {
+          const val = r.AdjustedResult ?? r.KPIResult ?? r.kpiResult ?? r.value;
+          return val !== null && val !== undefined && val !== '' && val !== '—';
+        });
 
       if (!hasPerformance) {
         const identifier = row.no ? `[${row.no}] ${row.kpi}` : row.kpi;
@@ -2401,6 +2415,14 @@ const createUserKPIResult = async (req, res) => {
     const cycleYear = CycleYear || getCurrentCycleYear();
     const quarter = normalizeQuarter(Quarter) || getCurrentQuarter();
     const userId = req.user?.Id || req.user?.id;
+
+    // Closed-cycle protection: allow writes only to the active cycle year.
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(cycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${cycleYear} is closed. You can only submit performance for the active cycle (${activeCycleYear}).`,
+      });
+    }
 
     if (!userId) {
       return res.status(401).json({ message: 'User context is required.' });
@@ -2503,6 +2525,7 @@ const createUserKPIResult = async (req, res) => {
 
 const getKPIApprovals = async (req, res) => {
   try {
+    const cycleYear = req.query?.year || req.query?.cycleYear || getCurrentCycleYear();
     const userRoleId = req.user?.currentRole?.Id;
 
     if (!userRoleId) {
@@ -2550,6 +2573,7 @@ const getKPIApprovals = async (req, res) => {
     // 2. Fetch official submissions to identify which offices have actually submitted their reports
     const officialSubmissions = await require('../models').OfficeReportSubmission.findAll({
       where: {
+        CycleYear: cycleYear,
         ParentRoleId: userRoleId,
         IsArchived: false,
       },
@@ -2565,6 +2589,7 @@ const getKPIApprovals = async (req, res) => {
     const results = await UserKPIResult.findAll({
       where: {
         UserId: { [Op.in]: childUserIds },
+        CycleYear: cycleYear,
         IsArchived: false,
         Status: { [Op.in]: ['pending', 'adjusted', 'approved'] },
       },
@@ -2654,6 +2679,13 @@ const approveKPIResult = async (req, res) => {
       return res.status(404).json({ message: 'KPI result not found.' });
     }
 
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(result.CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${result.CycleYear} is closed. KPI approvals are only allowed for the active cycle (${activeCycleYear}).`,
+      });
+    }
+
     await result.update({ Status: 'approved', ApproverRemark: remark });
 
     try {
@@ -2697,6 +2729,13 @@ const adjustKPIResult = async (req, res) => {
 
     if (!result) {
       return res.status(404).json({ message: 'KPI result not found.' });
+    }
+
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(result.CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${result.CycleYear} is closed. KPI adjustments are only allowed for the active cycle (${activeCycleYear}).`,
+      });
     }
 
     await result.update({ Status: 'adjusted', AdjustedResult: String(adjustedValue), ApproverRemark: remark });
@@ -2830,6 +2869,19 @@ const updateUserKPIResult = async (req, res) => {
     const result = await UserKPIResult.findByPk(id);
     if (!result) {
       return res.status(404).json({ message: 'User KPI result not found' });
+    }
+
+    const activeCycleYear = getCurrentCycleYear();
+    if (String(result.CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cycle ${result.CycleYear} is closed. You can only update KPI results for the active cycle (${activeCycleYear}).`,
+      });
+    }
+
+    if (CycleYear && String(CycleYear) !== String(activeCycleYear)) {
+      return res.status(400).json({
+        message: `Cannot change KPI result CycleYear to ${CycleYear}. Only the active cycle (${activeCycleYear}) is writable.`,
+      });
     }
 
     if (KPIId) {

@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import PerformanceDashboard from '../../Components/Dashboard/PerformanceDashboard';
-import { useKpiYearPlansQuery } from '../../Hooks/Queries/useKpis';
+import { useCycleYearsQuery } from '../../Hooks/Queries/useKpis';
 
 function UnifiedDashboard() {
   const [derivedKpiId, setDerivedKpiId] = useState('__ALL__');
@@ -9,11 +9,15 @@ function UnifiedDashboard() {
   const [selectedCycleYear, setSelectedCycleYear] = useState('');
 
   // Queries
-  const { data: yearPlans = [] } = useKpiYearPlansQuery();
+  const { data: cycleYearsData } = useCycleYearsQuery();
+  const activeCycleYearFromServer = cycleYearsData?.activeCycleYear || '';
+  const availableYears = Array.isArray(cycleYearsData?.years) ? cycleYearsData.years : [];
 
-  const availableYears = useMemo(() => {
-    return [...new Set(yearPlans.map((p) => p.CycleYear))].sort((a, b) => b.localeCompare(a));
-  }, [yearPlans]);
+  useEffect(() => {
+    if (!selectedCycleYear && activeCycleYearFromServer) {
+      setSelectedCycleYear(activeCycleYearFromServer);
+    }
+  }, [activeCycleYearFromServer, selectedCycleYear]);
 
   const { config } = useDashboardData({
     derivedKpiId,
@@ -31,7 +35,7 @@ function UnifiedDashboard() {
 
   return (
     <PerformanceDashboard
-      config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : ['2018'] }}
+      config={{ ...config, yearOptions: availableYears.length > 0 ? availableYears : activeCycleYearFromServer ? [activeCycleYearFromServer] : [] }}
       derivedKpiId={derivedKpiId}
       onDerivedKpiChange={setDerivedKpiId}
       focusedRoleId={selectedRoleId}

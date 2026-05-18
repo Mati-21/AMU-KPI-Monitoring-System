@@ -41,7 +41,7 @@ const createKPI = async (req, res) => {
       UnitId,
       LifecycleType: LifecycleType || 'RECURRING',
       Weight: parsedWeight,
-      DefaultBaseline: parsedDefaultBaseline !== null ? parsedDefaultBaseline : (LifecycleType === 'RECURRING' ? 0 : parsedBaseline),
+      DefaultBaseline: parsedDefaultBaseline !== null ? parsedDefaultBaseline : LifecycleType === 'RECURRING' ? 0 : parsedBaseline,
       Description,
       IsEvedenceRequired: IsEvedenceRequired || false,
       Remark,
@@ -67,6 +67,8 @@ const createKPI = async (req, res) => {
 
 const getKPIs = async (req, res) => {
   try {
+    const activeYear = getCurrentCycleYear();
+    const selectedYear = req.query?.year || req.query?.cycleYear || activeYear;
     const kpis = await KPI.findAll({
       where: { IsArchived: false },
       include: [
@@ -89,19 +91,20 @@ const getKPIs = async (req, res) => {
           ],
         },
         { model: Unit, attributes: ['Id', 'Name', 'Code'] },
-        { 
-          model: KPIYearPlan, 
+        {
+          model: KPIYearPlan,
           attributes: ['Id', 'CycleYear', 'Baseline', 'Target', 'FinalPerformance', 'Status', 'IsLocked'],
-          order: [['CycleYear', 'DESC']]
-        }
+          order: [['CycleYear', 'DESC']],
+        },
       ],
       order: [['CreatedAt', 'ASC']],
     });
 
-    const currentYear = getCurrentCycleYear();
-    const formattedKpis = kpis.map(kpi => {
+    const formattedKpis = kpis.map((kpi) => {
       const kpiJson = kpi.toJSON();
-      const currentPlan = kpiJson.KPIYearPlans?.find(p => p.CycleYear === currentYear) || kpiJson.KPIYearPlans?.[0];
+      const planForSelectedYear = kpiJson.KPIYearPlans?.find((p) => p.CycleYear === selectedYear) || null;
+      const fallbackPlan = selectedYear === activeYear ? kpiJson.KPIYearPlans?.[0] || null : null;
+      const currentPlan = planForSelectedYear || fallbackPlan;
       kpiJson.Baseline = currentPlan?.Baseline ?? kpiJson.DefaultBaseline ?? 0;
       kpiJson.Target = currentPlan?.Target ?? 0;
       return kpiJson;
@@ -117,6 +120,8 @@ const getKPIs = async (req, res) => {
 const getKPIById = async (req, res) => {
   try {
     const { id } = req.params;
+    const activeYear = getCurrentCycleYear();
+    const selectedYear = req.query?.year || req.query?.cycleYear || activeYear;
     const kpi = await KPI.findByPk(id, {
       include: [
         {
@@ -138,10 +143,10 @@ const getKPIById = async (req, res) => {
           ],
         },
         { model: Unit, attributes: ['Id', 'Name', 'Code'] },
-        { 
-          model: KPIYearPlan, 
-          attributes: ['Id', 'CycleYear', 'Baseline', 'Target', 'FinalPerformance', 'Status', 'IsLocked']
-        }
+        {
+          model: KPIYearPlan,
+          attributes: ['Id', 'CycleYear', 'Baseline', 'Target', 'FinalPerformance', 'Status', 'IsLocked'],
+        },
       ],
     });
 
@@ -149,9 +154,10 @@ const getKPIById = async (req, res) => {
       return res.status(404).json({ message: 'KPI not found' });
     }
 
-    const currentYear = getCurrentCycleYear();
     const kpiJson = kpi.toJSON();
-    const currentPlan = kpiJson.KPIYearPlans?.find(p => p.CycleYear === currentYear) || kpiJson.KPIYearPlans?.[0];
+    const planForSelectedYear = kpiJson.KPIYearPlans?.find((p) => p.CycleYear === selectedYear) || null;
+    const fallbackPlan = selectedYear === activeYear ? kpiJson.KPIYearPlans?.[0] || null : null;
+    const currentPlan = planForSelectedYear || fallbackPlan;
     kpiJson.Baseline = currentPlan?.Baseline ?? kpiJson.DefaultBaseline ?? 0;
     kpiJson.Target = currentPlan?.Target ?? 0;
 
@@ -212,13 +218,13 @@ const updateKPI = async (req, res) => {
     if (parsedBaseline !== null || parsedTarget !== null) {
       const currentYear = getCurrentCycleYear();
       const plan = await KPIYearPlan.findOne({
-        where: { KPIId: id, CycleYear: currentYear }
+        where: { KPIId: id, CycleYear: currentYear },
       });
 
       if (plan && !plan.IsLocked) {
         await plan.update({
           Baseline: parsedBaseline !== null ? parsedBaseline : plan.Baseline,
-          Target: parsedTarget !== null ? parsedTarget : plan.Target
+          Target: parsedTarget !== null ? parsedTarget : plan.Target,
         });
       }
     }

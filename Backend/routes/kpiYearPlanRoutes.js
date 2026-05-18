@@ -14,6 +14,7 @@ const rootRoleOnly = (req, res, next) => {
 router.use(protect);
 
 router.get('/', kpiYearPlanController.getYearPlans);
+router.get('/cycle-years', kpiYearPlanController.getCycleYears);
 router.get('/cycle-readiness', rootRoleOnly, kpiYearPlanController.getCycleReadiness);
 router.post('/close-year', rootRoleOnly, kpiYearPlanController.closeCycleYear);
 router.post('/:id/refresh', rootRoleOnly, kpiYearPlanController.refreshPlanPerformance);

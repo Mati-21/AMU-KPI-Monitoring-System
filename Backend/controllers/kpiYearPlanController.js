@@ -2,6 +2,44 @@ const { KPIYearPlan, KPI, KPIType, Unit } = require('../models');
 const KPIClosureService = require('../services/KPIClosureService');
 const { getCurrentCycleYear } = require('../utils/kpiCycle');
 
+const getCycleYears = async (req, res) => {
+  try {
+    const activeCycleYear = getCurrentCycleYear();
+
+    const plans = await KPIYearPlan.findAll({
+      attributes: ['CycleYear', 'IsLocked', 'Status'],
+      order: [['CycleYear', 'DESC']],
+    });
+
+    const statsByYear = new Map();
+    plans.forEach((plan) => {
+      const year = String(plan.CycleYear || '').trim();
+      if (!year) return;
+      const entry = statsByYear.get(year) || { total: 0, locked: 0, completed: 0 };
+      entry.total += 1;
+      if (plan.IsLocked) entry.locked += 1;
+      if (plan.Status === 'COMPLETED') entry.completed += 1;
+      statsByYear.set(year, entry);
+    });
+
+    // A year is considered "closed" when *all* of its plans are locked/completed.
+    const isClosedYear = (year) => {
+      const entry = statsByYear.get(year);
+      if (!entry || entry.total <= 0) return false;
+      return entry.locked === entry.total || entry.completed === entry.total;
+    };
+
+    const years = [...new Set([...statsByYear.keys(), activeCycleYear])]
+      .filter((year) => year === activeCycleYear || isClosedYear(year))
+      .sort((a, b) => String(b).localeCompare(String(a)));
+
+    res.json({ success: true, data: { activeCycleYear, years } });
+  } catch (error) {
+    console.error('Get Cycle Years error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 const getYearPlans = async (req, res) => {
   try {
     const { year } = req.query;
@@ -14,11 +52,11 @@ const getYearPlans = async (req, res) => {
           model: KPI,
           include: [
             { model: KPIType, attributes: ['KPIName'] },
-            { model: Unit, attributes: ['Code'] }
-          ]
-        }
+            { model: Unit, attributes: ['Code'] },
+          ],
+        },
       ],
-      order: [['CycleYear', 'DESC']]
+      order: [['CycleYear', 'DESC']],
     });
 
     res.json({ success: true, data: plans });
@@ -82,7 +120,8 @@ const refreshPlanPerformance = async (req, res) => {
 
 module.exports = {
   getYearPlans,
+  getCycleYears,
   getCycleReadiness,
   closeCycleYear,
-  refreshPlanPerformance
+  refreshPlanPerformance,
 };

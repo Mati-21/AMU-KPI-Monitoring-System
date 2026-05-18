@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import {
-  RefreshCw,
-  Clock3,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Eye,
-  Send,
-  Check,
-  ShieldCheck,
-  AlertTriangle
-} from 'lucide-react';
+import { RefreshCw, Clock3, ChevronDown, ChevronUp, Plus, Eye, Send, Check, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
 import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
-import { useSubmitPerformanceMutation, useReportQuery, useSubmitReportMutation, useCycleReadinessQuery, useCloseCycleMutation } from '../../Hooks/Queries/useKpis';
+import {
+  useSubmitPerformanceMutation,
+  useReportQuery,
+  useSubmitReportMutation,
+  useCycleReadinessQuery,
+  useCloseCycleMutation,
+  useCycleYearsQuery,
+} from '../../Hooks/Queries/useKpis';
 import { useNotification } from '../../Context/NotificationContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../Config/queryKeys';
@@ -137,6 +133,10 @@ const OfficeReport = () => {
   const submittingReport = submitReportMutation.isPending;
   const closeCycleMutation = useCloseCycleMutation();
 
+  const { data: cycleYearsData } = useCycleYearsQuery();
+  const activeCycleYearFromServer = cycleYearsData?.activeCycleYear || '';
+  const cycleYearOptions = Array.isArray(cycleYearsData?.years) ? cycleYearsData.years : [];
+
   const toggleColumnExpand = (columnId) => {
     setExpandedColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }));
   };
@@ -148,23 +148,14 @@ const OfficeReport = () => {
   }, [reportData, selectedScopeRoleId]);
 
   useEffect(() => {
-    let mounted = true;
-    const fetchYears = async () => {
-      try {
-        const res = await api.get('/kpi-year-plans');
-        if (!mounted) return;
-        const plans = res.data?.data || [];
-        const years = [...new Set(plans.map((p) => p.CycleYear))].sort((a, b) => b.localeCompare(a));
-        setAvailableYears(years);
-      } catch (err) {
-        console.error('Failed to load cycle years', err);
-      }
-    };
-    fetchYears();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    setAvailableYears(cycleYearOptions);
+  }, [cycleYearOptions]);
+
+  useEffect(() => {
+    if (!selectedCycleYear && activeCycleYearFromServer) {
+      setSelectedCycleYear(activeCycleYearFromServer);
+    }
+  }, [activeCycleYearFromServer, selectedCycleYear]);
 
   const columns = reportData?.columns || [];
   const allRows = reportData?.rows || [];
@@ -184,7 +175,7 @@ const OfficeReport = () => {
   // Root role = the one with no parent role (Strategic Office)
   // We check the authenticated user's normalized role hierarchy
   const isRootRole = authUser && authUser.parentRoleId === null;
-  const activeCycleYear = selectedCycleYear || (availableYears[0] || '2018');
+  const activeCycleYear = selectedCycleYear || activeCycleYearFromServer || availableYears[0] || '2018';
 
   // Cycle readiness — only fetch for root roles
   const { data: cycleReadiness } = useCycleReadinessQuery(activeCycleYear, isRootRole);
@@ -208,9 +199,7 @@ const OfficeReport = () => {
   const isCombinedMode = reportData?.reportMode === 'combined';
 
   // Calculate if the entire view has pending items
-  const hasPendingItems = rows.some((row) =>
-    columns.some((col) => isPendingDisplayCell(row.values?.[col.id]))
-  );
+  const hasPendingItems = rows.some((row) => columns.some((col) => isPendingDisplayCell(row.values?.[col.id])));
 
   const handleOpenSubmit = (row) => {
     setActiveKpi({
@@ -221,8 +210,10 @@ const OfficeReport = () => {
       target: row.target,
       baseline: row.baseline,
       quarterlyResults: row.quarterlyResults || [],
-      aggregatedValue: isCombinedMode 
-        ? (typeof row.values?.['combined'] === 'object' ? row.values['combined']?.value : row.values?.['combined']) 
+      aggregatedValue: isCombinedMode
+        ? typeof row.values?.['combined'] === 'object'
+          ? row.values['combined']?.value
+          : row.values?.['combined']
         : undefined,
     });
     setSubmissionInitialValues({
@@ -290,7 +281,6 @@ const OfficeReport = () => {
               </>
             ) : null}
 
-
             {showReportModeSelector ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">View Mode</span>
@@ -309,11 +299,10 @@ const OfficeReport = () => {
               <>
                 <span className="text-xs font-medium text-muted-foreground">Year</span>
                 <select
-                  value={selectedCycleYear}
+                  value={selectedCycleYear || activeCycleYearFromServer || ''}
                   onChange={(event) => setSelectedCycleYear(event.target.value)}
                   className="min-w-32 rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none"
                 >
-                  <option value="">2018</option>
                   {availableYears.map((year) => (
                     <option key={year} value={year}>
                       {year}
@@ -395,11 +384,12 @@ const OfficeReport = () => {
       <Card className="border-border shadow-sm">
         <CardHeader className="shrink-0 pb-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <CardTitle className="text-xl font-bold">
-              KPI Report for {currentOfficeName}
-            </CardTitle>
+            <CardTitle className="text-xl font-bold">KPI Report for {currentOfficeName}</CardTitle>
             {reportData?.quarter && (
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-4 py-1.5 rounded-md shadow-sm text-sm uppercase tracking-widest whitespace-nowrap">
+              <Badge
+                variant="outline"
+                className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-4 py-1.5 rounded-md shadow-sm text-sm uppercase tracking-widest whitespace-nowrap"
+              >
                 {reportData.quarter === 'Q4' ? 'Full Year' : reportData.quarter}
               </Badge>
             )}
@@ -434,12 +424,7 @@ const OfficeReport = () => {
                                   ✓
                                 </span>
                               )}
-                              <span
-                                className={cn(
-                                  "text-xs leading-tight transition-all duration-200",
-                                  !isExpanded && "line-clamp-2"
-                                )}
-                              >
+                              <span className={cn('text-xs leading-tight transition-all duration-200', !isExpanded && 'line-clamp-2')}>
                                 {fullName}
                               </span>
                             </div>
@@ -448,13 +433,9 @@ const OfficeReport = () => {
                                 type="button"
                                 onClick={() => toggleColumnExpand(column.id)}
                                 className="inline-flex items-center justify-center w-6 h-4 rounded hover:bg-muted text-primary transition-colors mt-0.5"
-                                title={isExpanded ? "Show less" : "Show more"}
+                                title={isExpanded ? 'Show less' : 'Show more'}
                               >
-                                {isExpanded ? (
-                                  <ChevronUp className="h-3 w-3" />
-                                ) : (
-                                  <span className="text-sm leading-none font-bold">...</span>
-                                )}
+                                {isExpanded ? <ChevronUp className="h-3 w-3" /> : <span className="text-sm leading-none font-bold">...</span>}
                               </button>
                             )}
                           </div>
@@ -509,8 +490,12 @@ const OfficeReport = () => {
                           {columns.map((column) => {
                             const cellValue = row.values?.[column.id];
                             const isMissingValue =
-                              cellValue === null || cellValue === undefined || cellValue === '' || cellValue === '—' || cellValue === 'N/A'
-                              || (typeof cellValue === 'object' && cellValue?.value === '—');
+                              cellValue === null ||
+                              cellValue === undefined ||
+                              cellValue === '' ||
+                              cellValue === '—' ||
+                              cellValue === 'N/A' ||
+                              (typeof cellValue === 'object' && cellValue?.value === '—');
                             const showPendingValue = isPendingDisplayCell(cellValue);
                             const displayValue = formatCellValue(cellValue);
 
@@ -529,9 +514,13 @@ const OfficeReport = () => {
                                         <>
                                           {cellValue?.approvedValue !== undefined && cellValue?.approvedValue !== displayValue ? (
                                             <div className="flex items-baseline gap-1">
-                                              <span className="text-muted-foreground text-xs" title="Previously approved">{cellValue.approvedValue}</span>
+                                              <span className="text-muted-foreground text-xs" title="Previously approved">
+                                                {cellValue.approvedValue}
+                                              </span>
                                               <span className="text-muted-foreground text-xs">(</span>
-                                              <span className="font-bold text-sm text-amber-600" title="Total with pending updates">{displayValue}</span>
+                                              <span className="font-bold text-sm text-amber-600" title="Total with pending updates">
+                                                {displayValue}
+                                              </span>
                                               <span className="text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5">
                                                 Pending
                                               </span>
@@ -555,9 +544,7 @@ const OfficeReport = () => {
                               </TableCell>
                             );
                           })}
-                          <TableCell className="text-xs leading-relaxed italic text-muted-foreground whitespace-pre-wrap">
-                            {row.remark}
-                          </TableCell>
+                          <TableCell className="text-xs leading-relaxed italic text-muted-foreground whitespace-pre-wrap">{row.remark}</TableCell>
                           <TableCell style={compactPad} className="text-center border-l border-border/50">
                             {(row.rowType === 'kpi' || !row.rowType) && (
                               <div className="flex items-center justify-center gap-2">
@@ -579,12 +566,8 @@ const OfficeReport = () => {
                     <TableRow>
                       <TableCell colSpan={20} className="py-20 text-center">
                         <div className="flex flex-col items-center justify-center space-y-2">
-                          <p className="text-base font-medium text-muted-foreground">
-                            No report data available for this office.
-                          </p>
-                          <p className="text-sm text-muted-foreground/60">
-                            Ensure KPIs have been allocated and performance has been submitted.
-                          </p>
+                          <p className="text-base font-medium text-muted-foreground">No report data available for this office.</p>
+                          <p className="text-sm text-muted-foreground/60">Ensure KPIs have been allocated and performance has been submitted.</p>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -624,16 +607,12 @@ const OfficeReport = () => {
             },
             onError: (err) => {
               notify(err?.response?.data?.message || 'Failed to submit performance.', 'error');
-            }
+            },
           });
         }}
       />
 
-      <PerformanceDetailModal
-        open={detailModalOpen}
-        onOpenChange={setDetailModalOpen}
-        kpi={activeKpi}
-      />
+      <PerformanceDetailModal open={detailModalOpen} onOpenChange={setDetailModalOpen} kpi={activeKpi} />
 
       <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
         <DialogContent className="sm:max-w-106.25">
@@ -659,14 +638,14 @@ const OfficeReport = () => {
               disabled={submittingReport}
               onClick={async () => {
                 // Dynamic Quarter Detection: Check the quarter the user is actually working on
-                const qMap = { 'Q1': 1, 'Q2': 2, 'Q3': 3, 'Q4': 4 };
+                const qMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
                 const invQMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
-                
+
                 let latestIdx = 0;
-                rows.forEach(row => {
+                rows.forEach((row) => {
                   if (!row.isHomeOfficeKpi) return;
 
-                  (row.allQuarterlyResults || row.quarterlyResults || []).forEach(r => {
+                  (row.allQuarterlyResults || row.quarterlyResults || []).forEach((r) => {
                     const qStr = (r.Quarter || r.quarter || '').toUpperCase();
                     const qIdx = qMap[qStr] || 0;
                     const val = r.AdjustedResult ?? r.KPIResult ?? r.kpiResult ?? r.value;
@@ -684,34 +663,35 @@ const OfficeReport = () => {
                   if (month >= 2 && month <= 4) return 'Q3';
                   return 'Q4';
                 };
-                
+
                 const targetQuarter = latestIdx > 0 ? invQMap[latestIdx] : getSysQuarter();
 
-                const missingPerf = rows.filter(row => {
+                const missingPerf = rows.filter((row) => {
                   if (!row.isHomeOfficeKpi) return false;
 
-                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(r => 
-                    (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
+                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(
+                    (r) => (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
                   );
-                  
+
                   const columnId = isCombinedMode ? 'combined' : String(reportData?.scopeRole?.id);
                   const cellValue = row.values?.[columnId];
                   const cellRawValue = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
 
                   const val = qRes?.AdjustedResult ?? qRes?.KPIResult ?? qRes?.kpiResult ?? qRes?.value;
-                  const hasData = (val !== null && val !== undefined && val !== '' && val !== '—') ||
-                                  (cellRawValue !== null && cellRawValue !== undefined && cellRawValue !== '' && cellRawValue !== '—');
+                  const hasData =
+                    (val !== null && val !== undefined && val !== '' && val !== '—') ||
+                    (cellRawValue !== null && cellRawValue !== undefined && cellRawValue !== '' && cellRawValue !== '—');
 
                   return !hasData;
                 });
 
-                const missingEvid = rows.filter(row => {
+                const missingEvid = rows.filter((row) => {
                   if (!row.isHomeOfficeKpi || !row.isEvidenceRequired) return false;
 
-                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(r => 
-                    (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
+                  const qRes = (row.allQuarterlyResults || row.quarterlyResults || []).find(
+                    (r) => (r.Quarter || r.quarter || '').toUpperCase() === targetQuarter
                   );
-                  
+
                   const hasEvidence = qRes?.EvidenceURL || qRes?.evidenceURL || qRes?.evidenceUrl || (row.allEvidenceUrls || []).length > 0;
                   return !hasEvidence;
                 });
@@ -720,24 +700,25 @@ const OfficeReport = () => {
                   let msg = `Submission blocked for ${targetQuarter}. `;
                   if (missingPerf.length > 0) msg += `Missing performance for ${missingPerf.length} KPIs. `;
                   if (missingEvid.length > 0) msg += `Missing evidence for ${missingEvid.length} KPIs. `;
-                  
+
                   notify(msg + `Please fill in all metrics for ${targetQuarter} before submitting.`, 'error');
                   setIsSubmitDialogOpen(false);
                   return;
                 }
 
                 setIsSubmitDialogOpen(false);
-                
-                console.log(`[REPORT_SUBMIT] Submitting KPIs for ${targetQuarter}:`, rows.map(r => ({
-                  kpi: r.kpi,
-                  quarter: targetQuarter,
-                  value: (() => {
-                    const qRes = (r.quarterlyResults || []).find(qr => 
-                      (qr.Quarter || qr.quarter || '').toUpperCase() === targetQuarter
-                    );
-                    return qRes?.KPIResult ?? qRes?.kpiResult ?? '—';
-                  })()
-                })));
+
+                console.log(
+                  `[REPORT_SUBMIT] Submitting KPIs for ${targetQuarter}:`,
+                  rows.map((r) => ({
+                    kpi: r.kpi,
+                    quarter: targetQuarter,
+                    value: (() => {
+                      const qRes = (r.quarterlyResults || []).find((qr) => (qr.Quarter || qr.quarter || '').toUpperCase() === targetQuarter);
+                      return qRes?.KPIResult ?? qRes?.kpiResult ?? '—';
+                    })(),
+                  }))
+                );
                 submitReportMutation.mutate(
                   {
                     year: reportData?.year,
@@ -770,13 +751,20 @@ const OfficeReport = () => {
             </DialogTitle>
             <DialogDescription className="space-y-3 pt-2">
               <p className="text-sm text-foreground">
-                You are about to close the <strong>{activeCycleYear}</strong> cycle and activate <strong>{String(Number(activeCycleYear) + 1)}</strong>.
+                You are about to close the <strong>{activeCycleYear}</strong> cycle and activate{' '}
+                <strong>{String(Number(activeCycleYear) + 1)}</strong>.
               </p>
               <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1 text-xs text-muted-foreground">
                 <p className="font-semibold text-foreground mb-1">KPI Transition Rules:</p>
-                <p>• <strong>Progressive KPIs</strong> — Final performance becomes new baseline &amp; target</p>
-                <p>• <strong>Recursive KPIs</strong> — Baseline resets to 0, target resets to default</p>
-                <p>• <strong>One-Time KPIs</strong> — Archived, do not carry forward</p>
+                <p>
+                  • <strong>Progressive KPIs</strong> — Final performance becomes new baseline &amp; target
+                </p>
+                <p>
+                  • <strong>Recursive KPIs</strong> — Baseline resets to 0, target resets to default
+                </p>
+                <p>
+                  • <strong>One-Time KPIs</strong> — Archived, do not carry forward
+                </p>
               </div>
               <p className="text-xs text-amber-600 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
@@ -788,11 +776,7 @@ const OfficeReport = () => {
             <Button variant="outline" onClick={() => setIsCloseDialogOpen(false)} disabled={closeCycleMutation.isPending}>
               Cancel
             </Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              onClick={handleCloseCycle}
-              disabled={closeCycleMutation.isPending}
-            >
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCloseCycle} disabled={closeCycleMutation.isPending}>
               <ShieldCheck className="mr-2 h-4 w-4" />
               {closeCycleMutation.isPending ? 'Closing Cycle...' : `Confirm & Close ${activeCycleYear}`}
             </Button>

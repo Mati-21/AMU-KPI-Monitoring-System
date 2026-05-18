@@ -251,11 +251,7 @@ export const useDashboardData = ({ cycleYear, focusedRoleId = '__ALL__' } = {}) 
       yearlyTrend: isStaffView ? computed.child?.kpiQuarterlyTrends || [] : computed.child?.kpiTrends || computed.child?.yearlyTrend || [],
       kpiNames: computed.child?.kpiNames || [],
       kpiTrends: computed.child?.kpiTrends || [],
-      statusDistribution: [
-        { name: 'Achieved', value: safePercent(receivedAssignedKpis ? (receivedAchievedKpis / receivedAssignedKpis) * 100 : 0), color: 'hsl(142 71% 45%)' },
-        { name: 'In Progress', value: safePercent(receivedAssignedKpis ? (receivedInProgressKpis / receivedAssignedKpis) * 100 : 0), color: 'hsl(45 93% 47%)' },
-        { name: 'Delayed', value: safePercent(receivedAssignedKpis ? (receivedDelayedKpis / receivedAssignedKpis) * 100 : 0), color: 'hsl(0 84% 60%)' },
-      ],
+      statusDistribution: computed.child?.statusDistribution || [],
       heatmap: computed.child?.heatmap || [],
       topPerformers: computed.child?.topPerformers || [],
       achievementGap: computed.child?.achievementGap || [],

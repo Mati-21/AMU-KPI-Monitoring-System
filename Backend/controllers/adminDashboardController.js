@@ -1,5 +1,6 @@
 const { User, KPI, KPIType, Role, UserKPI, UserKPIResult, UserRole, UserActivityLog, AuditLog, sequelize } = require('../models');
 const { Op } = require('sequelize');
+const { getCurrentCycleYear } = require('../utils/kpiCycle');
 
 const getAdminSummary = async (req, res) => {
   try {
@@ -8,23 +9,29 @@ const getAdminSummary = async (req, res) => {
       User.count({ where: { IsArchived: false } }),
       KPI.count({ where: { IsArchived: false } }),
       KPIType.count({ where: { ParentKPIID: null, IsArchived: false } }),
-      Role.count({ where: { IsArchived: false } })
+      Role.count({ where: { IsArchived: false } }),
     ]);
 
     // 2. Active KPIs (Top-level dispatched)
     const topRoles = await Role.findAll({ where: { ParentRoleId: null, IsArchived: false }, attributes: ['Id'] });
-    const topRoleIds = topRoles.map(r => r.Id);
+    const topRoleIds = topRoles.map((r) => r.Id);
     const topUsers = await UserRole.findAll({
       where: { RoleId: { [Op.in]: topRoleIds }, IsArchived: false, [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }] },
-      attributes: ['UserId']
+      attributes: ['UserId'],
     });
-    const topUserIds = [...new Set(topUsers.map(u => u.UserId))];
-    const activeAssignments = await UserKPI.count({ where: { CreatedBy: { [Op.in]: topUserIds }, IsArchived: false } });
+    const topUserIds = [...new Set(topUsers.map((u) => u.UserId))];
+    const activeAssignments = await UserKPI.count({
+      where: {
+        CreatedBy: { [Op.in]: topUserIds },
+        CycleYear: getCurrentCycleYear(),
+        IsArchived: false,
+      },
+    });
 
     // 3. Online vs Offline Users (Active in last 15 mins)
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
     const onlineUsersCount = await User.count({
-      where: { LastActiveAt: { [Op.gte]: fifteenMinsAgo }, IsArchived: false }
+      where: { LastActiveAt: { [Op.gte]: fifteenMinsAgo }, IsArchived: false },
     });
     const offlineUsersCount = Math.max(0, totalUsers - onlineUsersCount);
 
@@ -39,40 +46,37 @@ const getAdminSummary = async (req, res) => {
 
     const activityLogs = await UserActivityLog.findAll({
       where: { ActivityDate: { [Op.gte]: sevenDaysAgo } },
-      attributes: [
-        'ActivityDate',
-        [sequelize.fn('COUNT', sequelize.col('UserId')), 'count']
-      ],
+      attributes: ['ActivityDate', [sequelize.fn('COUNT', sequelize.col('UserId')), 'count']],
       group: ['ActivityDate'],
-      order: [['ActivityDate', 'ASC']]
+      order: [['ActivityDate', 'ASC']],
     });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const activeUsersTrend = activityLogs.map(log => {
+    const activeUsersTrend = activityLogs.map((log) => {
       const date = new Date(log.ActivityDate);
       return {
         day: dayNames[date.getDay()],
-        value: parseInt(log.getDataValue('count'), 10)
+        value: parseInt(log.getDataValue('count'), 10),
       };
     });
 
     // 5. Login Frequency (Hourly distribution for today)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const loginTrends = await UserActivityLog.findAll({
       where: { ActivityDate: { [Op.gte]: thirtyDaysAgo } },
       attributes: [
         [sequelize.fn('to_char', sequelize.col('ActivityDate'), 'DY'), 'day'],
-        [sequelize.fn('COUNT', sequelize.col('UserId')), 'count']
+        [sequelize.fn('COUNT', sequelize.col('UserId')), 'count'],
       ],
       group: [sequelize.fn('to_char', sequelize.col('ActivityDate'), 'DY')],
-      order: [[sequelize.literal("MIN(\"ActivityDate\")"), 'ASC']]
+      order: [[sequelize.literal('MIN("ActivityDate")'), 'ASC']],
     });
 
-    const loginActivityData = loginTrends.map(t => ({
+    const loginActivityData = loginTrends.map((t) => ({
       name: t.getDataValue('day'),
-      value: parseInt(t.getDataValue('count'), 10)
+      value: parseInt(t.getDataValue('count'), 10),
     }));
 
     // 6. Recent Activities (From AuditLog)
@@ -89,22 +93,38 @@ const getAdminSummary = async (req, res) => {
     const auditLogs = await AuditLog.findAll({
       limit: 1000,
       order: [['createdAt', 'DESC']],
-      include: [{ model: User, attributes: ['FirstName', 'FatherName'] }]
+      include: [{ model: User, attributes: ['FirstName', 'FatherName'] }],
     });
 
-    const mappedActivities = auditLogs.map(log => ({
+    const mappedActivities = auditLogs.map((log) => ({
       user: log.User ? `${log.User.FirstName} ${log.User.FatherName}` : 'System',
-      action: log.Action.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '),
+      action: log.Action.split('_')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' '),
       description: log.Description,
       time: timeAgo(log.createdAt),
       status: log.Status === 'Success' ? 'Completed' : 'Pending',
-      type: ['LOGIN', 'LOGOUT'].includes(log.Action) ? 'auth' : 
-            ['CREATE_USER', 'USER_REGISTRATION', 'UPDATE_USER', 'DELETE_USER', 'RESET_PASSWORD', 'CREATE_ROLE', 'UPDATE_ROLE', 'DELETE_ROLE', 'UPDATE_SETTINGS', 'UPLOAD_LOGO'].includes(log.Action) ? 'admin' : 'system'
+      type: ['LOGIN', 'LOGOUT'].includes(log.Action)
+        ? 'auth'
+        : [
+              'CREATE_USER',
+              'USER_REGISTRATION',
+              'UPDATE_USER',
+              'DELETE_USER',
+              'RESET_PASSWORD',
+              'CREATE_ROLE',
+              'UPDATE_ROLE',
+              'DELETE_ROLE',
+              'UPDATE_SETTINGS',
+              'UPLOAD_LOGO',
+            ].includes(log.Action)
+          ? 'admin'
+          : 'system',
     }));
 
     // Separate into System vs Admin Activities for the Dashboard columns
-    const systemActivities = mappedActivities.filter(a => a.type === 'system' || a.type === 'auth');
-    const adminActivities = mappedActivities.filter(a => a.type === 'admin');
+    const systemActivities = mappedActivities.filter((a) => a.type === 'system' || a.type === 'auth');
+    const adminActivities = mappedActivities.filter((a) => a.type === 'admin');
 
     // If AuditLog is empty, provide some synthetic data so the dashboard doesn't look empty during first run
     if (mappedActivities.length === 0) {
@@ -120,14 +140,14 @@ const getAdminSummary = async (req, res) => {
           { label: 'Total KPIs', value: totalKpis.toLocaleString(), change: 'Overall' },
           { label: 'Total Themes', value: totalThemes.toLocaleString(), change: 'Overall' },
           { label: 'Total Roles', value: totalRoles.toLocaleString(), change: 'Overall' },
-          { label: 'Active KPIs', value: activeAssignments.toLocaleString(), change: 'Overall' }
+          { label: 'Active KPIs', value: activeAssignments.toLocaleString(), change: 'Overall' },
         ],
         userStatusDistribution,
         activeUsersTrend,
         loginActivityData,
         systemActivities,
-        adminActivities
-      }
+        adminActivities,
+      },
     });
   } catch (error) {
     console.error('Error fetching admin summary:', error);
