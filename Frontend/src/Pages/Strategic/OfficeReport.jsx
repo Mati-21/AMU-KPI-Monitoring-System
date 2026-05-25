@@ -523,10 +523,10 @@ const OfficeReport = () => {
                                 const divisor = selectedQuarter ? (targetVal / 4) : targetVal;
                                 if (divisor > 0) {
                                   const percentage = (currentVal / divisor) * 100;
-                                  
+
                                   if (colorCode) {
                                     displayValue = `${percentage.toFixed(1)}%`;
-                                    
+
                                     if (cellValue?.approvedValue !== undefined) {
                                       const approvedNum = parseFloat(String(cellValue.approvedValue).replace(/,/g, ''));
                                       if (!isNaN(approvedNum)) {

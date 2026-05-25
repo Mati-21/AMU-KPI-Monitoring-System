@@ -501,9 +501,12 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
       return sum + (v.pendingPerformance || 0);
     }, 0);
 
+    const activeValues = cumulativeValues.filter((v) => v.hasApproved || v.hasPending);
+    const receiverCount = grouped.isTargetIndividual
+      ? (activeValues.length > 0 ? activeValues.length : cumulativeValues.length)
+      : cumulativeValues.length;
     const allApproved = cumulativeValues.length > 0 && cumulativeValues.every((v) => v.isApproved);
     const hasPendingPerformance = pendingTotal > 0;
-    const receiverCount = cumulativeValues.length;
     const aggregatedPerformance = grouped.isTargetIndividual ? (receiverCount > 0 ? cumulativeTotal / receiverCount : 0) : cumulativeTotal;
     const aggregatedPendingTotal = grouped.isTargetIndividual
       ? receiverCount > 0
@@ -791,8 +794,16 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   ]);
 
   if (quarter) {
-    childSubmissions = childSubmissions.filter((sub) => getSubmissionQuarter(sub) === quarter);
-    ownSubmissions = ownSubmissions.filter((sub) => getSubmissionQuarter(sub) === quarter);
+    const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+    const targetQIdx = quarterMap[normalizeQuarter(quarter)] || 0;
+    childSubmissions = childSubmissions.filter((sub) => {
+      const subQIdx = quarterMap[normalizeQuarter(getSubmissionQuarter(sub))] || 0;
+      return subQIdx >= targetQIdx;
+    });
+    ownSubmissions = ownSubmissions.filter((sub) => {
+      const subQIdx = quarterMap[normalizeQuarter(getSubmissionQuarter(sub))] || 0;
+      return subQIdx >= targetQIdx;
+    });
   }
 
   const parentHasSubmitted = ownSubmissions.length > 0;
@@ -1547,31 +1558,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     return maxIdx > 0 ? invQuarterMap[maxIdx] : 'Q1';
   };
 
-  const targetQuarter =
-    quarter ||
-    (() => {
-      const targetDataQuarter = getTargetDataQuarter(flatRows);
-      const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
-      const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
-
-      const subQ = activeQuarter;
-      const subQIdx = subQ ? quarterMap[subQ] || 0 : 0;
-      const dataQIdx = quarterMap[targetDataQuarter] || 1;
-
-      // Also consider the highest quarter from child submissions
-      // so that when a child submits e.g. Q2, the parent quarter advances to at least Q2
-      let childSubMaxIdx = 0;
-      childSubmissions.forEach((sub) => {
-        const childQ = getSubmissionQuarter(sub);
-        const childQIdx = childQ ? quarterMap[childQ] || 0 : 0;
-        if (childQIdx > childSubMaxIdx) {
-          childSubMaxIdx = childQIdx;
-        }
-      });
-
-      const maxIdx = Math.max(subQIdx, dataQIdx, childSubMaxIdx);
-      return invQuarterMap[maxIdx] || 'Q1';
-    })();
+  const targetQuarter = quarter || getTargetDataQuarter(flatRows) || 'Q1';
 
   const canSubmit = (() => {
     if (cycleYear !== getCurrentCycleYear()) return false;
@@ -2037,20 +2024,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const activeQuarter = existingSubmission ? getSubmissionQuarter(existingSubmission) : null;
 
-  const targetQuarter =
-    quarter ||
-    (() => {
-      const targetDataQuarter = getTargetDataQuarter(flatRows);
-      const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
-      const invQuarterMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4' };
-
-      const subQ = activeQuarter;
-      const subQIdx = subQ ? quarterMap[subQ] || 0 : 0;
-      const dataQIdx = quarterMap[targetDataQuarter] || 1;
-
-      const maxIdx = Math.max(subQIdx, dataQIdx);
-      return invQuarterMap[maxIdx] || 'Q1';
-    })();
+  const targetQuarter = quarter || getTargetDataQuarter(flatRows) || 'Q1';
 
   const canSubmit = (() => {
     if (cycleYear !== getCurrentCycleYear()) return false;
@@ -2204,7 +2178,16 @@ const getCurrentOfficeReport = async (req, res) => {
               return 'Q1';
             };
             const submission = quarter
-              ? submissions.find((s) => getSubmissionQuarter(s) === quarter)
+              ? (() => {
+                  const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+                  const targetQIdx = quarterMap[normalizeQuarter(quarter)] || 0;
+                  // Sort descending by date first to find the most recent valid submission
+                  const sorted = [...submissions].sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt));
+                  return sorted.find((s) => {
+                    const subQIdx = quarterMap[normalizeQuarter(getSubmissionQuarter(s))] || 0;
+                    return subQIdx >= targetQIdx;
+                  });
+                })()
               : submissions.sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt))[0];
 
             if (!submission && cycleYear === getCurrentCycleYear()) {

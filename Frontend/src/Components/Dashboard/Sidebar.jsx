@@ -10,7 +10,7 @@ const Sidebar = () => {
   const authUser = useSelector((state) => state.auth?.user);
   const systemSettings = useSelector((state) => state.auth?.systemSettings);
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
-  
+
   const logoUrl = getFileUrl(systemSettings?.systemLogo);
 
   const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
@@ -85,8 +85,7 @@ const Sidebar = () => {
                       to={item.path} // relative path
                       end={isDashboard} // only dashboard uses exact match
                       className={({ isActive }) =>
-                        `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                          isActive ? 'bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)]' : 'text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
+                        `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${isActive ? 'bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)]' : 'text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--sidebar-accent-foreground)]'
                         }`
                       }
                     >
