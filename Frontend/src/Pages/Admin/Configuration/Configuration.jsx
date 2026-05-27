@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { api } from "../../../api/axios";
 import GeneralSystemSetting from "./GeneralSystemSetting";
 import KpiSystemConfiguration from "./KpiSystemConfiguration";
-import GradingScale from "./GradingScale";
 import PageTitle from "./PageTitle";
 import CycleManagement from "./CycleManagement";
 import Footer from "./Footer";
@@ -11,14 +10,6 @@ import { useDispatch } from "react-redux";
 import { logout, setMaintenance, setSystemSettings } from "../../../Features/authSlice";
 import { useNotification } from "../../../Context/NotificationContext";
 
-const defaultTiers = [
-// ... (keep defaultTiers)
-  { id: "1", label: "Excellent", color: "#22c55e", min: 90, max: 100 },
-  { id: "2", label: "Good", color: "#3b82f6", min: 90, max: 100 },
-  { id: "3", label: "Average", color: "#eab308", min: 90, max: 100 },
-  { id: "4", label: "Poor", color: "#ef4444", min: 90, max: 100 },
-];
-
 const Configuration = () => {
   const dispatch = useDispatch();
   const { notify } = useNotification();
@@ -26,7 +17,6 @@ const Configuration = () => {
   const [saving, setSaving] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [systemOnline, setSystemOnline] = useState(true);
-  const [tiers, setTiers] = useState(defaultTiers);
 
   const [settings, setSettings] = useState({
     displayName: "AMU KPI Monitoring System",
@@ -134,13 +124,6 @@ const Configuration = () => {
             />
 
             <KpiSystemConfiguration
-              setSettings={setSettings}
-              settings={settings}
-            />
-
-            <GradingScale
-              setTiers={setTiers}
-              tiers={tiers}
               setSettings={setSettings}
               settings={settings}
             />

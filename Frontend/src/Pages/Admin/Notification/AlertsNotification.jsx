@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, CheckCheck, Calendar, Search, Filter, Check, ChevronDown } from 'lucide-react';
+import { RefreshCw, CheckCheck, Calendar, Search, Filter, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../../../Components/UI/Badge';
 import { api } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
@@ -88,8 +88,9 @@ const AlertsNotifications = () => {
 
   const [priority, setPriority] = useState('all');
   const [date, setDate] = useState('all');
-  const [type, setType] = useState('7days');
+  const [type, setType] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchNotifications = async () => {
     try {
@@ -120,6 +121,10 @@ const AlertsNotifications = () => {
     fetchNotifications();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, date, type, sortBy]);
 
   const socket = useSocket();
 
@@ -243,6 +248,13 @@ const AlertsNotifications = () => {
     return rows;
   }, [filtered, sortBy]);
 
+  const pageSize = 20;
+  const totalItems = sorted.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const paginated = useMemo(() => {
+    return sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [sorted, currentPage]);
+
   return (
     <div className="flex min-h-screen bg-background">
       <main className="flex-1 p-8 overflow-auto">
@@ -311,38 +323,74 @@ const AlertsNotifications = () => {
 
         {/* List */}
         <div className="space-y-3">
-          {sorted.map((n) => (
-            <div
-              key={n.id}
-              role="button"
-              tabIndex={0}
-              className={`flex justify-between rounded-md bg-card shadow-sm border border-border border-l-4 border-l-primary/30 px-4 py-3 cursor-pointer hover:bg-accent/20 ${
-                n.read ? 'opacity-80' : ''
-              }`}
-              onClick={() => {
-                if (!n.read) {
-                  markOneRead(n.id);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !n.read) {
-                  markOneRead(n.id);
-                }
-              }}
-            >
-              <div className="min-w-0">
-                <h3 className="font-semibold text-sm">{n.title}</h3>
-                <p className="text-xs text-gray-500">{n.description}</p>
+          {paginated.length > 0 ? (
+            paginated.map((n) => (
+              <div
+                key={n.id}
+                role="button"
+                tabIndex={0}
+                className={`flex justify-between rounded-md bg-card shadow-sm border border-border border-l-4 border-l-primary/30 px-4 py-3 cursor-pointer hover:bg-accent/20 ${
+                  n.read ? 'opacity-80' : ''
+                }`}
+                onClick={() => {
+                  if (!n.read) {
+                    markOneRead(n.id);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !n.read) {
+                    markOneRead(n.id);
+                  }
+                }}
+              >
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm">{n.title}</h3>
+                  <p className="text-xs text-gray-500">{n.description}</p>
 
-                <div className="flex gap-3 mt-2">
-                  <span className="text-xs flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> {n.date}
-                  </span>
+                  <div className="flex gap-3 mt-2">
+                    <span className="text-xs flex items-center gap-1">
+                      <Calendar className="w-3 h-3" /> {n.date}
+                    </span>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center py-12 border border-dashed border-border rounded-lg bg-card/50">
+              <p className="text-sm text-muted-foreground">No notifications found.</p>
             </div>
-          ))}
+          )}
         </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+            <span className="text-xs text-muted-foreground">
+              Showing {(currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} notifications
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                className="flex items-center justify-center w-8 h-8 rounded-md border border-border bg-card text-foreground hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs font-medium px-2 text-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                className="flex items-center justify-center w-8 h-8 rounded-md border border-border bg-card text-foreground hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

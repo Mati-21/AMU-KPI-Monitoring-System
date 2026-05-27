@@ -201,6 +201,7 @@ const SYSTEM_ADMIN_FALLBACK_PERMISSIONS = [
   permissionKey('view', 'Configuration'),
   permissionKey('view', 'Alerts & Notifications'),
   permissionKey('view', 'Personal Profile'),
+  permissionKey('view', 'Direct Messages'),
 ].filter(Boolean);
 
 const getEffectivePermissions = (req) => {

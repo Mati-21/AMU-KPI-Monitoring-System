@@ -26,7 +26,6 @@ import {
   useUpdateUserKpiMutation,
   useDeleteUserKpiMutation,
   useBulkDeleteUserKpisMutation,
-  useKpiYearPlansQuery,
 } from '../../Hooks/Queries/useKpis';
 
 const CompactCellText = ({ value, maxWidth = 'max-w-[220px]' }) => (
@@ -87,7 +86,6 @@ const getDefaultAssignmentOption = () => ({
   customTargets: {},
 });
 
-
 const EMPTY_ARRAY = [];
 const MINE_PARAMS = { scope: 'mine' };
 const MINE_PARENT_PARAMS = { scope: 'mine', fromParent: true };
@@ -128,7 +126,6 @@ const KpiAllocationPage = () => {
   const { data: sentAssignments = EMPTY_ARRAY, isLoading: loadingSent, error: sentError } = useUserKpisQuery(SENT_PARAMS);
   const { data: kpis = EMPTY_ARRAY, isLoading: loadingKpis, error: kpiError } = useKpisQuery();
   const { data: kpiTypes = EMPTY_ARRAY, isLoading: loadingTypes, error: typeError } = useKpiTypesQuery();
-  const { data: yearPlans = EMPTY_ARRAY } = useKpiYearPlansQuery();
 
   // Mutations
   const createUserKpiMutation = useCreateUserKpiMutation();
@@ -369,11 +366,6 @@ const KpiAllocationPage = () => {
     () =>
       [
         {
-          key: 'active-kpis',
-          label: 'Active KPIs',
-          enabled: !hasParentRole && canViewKpiTab,
-        },
-        {
           key: 'view',
           label: hasParentRole ? 'Assigned KPI' : 'Registered KPIs',
           enabled: canViewKpiTab,
@@ -610,9 +602,7 @@ const KpiAllocationPage = () => {
 
     // Identify KPIs that have been delegated (sent to others)
     const delegatedKpiKeys = new Set(
-      sentAssignments
-        .filter((a) => String(a.UserId) !== currentUserId)
-        .map((a) => `${a.KPIId}::${(a.Name || '').trim()}::${(a.Remark || '').trim()}`)
+      sentAssignments.filter((a) => String(a.UserId) !== currentUserId).map((a) => `${a.KPIId}::${(a.Name || '').trim()}::${(a.Remark || '').trim()}`)
     );
 
     const activePerformanceAssignments = combinedAssignments.filter((assignment) => {
@@ -620,7 +610,7 @@ const KpiAllocationPage = () => {
       const creatorId = String(assignment?.CreatedBy || '');
 
       // 1. Visibility: Show if someone else created it OR explicitly activated for home office
-      const isVisible = (creatorId !== currentUserId) || !!assignment?.IncludeCurrentOffice;
+      const isVisible = creatorId !== currentUserId || !!assignment?.IncludeCurrentOffice;
       if (!isVisible) return false;
 
       // 2. Delegation: Hide if the user has assigned this same KPI to a child role
@@ -827,9 +817,7 @@ const KpiAllocationPage = () => {
 
     // Identify existing assignments to skip them
     const existingKeys = new Set(
-      sentAssignments
-        .filter((a) => !a.IsArchived)
-        .map((a) => `${String(a.KPIId)}::${String(a.UserId)}::${(a.Name || '').trim()}`)
+      sentAssignments.filter((a) => !a.IsArchived).map((a) => `${String(a.KPIId)}::${String(a.UserId)}::${(a.Name || '').trim()}`)
     );
 
     // Deduplicate to prevent multiple assignments for the same user/kpi pair
@@ -980,78 +968,6 @@ const KpiAllocationPage = () => {
           <p className="mt-4 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
             No tab is available for your current permissions.
           </p>
-        ) : null}
-
-        {/* Active KPIs Tab — current cycle KPIs from KPIYearPlan */}
-        {!hasParentRole && canViewKpiTab ? (
-          <TabsContent value="active-kpis" className="space-y-4 mt-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                KPIs active in the current cycle — each carries baseline, target, and final performance.
-              </p>
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                {yearPlans.filter(p => p.Status === 'ACTIVE').length} Active KPIs
-              </span>
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="px-4 py-2 text-left font-semibold">No.</th>
-                    <th className="px-4 py-2 text-left font-semibold">KPI Name</th>
-                    <th className="px-4 py-2 text-center font-semibold">Type</th>
-                    <th className="px-4 py-2 text-center font-semibold">Cycle Year</th>
-                    <th className="px-4 py-2 text-center font-semibold">Baseline</th>
-                    <th className="px-4 py-2 text-center font-semibold">Target</th>
-                    <th className="px-4 py-2 text-center font-semibold">Final Performance</th>
-                    <th className="px-4 py-2 text-center font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {yearPlans.length === 0 ? (
-                    <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No active KPI plans found.</td></tr>
-                  ) : (
-                    yearPlans.map((plan, index) => {
-                      const kpiRow = kpiRows.find(r => r.id === plan.KPIId);
-                      return (
-                        <tr key={plan.Id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-2 text-muted-foreground text-xs">{index + 1}</td>
-                          <td className="px-4 py-2 font-medium">{plan.KPI?.KPIType?.KPIName || kpiRow?.kpi || '—'}</td>
-                          <td className="px-4 py-2 text-center">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              plan.KPI?.LifecycleType === 'PROGRESSIVE' ? 'bg-blue-100 text-blue-700' :
-                              plan.KPI?.LifecycleType === 'ONE_TIME' ? 'bg-amber-100 text-amber-700' :
-                              'bg-emerald-100 text-emerald-700'
-                            }`}>
-                              {plan.KPI?.LifecycleType === 'PROGRESSIVE' ? 'Progressive' :
-                               plan.KPI?.LifecycleType === 'ONE_TIME' ? 'One-Time' : 'Recursive'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-center text-xs font-mono">{plan.CycleYear}</td>
-                          <td className="px-4 py-2 text-center">{plan.Baseline ?? '—'}</td>
-                          <td className="px-4 py-2 text-center">{plan.Target ?? '—'}</td>
-                          <td className="px-4 py-2 text-center">
-                            {plan.FinalPerformance !== null && plan.FinalPerformance !== undefined
-                              ? plan.FinalPerformance
-                              : <span className="text-muted-foreground text-xs">Pending</span>}
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              plan.Status === 'COMPLETED' ? 'bg-gray-100 text-gray-600' :
-                              plan.Status === 'LOCKED' ? 'bg-orange-100 text-orange-700' :
-                              'bg-emerald-100 text-emerald-700'
-                            }`}>
-                              {plan.Status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </TabsContent>
         ) : null}
 
         {canViewKpiTab ? (
@@ -1600,26 +1516,16 @@ const KpiAllocationPage = () => {
         notify={notify}
       />
 
-      <Dialog
-        open={confirmModal.open}
-        onOpenChange={(open) => !open && setConfirmModal((prev) => ({ ...prev, open: false }))}
-      >
+      <Dialog open={confirmModal.open} onOpenChange={(open) => !open && setConfirmModal((prev) => ({ ...prev, open: false }))}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className={confirmModal.isDestructive ? 'text-red-600' : ''}>
-              {confirmModal.title}
-            </DialogTitle>
+            <DialogTitle className={confirmModal.isDestructive ? 'text-red-600' : ''}>{confirmModal.title}</DialogTitle>
             <div className="py-4">
-              <p className="text-sm text-muted-foreground">
-                {confirmModal.message}
-              </p>
+              <p className="text-sm text-muted-foreground">{confirmModal.message}</p>
             </div>
           </DialogHeader>
           <div className="flex justify-end gap-3 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setConfirmModal((prev) => ({ ...prev, open: false }))}
-            >
+            <Button variant="outline" onClick={() => setConfirmModal((prev) => ({ ...prev, open: false }))}>
               Cancel
             </Button>
             <Button

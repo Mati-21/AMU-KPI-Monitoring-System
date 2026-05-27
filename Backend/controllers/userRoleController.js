@@ -44,7 +44,12 @@ const countActiveSystemAdminAssignments = async () => {
 };
 
 const STARTER_PERMISSION_SCOPE_SET = new Set(
-  [permissionKey('view', 'Sub Unit'), permissionKey('view', 'Affiliated Office Report'), permissionKey('view', 'Personal Profile')].filter(Boolean)
+  [
+    permissionKey('view', 'Sub Unit'),
+    permissionKey('view', 'Affiliated Office Report'),
+    permissionKey('view', 'Personal Profile'),
+    permissionKey('view', 'Direct Messages'),
+  ].filter(Boolean)
 );
 
 const buildStarterPermissionRows = () => {

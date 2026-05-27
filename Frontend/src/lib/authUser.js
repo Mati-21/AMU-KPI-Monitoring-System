@@ -42,6 +42,7 @@ const SYSTEM_ADMIN_FALLBACK_PERMISSIONS = [
   permissionUtils.permissionKey('view', 'Configuration'),
   permissionUtils.permissionKey('view', 'Alerts & Notifications'),
   permissionUtils.permissionKey('view', 'Personal Profile'),
+  permissionUtils.permissionKey('view', 'Direct Messages'),
 ].filter(Boolean);
 
 const sanitizeNamePart = (value) => {

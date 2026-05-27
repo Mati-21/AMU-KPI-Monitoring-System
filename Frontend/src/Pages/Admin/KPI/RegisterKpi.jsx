@@ -33,8 +33,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
     weight: '',
     baseline: '',
     target: '',
-    lifecycleType: 'RECURRING',
-    defaultBaseline: '0',
+    cycleYear: '',
     description: '',
     remark: '',
     isEvidenceRequired: false,
@@ -54,13 +53,19 @@ function RegisterKpi({ setActiveTab, onSaved }) {
       setError('');
 
       try {
-        const [typesRes, unitsRes] = await Promise.all([api.get('/kpi-types'), api.get('/units')]);
+        const [typesRes, unitsRes, cycleYearsRes] = await Promise.all([
+          api.get('/kpi-types'),
+          api.get('/units'),
+          api.get('/kpi-year-plans/cycle-years')
+        ]);
         if (!mounted) return;
         setKpiTypes(typesRes.data?.data || []);
         setUnits(unitsRes.data?.data || []);
+        const activeYear = cycleYearsRes.data?.data?.activeCycleYear || new Date().getFullYear().toString();
+        setKpiForm((prev) => ({ ...prev, cycleYear: activeYear }));
       } catch (loadErr) {
         if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load themes and units from database.');
+        setError(loadErr?.response?.data?.message || 'Failed to load themes, units, and active cycle year.');
       } finally {
         if (mounted) setLoading(false);
       }
@@ -92,8 +97,8 @@ function RegisterKpi({ setActiveTab, onSaved }) {
   const handleSave = async () => {
     setError('');
 
-    if (!kpiForm.kpiName.trim() || !kpiForm.themeId || !kpiForm.subThemeId || !kpiForm.unit || !kpiForm.weight || !kpiForm.target) {
-      setError('KPI name, theme, sub-theme, unit, weight, and target are required.');
+    if (!kpiForm.kpiName.trim() || !kpiForm.themeId || !kpiForm.subThemeId || !kpiForm.unit || !kpiForm.weight || !kpiForm.target || !kpiForm.cycleYear.trim()) {
+      setError('KPI name, theme, sub-theme, unit, weight, target, and cycle year are required.');
       return;
     }
 
@@ -172,8 +177,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         Weight: parsedWeight,
         Baseline: parsedBaseline,
         Target: parsedTarget,
-        LifecycleType: kpiForm.lifecycleType,
-        DefaultBaseline: kpiForm.lifecycleType === 'RECURRING' ? parseNumericInput(kpiForm.defaultBaseline) : null,
+        CycleYear: kpiForm.cycleYear.trim(),
         Description: kpiForm.description?.trim() || null,
         Remark: kpiForm.remark?.trim() || null,
         IsEvedenceRequired: kpiForm.isEvidenceRequired,
@@ -189,8 +193,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
         weight: '',
         baseline: '',
         target: '',
-        lifecycleType: 'RECURRING',
-        defaultBaseline: '0',
+        cycleYear: kpiForm.cycleYear,
         description: '',
         remark: '',
         isEvidenceRequired: false,
@@ -265,9 +268,9 @@ function RegisterKpi({ setActiveTab, onSaved }) {
           </div>
 
           <div className="space-y-1">
-            <Label>Baseline (Current Year)</Label>
+            <Label>Baseline</Label>
             <Input
-              placeholder="Baseline (Current Year)"
+              placeholder="Baseline"
               value={kpiForm.baseline}
               onChange={(e) => setKpiForm({ ...kpiForm, baseline: e.target.value })}
               className="h-11"
@@ -275,31 +278,19 @@ function RegisterKpi({ setActiveTab, onSaved }) {
           </div>
 
           <div className="space-y-1">
-            <Label>Target (Current Year)</Label>
-            <Input placeholder="Target (Current Year)" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
+            <Label>Target</Label>
+            <Input placeholder="Target" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
           </div>
           
           <div className="space-y-1">
-            <Label>Lifecycle Type</Label>
-            <CustomSelect
-              placeholder="Lifecycle Type"
-              value={kpiForm.lifecycleType}
-              onChange={(value) => setKpiForm({ ...kpiForm, lifecycleType: value })}
-              options={['RECURRING', 'PROGRESSIVE', 'ONE_TIME']}
+            <Label>KPI Cycle Year</Label>
+            <Input
+              placeholder="e.g. 2018"
+              value={kpiForm.cycleYear}
+              onChange={(e) => setKpiForm({ ...kpiForm, cycleYear: e.target.value })}
+              className="h-11"
             />
           </div>
-
-          {kpiForm.lifecycleType === 'RECURRING' && (
-             <div className="space-y-1">
-               <Label>Default Baseline (for resets)</Label>
-               <Input
-                 placeholder="Default Baseline (for resets)"
-                 value={kpiForm.defaultBaseline}
-                 onChange={(e) => setKpiForm({ ...kpiForm, defaultBaseline: e.target.value })}
-                 className="h-11"
-               />
-             </div>
-          )}
           
           <div className="flex items-center gap-3 h-11 px-1 mt-6">
             <Checkbox
@@ -349,8 +340,7 @@ function RegisterKpi({ setActiveTab, onSaved }) {
                 weight: '',
                 baseline: '',
                 target: '',
-                lifecycleType: 'RECURRING',
-                defaultBaseline: '0',
+                cycleYear: '',
                 description: '',
                 remark: '',
                 isEvidenceRequired: false,

@@ -162,7 +162,7 @@ export const navigationSections = [
         icon: MessageSquare,
         label: 'Direct Messages',
         path: '/direct-messages',
-        permissions: [permissionUtils.permissionKey('view', 'Personal Profile')],
+        permissions: [permissionUtils.permissionKey('view', 'Direct Messages')],
       },
     ],
   },

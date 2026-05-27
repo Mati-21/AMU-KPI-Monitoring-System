@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { RefreshCw, Clock3, ChevronDown, ChevronUp, Plus, Eye, Send, Check, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import * as XLSX from 'xlsx';
 import PerformanceSubmitModal from '../../Components/KPI/PerformanceSubmitModal';
 import PerformanceDetailModal from '../../Components/KPI/PerformanceDetailModal';
 import {
@@ -241,6 +242,59 @@ const OfficeReport = () => {
     setDetailModalOpen(true);
   };
 
+  const handleExportToExcel = () => {
+    if (!rows || rows.length === 0) {
+      notify('No report data available to export.', 'error');
+      return;
+    }
+
+    const headers = ['No.', 'KPI', 'Unit', 'Weight', 'Baseline', 'Target'];
+    columns.forEach((col) => {
+      headers.push(col.name);
+    });
+    headers.push('Remark');
+
+    const sheetData = [];
+    sheetData.push(headers);
+
+    allRows.forEach((row) => {
+      const rowValues = [];
+      rowValues.push(row.no || '');
+      rowValues.push(row.kpi || '');
+      rowValues.push(row.unit || '');
+      rowValues.push(row.weight || '');
+      rowValues.push(row.baseline || '');
+      rowValues.push(row.target || '');
+
+      columns.forEach((col) => {
+        const cellValue = row.values?.[col.id];
+        let val = formatCellValue(cellValue);
+        rowValues.push(val);
+      });
+
+      rowValues.push(row.remark || '');
+      sheetData.push(rowValues);
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'KPI Report');
+
+    const maxCols = headers.length;
+    const colsWidth = [];
+    for (let i = 0; i < maxCols; i++) {
+      colsWidth.push({ wch: 15 });
+    }
+    colsWidth[1] = { wch: 45 };
+    worksheet['!cols'] = colsWidth;
+
+    const fileName = `KPI_Report_${currentOfficeName.replace(/\s+/g, '_')}_${selectedCycleYear}_${selectedQuarter || 'Progressive'}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+    notify('Excel report exported successfully.', 'success');
+  };
+
+
+
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
       <div className="shrink-0 space-y-3">
@@ -263,15 +317,15 @@ const OfficeReport = () => {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-6 mt-6 space-y-6">
+        <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border rounded-2xl shadow-sm p-6 mt-6 space-y-6">
           <div className="flex flex-wrap items-end gap-6">
             {showScopeSelector && (
               <div className="flex-1 min-w-[240px] space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">REPORT SCOPE</span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest block">REPORT SCOPE</span>
                 <select
                   value={selectedScopeRoleId || String(reportData?.scopeRole?.id || '')}
                   onChange={(event) => setSelectedScopeRoleId(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
+                  className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50/30 dark:bg-muted/50 px-4 py-2.5 text-sm text-slate-700 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   {scopeRoleOptions.map((scopeRole) => (
                     <option key={scopeRole.id} value={scopeRole.id}>
@@ -284,11 +338,11 @@ const OfficeReport = () => {
 
             {showReportModeSelector && (
               <div className="flex-1 min-w-[160px] space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">VIEW MODE</span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest block">VIEW MODE</span>
                 <select
                   value={selectedReportMode}
                   onChange={(event) => setSelectedReportMode(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
+                  className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50/30 dark:bg-muted/50 px-4 py-2.5 text-sm text-slate-700 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   <option value="individual">Individual</option>
                   <option value="combined">Combined</option>
@@ -298,11 +352,11 @@ const OfficeReport = () => {
 
             {availableYears.length > 0 && (
               <div className="flex-1 min-w-[140px] space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">YEAR</span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest block">YEAR</span>
                 <select
                   value={selectedCycleYear || activeCycleYearFromServer || ''}
                   onChange={(event) => setSelectedCycleYear(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
+                  className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50/30 dark:bg-muted/50 px-4 py-2.5 text-sm text-slate-700 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
                 >
                   {availableYears.map((year) => (
                     <option key={year} value={year}>
@@ -314,11 +368,11 @@ const OfficeReport = () => {
             )}
 
             <div className="flex-1 min-w-[160px] space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">QUARTER</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-muted-foreground uppercase tracking-widest block">QUARTER</span>
               <select
                 value={selectedQuarter}
                 onChange={(event) => setSelectedQuarter(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/30 px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
+                className="w-full rounded-xl border border-slate-200 dark:border-border bg-slate-50/30 dark:bg-muted/50 px-4 py-2.5 text-sm text-slate-700 dark:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/15 focus:border-primary transition-all"
               >
                 <option value="">Progressive</option>
                 <option value="Q1">Q1</option>
@@ -328,8 +382,8 @@ const OfficeReport = () => {
               </select>
             </div>
 
-            <div className="flex items-center justify-between border border-slate-200 rounded-xl px-4 py-2.5 min-w-[180px] bg-slate-50/30 h-[46px] self-end">
-              <span className="text-sm font-semibold text-slate-700">Color code</span>
+            <div className="flex items-center justify-between border border-slate-200 dark:border-border rounded-xl px-4 py-2.5 min-w-[180px] bg-slate-50/30 dark:bg-muted/50 h-[46px] self-end">
+              <span className="text-sm font-semibold text-slate-700 dark:text-foreground">Color code</span>
               <label className="relative inline-flex items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -337,7 +391,7 @@ const OfficeReport = () => {
                   onChange={(e) => setColorCode(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-9 h-5 bg-slate-200 dark:bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 dark:peer-checked:bg-blue-500"></div>
               </label>
             </div>
           </div>
@@ -372,7 +426,7 @@ const OfficeReport = () => {
                   'flex items-center gap-2 py-2.5 px-5 rounded-xl transition-all font-semibold text-sm',
                   cycleReady && reportData?.quarter === 'Q4'
                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200/50'
+                    : 'bg-slate-100 dark:bg-muted/40 text-slate-400 dark:text-muted-foreground cursor-not-allowed border border-slate-200/50 dark:border-border/30'
                 )}
                 disabled={!cycleReady || reportData?.quarter !== 'Q4' || closeCycleMutation.isPending}
                 title={
@@ -394,18 +448,28 @@ const OfficeReport = () => {
 
       {error ? <p className="shrink-0 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
-      <Card className="border-border shadow-sm">
+      <Card className="border-border shadow-sm bg-card">
         <CardHeader className="shrink-0 pb-3">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <CardTitle className="text-xl font-bold">KPI Report for {currentOfficeName}</CardTitle>
-            {reportData?.quarter && (
-              <Badge
-                variant="outline"
-                className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-4 py-1.5 rounded-md shadow-sm text-sm uppercase tracking-widest whitespace-nowrap"
-              >
-                {reportData.quarter === 'Q4' ? 'Full Year' : reportData.quarter}
-              </Badge>
-            )}
+            <div className="flex items-center gap-3 flex-wrap">
+              {hasKpiRows && (
+                <Button
+                  onClick={handleExportToExcel}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm h-8"
+                >
+                  <span>Export to Excel</span>
+                </Button>
+              )}
+              {reportData?.quarter && (
+                <Badge
+                  variant="outline"
+                  className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold px-4 py-1.5 rounded-md shadow-sm text-sm uppercase tracking-widest whitespace-nowrap h-8 flex items-center justify-center"
+                >
+                  {reportData.quarter === 'Q4' ? 'Full Year' : reportData.quarter}
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
 
@@ -513,9 +577,16 @@ const OfficeReport = () => {
                             let displayValue = formatCellValue(cellValue);
                             let formattedApprovedValue = cellValue?.approvedValue;
                             let cellBgClass = '';
+                            let cellStyle = { ...compactPad };
+                            let textStyle = {};
 
                             if ((row.rowType === 'kpi' || !row.rowType) && !isMissingValue) {
-                              const targetVal = parseFloat(String(row.target).replace(/,/g, ''));
+                              const rowTargetVal = parseFloat(String(row.target).replace(/,/g, ''));
+                              const cellTargetVal = cellValue && typeof cellValue === 'object' && cellValue.target !== undefined
+                                ? parseFloat(String(cellValue.target).replace(/,/g, ''))
+                                : rowTargetVal;
+
+                              const targetVal = isNaN(cellTargetVal) ? rowTargetVal : cellTargetVal;
                               const rawVal = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
                               const currentVal = parseFloat(String(rawVal).replace(/,/g, ''));
 
@@ -534,13 +605,17 @@ const OfficeReport = () => {
                                       }
                                     }
 
-                                    if (percentage >= 95) {
-                                      cellBgClass = 'bg-emerald-600 text-white font-bold dark:bg-emerald-700 dark:text-white';
-                                    } else if (percentage >= 50) {
-                                      cellBgClass = 'bg-amber-500 text-white font-bold dark:bg-amber-600 dark:text-white';
-                                    } else {
-                                      cellBgClass = 'bg-rose-600 text-white font-bold dark:bg-rose-700 dark:text-white';
-                                    }
+                                    const fillPercent = Math.min(100, Math.max(0, percentage));
+                                    const hue = Math.min(120, Math.max(0, (percentage / 100) * 120));
+                                    const lightness = Math.max(40, Math.min(55, 55 - (percentage / 100) * 15));
+                                    const color = `hsl(${hue}, 80%, ${lightness}%)`;
+                                    
+                                    cellStyle.background = `linear-gradient(to right, ${color} ${fillPercent}%, rgba(255, 255, 255, 0.05) ${fillPercent}%)`;
+                                    textStyle = {
+                                      color: 'white',
+                                      fontWeight: 'bold',
+                                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.7)'
+                                    };
                                   }
                                 }
                               }
@@ -549,10 +624,10 @@ const OfficeReport = () => {
                             return (
                               <TableCell
                                 key={column.id}
-                                style={compactPad}
+                                style={cellStyle}
                                 className={`text-center text-sm ${isMissingValue ? 'text-muted-foreground/60' : 'text-foreground font-medium'} ${cellBgClass}`}
                               >
-                                <div className="flex flex-col items-center gap-1">
+                                <div className="flex flex-col items-center gap-1" style={textStyle}>
                                   {showPendingValue ? (
                                     <div className="flex flex-col items-center leading-none gap-0.5">
                                       {displayValue === 'Pending' ? (

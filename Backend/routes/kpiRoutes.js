@@ -1,8 +1,11 @@
 const express = require('express');
 const { protect, requireModulePermission, requirePermission, permissionKey } = require('../middleware/authMiddleware');
-const { createKPI, getKPIs, getKPIById, updateKPI, deleteKPI } = require('../controllers/kpiController');
+const { createKPI, getKPIs, getKPIById, updateKPI, deleteKPI, deleteAllKPIs, importKPIs } = require('../controllers/kpiController');
 
 const router = express.Router();
+
+router.post('/import', protect, requireModulePermission('KPI Management', 'create'), importKPIs);
+router.delete('/delete-all', protect, requireModulePermission('KPI Management', 'delete'), deleteAllKPIs);
 
 router
   .route('/')

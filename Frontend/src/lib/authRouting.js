@@ -50,12 +50,12 @@ const permissionRoutes = [
     route: '/configuration',
   },
   {
-    permissions: [permissionUtils.permissionKey('view', 'Alerts & Notifications')],
-    route: '/alert-notification',
-  },
-  {
     permissions: [permissionUtils.permissionKey('view', 'Personal Profile')],
     route: '/profile',
+  },
+  {
+    permissions: [permissionUtils.permissionKey('view', 'Direct Messages')],
+    route: '/direct-messages',
   },
 ];
 

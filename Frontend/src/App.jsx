@@ -193,15 +193,15 @@ function App() {
                       <Route path="/configuration" element={<Configuration />} />
                     </Route>
 
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Alerts & Notifications')} />}>
-                      <Route path="/alert-notification" element={<AlertsNotifications />} />
-                    </Route>
+                    <Route path="/alert-notification" element={<AlertsNotifications />} />
 
                     <Route element={<RequirePermission permissions={[permissionUtils.permissionKey('view', 'System Logs')]} />}>
                       <Route path="/system-logs" element={<SystemLogs />} />
                     </Route>
                     <Route path="/contact-messages" element={<ContactMessages />} />
-                    <Route path="/direct-messages" element={<DirectMessageView />} />
+                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Direct Messages')} />}>
+                      <Route path="/direct-messages" element={<DirectMessageView />} />
+                    </Route>
 
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Route>

@@ -5,6 +5,7 @@ import KpiList from './KpiList';
 import RegisterKpi from './RegisterKpi';
 import RegisterUnit from './RegisterUnit';
 import RegisterCategory from './RegisterCategory';
+import ImportKpi from './ImportKpi';
 
 const KpiManagement = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -26,6 +27,7 @@ const KpiManagement = () => {
     { key: 'addKpi', label: 'Register KPI' },
     { key: 'addKpiCategory', label: 'Register Theme / Sub-Theme' },
     { key: 'addKpiUnit', label: 'Register Unit' },
+    { key: 'importKpi', label: 'Mass Import KPIs' },
   ];
 
   return (
@@ -45,6 +47,7 @@ const KpiManagement = () => {
           {activeTab === 'addKpi' && <RegisterKpi setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
           {activeTab === 'addKpiCategory' && <RegisterCategory setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
           {activeTab === 'addKpiUnit' && <RegisterUnit setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
+          {activeTab === 'importKpi' && <ImportKpi setActiveTab={handleTabChange} onSaved={() => setRefreshKey((prev) => prev + 1)} />}
         </main>
       </div>
     </div>

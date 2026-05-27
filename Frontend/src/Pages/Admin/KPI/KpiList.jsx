@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Edit, Trash2, Eye, Target } from 'lucide-react';
+import { Edit, Trash2, Eye, Target, AlertTriangle, FileText, FileJson, FileSpreadsheet, Download } from 'lucide-react';
 
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../../Components/UI/Table';
 import { Input } from '../../../Components/UI/Input';
 import SearchInput from '../../../Components/UI/SearchInput';
 import Button from '../../../Components/UI/Button';
 import Checkbox from '../../../Components/UI/Checkbox';
+import * as XLSX from 'xlsx';
+import html2pdf from 'html2pdf.js';
 import { Badge } from '../../../Components/UI/Badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../Components/UI/dialog';
 import { api } from '../../../api/axios';
@@ -72,6 +74,9 @@ function KpiList({ refreshKey }) {
   const [deletingSubTheme, setDeletingSubTheme] = useState(null);
   const [deletingUnit, setDeletingUnit] = useState(null);
   const [viewingKpi, setViewingKpi] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const [editKpiForm, setEditKpiForm] = useState(emptyEditKpi);
   const [editThemeForm, setEditThemeForm] = useState(emptyEditTheme);
@@ -304,6 +309,147 @@ function KpiList({ refreshKey }) {
     setEditingKpi(true);
   };
 
+  const toggleRow = (id) => {
+    setSelectedIds((prev) => {
+      const s = new Set(prev.map(String));
+      if (s.has(String(id))) s.delete(String(id));
+      else s.add(String(id));
+      return Array.from(s);
+    });
+  };
+
+  const selectAll = () => setSelectedIds(filteredKpis.map((r) => String(r.id)));
+  const deselectAll = () => setSelectedIds([]);
+  const exportCsv = (rows) => {
+    if (!rows || !rows.length) return;
+    const headers = ['No', 'KPI', 'Theme', 'SubTheme', 'Unit', 'Weight', 'Baseline', 'Target', 'Remark'];
+    const csv = [headers.join(',')]
+      .concat(
+        rows.map((r) =>
+          [
+            r.no,
+            `"${(r.kpiName || '').replace(/"/g, '""')}"`,
+            `"${(r.theme || '').replace(/"/g, '""')}"`,
+            `"${(r.subTheme || '').replace(/"/g, '""')}"`,
+            r.unit,
+            r.weight,
+            r.baseline,
+            r.target,
+            `"${(r.remark || '').replace(/"/g, '""')}"`,
+          ].join(',')
+        )
+      )
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kpis.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportJson = (rows) => {
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kpis.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportXlsx = (rows) => {
+    if (!rows || !rows.length) return;
+    const data = rows.map((r) => ({
+      No: r.no,
+      KPI: r.kpiName,
+      Theme: r.theme,
+      SubTheme: r.subTheme,
+      Unit: r.unit,
+      Weight: r.weight,
+      Baseline: r.baseline,
+      Target: r.target,
+      Remark: r.remark,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'KPIs');
+    XLSX.writeFile(wb, 'kpis.xlsx');
+  };
+
+  const exportPdf = async (rows) => {
+    if (!rows || !rows.length) return;
+    const table = document.createElement('table');
+    table.style.borderCollapse = 'collapse';
+    table.style.width = '100%';
+
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['No', 'KPI', 'Theme', 'SubTheme', 'Unit', 'Weight', 'Baseline', 'Target', 'Remark'].forEach((h) => {
+      const th = document.createElement('th');
+      th.style.border = '1px solid #ddd';
+      th.style.padding = '6px';
+      th.style.textAlign = 'left';
+      th.style.background = '#f6f6f6';
+      th.textContent = h;
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    rows.forEach((r) => {
+      const tr = document.createElement('tr');
+      [r.no, r.kpiName, r.theme, r.subTheme, r.unit, r.weight, r.baseline, r.target, r.remark].forEach((cell) => {
+        const td = document.createElement('td');
+        td.style.border = '1px solid #ddd';
+        td.style.padding = '6px';
+        td.style.fontSize = '12px';
+        td.textContent = cell;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    const container = document.createElement('div');
+    container.style.padding = '10px';
+    container.appendChild(table);
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
+
+    try {
+      await html2pdf()
+        .from(container)
+        .set({ margin: 10, filename: 'kpis.pdf', html2canvas: { scale: 2 } })
+        .save();
+    } catch (e) {
+      // ignore
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
+
+  const confirmDeleteSelected = async () => {
+    if (!selectedIds || selectedIds.length === 0) return;
+
+    setSaving(true);
+    try {
+      await Promise.all(selectedIds.map((id) => api.delete(`/kpis/${id}`)));
+      notify(`Deleted ${selectedIds.length} KPI(s) successfully.`, 'success');
+      setSelectedIds([]);
+      setDeletingSelected(false);
+      await loadData();
+    } catch (err) {
+      notify(err?.response?.data?.message || 'Failed to delete selected KPIs.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openThemeEditor = (row) => {
     setEditThemeForm({
       id: row.Id,
@@ -443,7 +589,6 @@ function KpiList({ refreshKey }) {
     setSaving(true);
     try {
       await api.delete(`/kpis/${deletingKpi.id}`);
-      await api.delete(`/kpi-types/${deletingKpi.kpiTypeId}`);
       notify('KPI deleted successfully.', 'success');
       setDeletingKpi(null);
       await loadData();
@@ -514,6 +659,20 @@ function KpiList({ refreshKey }) {
     }
   };
 
+  const confirmDeleteAll = async () => {
+    setSaving(true);
+    try {
+      const res = await api.delete('/kpis/delete-all');
+      notify(res.data?.message || 'All KPIs deleted successfully.', 'success');
+      setDeletingAll(false);
+      await loadData();
+    } catch (deleteErr) {
+      notify(deleteErr?.response?.data?.message || 'Failed to delete all KPIs.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const subThemeOptionsForEdit = subThemes.filter((row) => !editKpiForm.themeId || row.ParentKPIID === editKpiForm.themeId);
 
   return (
@@ -532,15 +691,95 @@ function KpiList({ refreshKey }) {
             <button className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-muted shadow-soft">
               <span>Filters</span>
             </button>
+
+            {kpiRows.length > 0 && (
+              <button
+                onClick={() => setDeletingAll(true)}
+                className="flex h-10 items-center gap-2 rounded-full border border-destructive/30 bg-destructive/5 px-4 text-sm font-semibold text-destructive transition-all duration-200 hover:bg-destructive/10 shadow-soft"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete All</span>
+              </button>
+            )}
           </div>
         </div>
 
         {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
 
         <div className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={selectAll}>
+                Select all
+              </Button>
+              <Button size="sm" variant="outline" onClick={deselectAll}>
+                Deselect
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setDeletingSelected(true)}
+                disabled={selectedIds.length === 0}
+                title="Trash selected"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
+                onClick={() => exportCsv(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
+                aria-label="Export CSV"
+                title="Export CSV"
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
+                onClick={() => exportJson(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
+                aria-label="Export JSON"
+                title="Export JSON"
+              >
+                <FileJson className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
+                onClick={() => exportXlsx(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
+                aria-label="Export Excel"
+                title="Export Excel"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
+                onClick={() => exportPdf(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
+                aria-label="Export PDF"
+                title="Export PDF"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
           <Table className="min-w-300">
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12 text-center">
+                  <Checkbox
+                    id="select-all-kpis"
+                    checked={filteredKpis.length > 0 && selectedIds.length === filteredKpis.length}
+                    onCheckedChange={(checked) => (checked ? selectAll() : deselectAll())}
+                  />
+                </TableHead>
                 <TableHead>No.</TableHead>
                 <TableHead>KPI</TableHead>
                 <TableHead>Theme</TableHead>
@@ -557,11 +796,18 @@ function KpiList({ refreshKey }) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10}>Loading KPI records...</TableCell>
+                  <TableCell colSpan={11}>Loading KPI records...</TableCell>
                 </TableRow>
               ) : paginatedKpis.length ? (
                 paginatedKpis.map((row) => (
                   <TableRow key={row.id}>
+                    <TableCell className="text-center">
+                      <Checkbox
+                        id={`select-kpi-${row.id}`}
+                        checked={selectedIds.includes(String(row.id))}
+                        onCheckedChange={() => toggleRow(row.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{row.no}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
@@ -601,7 +847,7 @@ function KpiList({ refreshKey }) {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10}>No KPI records found in the database.</TableCell>
+                  <TableCell colSpan={11}>No KPI records found in the database.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -968,6 +1214,51 @@ function KpiList({ refreshKey }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={deletingAll} onOpenChange={(open) => !open && !saving && setDeletingAll(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete All KPIs
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>all {kpiRows.length} KPIs</strong> along with their associated assignments, results, year plans,
+              and documents. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingAll(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteAll} disabled={saving}>
+              {saving ? 'Deleting All...' : 'Yes, Delete All KPIs'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deletingSelected} onOpenChange={(open) => !open && !saving && setDeletingSelected(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Selected KPIs
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete the selected <strong>{selectedIds.length}</strong> KPI(s) and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingSelected(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSelected} disabled={saving || selectedIds.length === 0}>
+              {saving ? 'Deleting...' : `Delete Selected (${selectedIds.length})`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(deletingTheme)} onOpenChange={(open) => !open && !saving && setDeletingTheme(null)}>
         <DialogContent>
           <DialogHeader>
@@ -1027,9 +1318,7 @@ function KpiList({ refreshKey }) {
                 <Target className="h-6 w-6" />
               </div>
               <div className="space-y-1">
-                <DialogTitle className="text-2xl font-bold text-slate-900 leading-tight">
-                  KPI Information
-                </DialogTitle>
+                <DialogTitle className="text-2xl font-bold text-slate-900 leading-tight">KPI Information</DialogTitle>
                 <DialogDescription className="text-sm text-slate-500 font-medium">
                   Review the full configuration and strategic metadata for this objective.
                 </DialogDescription>
@@ -1079,7 +1368,9 @@ function KpiList({ refreshKey }) {
                 {/* Evidence Status & Remark */}
                 <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Evidence Required</p>
-                  <Badge className={viewingKpi.isEvidenceRequired ? "bg-indigo-100 text-indigo-700 border-0" : "bg-slate-100 text-slate-600 border-0"}>
+                  <Badge
+                    className={viewingKpi.isEvidenceRequired ? 'bg-indigo-100 text-indigo-700 border-0' : 'bg-slate-100 text-slate-600 border-0'}
+                  >
                     {viewingKpi.isEvidenceRequired ? 'Yes' : 'No'}
                   </Badge>
                 </div>

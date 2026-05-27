@@ -119,15 +119,11 @@ class KPIClosureService {
 
     try {
       // 1. Finalize and lock the current cycle year plans (marks the cycle as "Closed").
-      // NOTE: We intentionally do NOT archive/delete UserKPI, UserKPIResult, or OfficeReportSubmission
-      // rows for the closing year so historical dashboards and reports remain accessible by year.
       const plans = await KPIYearPlan.findAll({
         where: { CycleYear: cycleYear },
         include: [{ model: KPI }],
         transaction,
       });
-
-      const nextPlanByKpiId = new Map();
 
       for (const plan of plans) {
         // Skip already-locked plans to make this operation idempotent.
@@ -158,174 +154,31 @@ class KPIClosureService {
         plan.Status = 'COMPLETED';
         await plan.save({ transaction });
 
-        // Apply KPI Lifecycle Rules to compute next year plan baseline/target
+        // Update ONE_TIME KPIs lifecycle if needed
         const kpi = plan.KPI;
-        if (!kpi) continue;
-
-        // Expired KPIs (inactive) do not carry forward into the next active cycle.
-        if (kpi.IsActive === false || kpi.IsArchived === true) {
-          continue;
+        if (kpi && kpi.LifecycleType === 'ONE_TIME') {
+          kpi.IsArchived = true;
+          await kpi.save({ transaction });
         }
-
-        let nextBaseline = 0;
-        let nextTarget = plan.Target;
-        let shouldCarryForward = true;
-
-        switch (kpi.LifecycleType) {
-          case 'PROGRESSIVE':
-            // Final performance becomes both baseline and target
-            nextBaseline = finalValue;
-            nextTarget = finalValue;
-            break;
-
-          case 'RECURRING':
-            // Recurring: reset baseline to 0, reset target to the KPI's default (fallback to current plan)
-            nextBaseline = 0;
-            nextTarget = parseNumeric(kpi.DefaultBaseline) ?? parseNumeric(plan.Target) ?? 0;
-            break;
-
-          case 'ONE_TIME':
-            // One-time: archive and do NOT carry forward
-            kpi.IsArchived = true;
-            await kpi.save({ transaction });
-            shouldCarryForward = false;
-            break;
-
-          default:
-            nextBaseline = 0;
-            nextTarget = plan.Target;
-        }
-
-        if (!shouldCarryForward || kpi.IsArchived) {
-          continue;
-        }
-
-        const existingNextPlan = await KPIYearPlan.findOne({
-          where: { KPIId: kpi.Id, CycleYear: nextCycleYear },
-          transaction,
-        });
-
-        const nextPlan =
-          existingNextPlan ||
-          (await KPIYearPlan.create(
-            {
-              KPIId: kpi.Id,
-              CycleYear: nextCycleYear,
-              Baseline: nextBaseline,
-              Target: nextTarget,
-              Status: 'ACTIVE',
-              IsLocked: false,
-            },
-            { transaction }
-          ));
-
-        nextPlanByKpiId.set(String(kpi.Id), { nextBaseline, nextTarget, nextPlan });
       }
 
-      // 2. Ensure the next cycle has KPIYearPlans for ALL active (non-archived) KPIs.
-      // This covers newly registered KPIs and avoids gaps if a KPI had no plan in the closing year.
-      const activeKpis = await KPI.findAll({
-        where: { IsArchived: false, IsActive: true },
-        attributes: ['Id', 'LifecycleType', 'DefaultBaseline'],
-        transaction,
-      });
+      // 2. Archive all UserKPIs for all roles for this closing year, clearing them from active UI
+      await UserKPI.update(
+        { IsArchived: true },
+        { where: { CycleYear: cycleYear }, transaction }
+      );
 
-      for (const kpi of activeKpis) {
-        if (kpi.LifecycleType === 'ONE_TIME') continue;
-        const kpiId = String(kpi.Id);
-        if (nextPlanByKpiId.has(kpiId)) continue;
-
-        const existing = await KPIYearPlan.findOne({
-          where: { KPIId: kpi.Id, CycleYear: nextCycleYear },
-          transaction,
-        });
-        if (existing) {
-          nextPlanByKpiId.set(kpiId, { nextBaseline: existing.Baseline, nextTarget: existing.Target, nextPlan: existing });
-          continue;
-        }
-
-        const lastPlan = await KPIYearPlan.findOne({
-          where: { KPIId: kpi.Id },
-          order: [['CycleYear', 'DESC']],
-          transaction,
-        });
-
-        const baseline = 0;
-        const target = parseNumeric(kpi.DefaultBaseline) ?? parseNumeric(lastPlan?.Target) ?? 0;
-
-        const created = await KPIYearPlan.create(
-          {
-            KPIId: kpi.Id,
-            CycleYear: nextCycleYear,
-            Baseline: baseline,
-            Target: target,
-            Status: 'ACTIVE',
-            IsLocked: false,
-          },
-          { transaction }
-        );
-        nextPlanByKpiId.set(kpiId, { nextBaseline: created.Baseline, nextTarget: created.Target, nextPlan: created });
-      }
-
-      // 3. Regenerate UserKPI assignments for the new cycle.
-      // We base this on the closing cycle's existing assignments and apply lifecycle/expiry rules.
-      await this.regenerateUserKPIAssignmentsForNewCycle(cycleYear, nextCycleYear, nextPlanByKpiId, transaction);
+      // We intentionally do NOT create next-year plans or copy assignments automatically.
+      // Admin will re-register or mass-import them for the new cycle year.
 
       await transaction.commit();
+      
       // Update the active cycle year in DB + in-memory cache AFTER data is committed.
       await setActiveCycleYear(nextCycleYear);
       return { success: true, closedPlansCount: plans.length, nextCycleYear };
     } catch (error) {
       await transaction.rollback();
       throw error;
-    }
-  }
-
-  /**
-   * Migrate UserKPI assignments from old cycle to new cycle.
-   * Skips ONE_TIME KPIs. Uses updated baseline/target from new KPIYearPlan.
-   */
-  async regenerateUserKPIAssignmentsForNewCycle(cycleYear, nextCycleYear, nextPlanByKpiId, transaction) {
-    const oldAssignments = await UserKPI.findAll({
-      where: { CycleYear: cycleYear, IsArchived: false },
-      include: [{ model: KPI, attributes: ['Id', 'LifecycleType', 'IsArchived', 'IsActive'] }],
-      transaction,
-    });
-
-    for (const assignment of oldAssignments) {
-      const kpi = assignment.KPI;
-      if (!kpi) continue;
-      if (kpi.IsArchived || kpi.IsActive === false || kpi.LifecycleType === 'ONE_TIME') continue;
-
-      const existing = await UserKPI.findOne({
-        where: { UserId: assignment.UserId, KPIId: assignment.KPIId, CycleYear: nextCycleYear, IsArchived: false },
-        transaction,
-      });
-      if (existing) continue;
-
-      const planData = nextPlanByKpiId.get(String(assignment.KPIId));
-      const newBaseline = planData ? planData.nextBaseline : 0;
-      const newTarget = planData ? planData.nextTarget : assignment.AssignedTarget;
-      const nextPlanId = planData?.nextPlan?.Id || null;
-
-      await UserKPI.create(
-        {
-          UserId: assignment.UserId,
-          KPIId: assignment.KPIId,
-          KPIYearPlanId: nextPlanId,
-          CycleYear: nextCycleYear,
-          Baseline: newBaseline,
-          AssignedTarget: newTarget,
-          CreatedBy: assignment.CreatedBy,
-          Name: assignment.Name,
-          Remark: assignment.Remark,
-          IsTargetIndividual: assignment.IsTargetIndividual,
-          IncludeCurrentOffice: assignment.IncludeCurrentOffice,
-          AssignmentBatchId: assignment.AssignmentBatchId || null,
-          IsArchived: false,
-        },
-        { transaction }
-      );
     }
   }
 
