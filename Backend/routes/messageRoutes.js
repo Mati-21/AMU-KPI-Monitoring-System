@@ -16,7 +16,7 @@ const {
 } = require('../controllers/messageController');
 const { protect } = require('../middleware/authMiddleware');
 
-const { messageStorage } = require('../services/cloudinaryService');
+const { messageStorage } = require('../services/uploadService');
 
 const upload = multer({
   storage: messageStorage,

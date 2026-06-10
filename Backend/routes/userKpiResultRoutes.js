@@ -27,7 +27,7 @@ const AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS = [
   permissionKey('view', 'Other Role Reports'),
 ].filter(Boolean);
 
-const { evidenceStorage } = require('../services/cloudinaryService');
+const { evidenceStorage } = require('../services/uploadService');
 
 const upload = multer({
   storage: evidenceStorage,

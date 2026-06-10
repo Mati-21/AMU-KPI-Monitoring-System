@@ -54,8 +54,8 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'http://localhost:5000', 'blob:', 'https://res.cloudinary.com'],
-        connectSrc: ["'self'", 'http://localhost:5000', 'ws://localhost:5000', 'https://res.cloudinary.com'],
+        imgSrc: ["'self'", 'data:', 'http://localhost:5000', 'blob:'],
+        connectSrc: ["'self'", 'http://localhost:5000', 'ws://localhost:5000'],
       },
     },
   })

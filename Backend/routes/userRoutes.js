@@ -39,7 +39,7 @@ router
   .put(protect, requirePermission([permissionKey('edit', 'User Management'), permissionKey('manage', 'Users')]), resetUserPassword);
 
 const multer = require('multer');
-const { profileStorage } = require('../services/cloudinaryService');
+const { profileStorage } = require('../services/uploadService');
 const upload = multer({ storage: profileStorage });
 
 router

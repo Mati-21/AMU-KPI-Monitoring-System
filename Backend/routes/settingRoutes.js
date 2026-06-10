@@ -5,7 +5,7 @@ const path = require('path');
 const { getSettings, updateSetting, getSystemStatus, uploadLogo } = require('../controllers/settingController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
-const { logoStorage } = require('../services/cloudinaryService');
+const { logoStorage } = require('../services/uploadService');
 
 const upload = multer({ storage: logoStorage });
 
