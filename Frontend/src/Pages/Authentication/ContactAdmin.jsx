@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { 
   Mail, 
   User, 
@@ -8,7 +9,8 @@ import {
   ShieldCheck, 
   Clock, 
   CheckCircle2, 
-  ArrowLeft 
+  ArrowLeft,
+  AlertCircle
 } from 'lucide-react';
 import Navbar from '../../Components/UI/Navbar';
 
@@ -20,16 +22,34 @@ const ContactAdmin = () => {
     message: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error'
+  const [submitMessage, setSubmitMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
+    setSubmitStatus(null);
+
+    try {
+      await axios.post('http://localhost:5000/api/contact-messages', {
+        username: formData.username,
+        email: formData.email,
+        message: formData.message,
+      });
+
+      setSubmitStatus('success');
+      setSubmitMessage('Message sent successfully! We will get back to you soon.');
+      setFormData({ username: '', email: '', message: '' });
+
+      setTimeout(() => navigate('/signin'), 2500);
+    } catch (err) {
+      setSubmitStatus('error');
+      setSubmitMessage(
+        err?.response?.data?.message || 'Failed to send message. Please try again.'
+      );
+    } finally {
       setIsSubmitting(false);
-      alert('Message sent successfully! We will get back to you soon.');
-      navigate('/signin');
-    }, 1500);
+    }
   };
 
   return (
@@ -107,6 +127,21 @@ const ContactAdmin = () => {
                   </div>
                 </div>
 
+                {/* Status Banner */}
+                {submitStatus && (
+                  <div className={`flex items-start gap-3 p-4 rounded-xl text-sm font-medium border ${
+                    submitStatus === 'success'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400'
+                  }`}>
+                    {submitStatus === 'success'
+                      ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                      : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    }
+                    <span>{submitMessage}</span>
+                  </div>
+                )}
+
                 {/* Footer Actions */}
                 <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-6">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -115,7 +150,7 @@ const ContactAdmin = () => {
                   </div>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || submitStatus === 'success'}
                     className="w-full sm:w-auto h-10 px-6 bg-primary text-primary-foreground font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-70 disabled:scale-100 flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
@@ -123,7 +158,7 @@ const ContactAdmin = () => {
                     ) : (
                       <Send className="w-4 h-4" />
                     )}
-                    {isSubmitting ? 'Sending...' : 'Send Message'}
+                    {isSubmitting ? 'Sending...' : submitStatus === 'success' ? 'Sent!' : 'Send Message'}
                   </button>
                 </div>
               </form>

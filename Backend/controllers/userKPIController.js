@@ -719,6 +719,153 @@ const bulkDeleteUserKPIs = async (req, res) => {
   }
 };
 
+const bulkAssignUserKPIs = async (req, res) => {
+  try {
+    const { assignments } = req.body;
+    if (!Array.isArray(assignments) || !assignments.length) {
+      return res.status(400).json({ message: 'Invalid or empty assignments list.' });
+    }
+
+    const activeCycleYear = getCurrentCycleYear();
+    const createdBy = req.user?.Id;
+
+    // Group assignments by UserId to process them user-by-user and generate 1 notification per user
+    const assignmentsByUser = new Map();
+    for (const item of assignments) {
+      const uId = item.UserId;
+      if (!uId) continue;
+      if (!assignmentsByUser.has(uId)) {
+        assignmentsByUser.set(uId, []);
+      }
+      assignmentsByUser.get(uId).push(item);
+    }
+
+    const results = [];
+    const notificationsToCreate = [];
+
+    for (const [userId, userItems] of assignmentsByUser.entries()) {
+      const user = await User.findByPk(userId);
+      if (!user) continue;
+
+      let newCount = 0;
+      let updateCount = 0;
+      const userKPIIds = [];
+      const kpiIds = [];
+
+      for (const item of userItems) {
+        const { KPIId, Remark, Baseline, AssignedTarget, IsTargetIndividual, IncludeCurrentOffice, AssignmentBatchId } = item;
+        const kpi = await KPI.findByPk(KPIId);
+        if (!kpi) continue;
+
+        const assignmentBatchId = parseUuidValue(AssignmentBatchId);
+
+        const existingAssignment = await UserKPI.findOne({
+          where: {
+            KPIId,
+            UserId: userId,
+            CycleYear: activeCycleYear,
+            IsArchived: false,
+          },
+        });
+
+        if (existingAssignment) {
+          // Update existing assignment
+          await existingAssignment.update({
+            Baseline: Baseline !== undefined ? parseNumericValue(Baseline) : existingAssignment.Baseline,
+            AssignedTarget: AssignedTarget !== undefined ? parseNumericValue(AssignedTarget) : existingAssignment.AssignedTarget,
+            IsTargetIndividual: IsTargetIndividual !== undefined ? Boolean(IsTargetIndividual) : existingAssignment.IsTargetIndividual,
+            IncludeCurrentOffice: IncludeCurrentOffice !== undefined ? Boolean(IncludeCurrentOffice) : existingAssignment.IncludeCurrentOffice,
+            AssignmentBatchId: assignmentBatchId !== undefined ? assignmentBatchId : existingAssignment.AssignmentBatchId,
+            Remark: Remark !== undefined ? Remark : existingAssignment.Remark,
+          });
+
+          updateCount++;
+          userKPIIds.push(existingAssignment.Id);
+          kpiIds.push(KPIId);
+          results.push(existingAssignment);
+        } else {
+          // Create new assignment
+          const computedBaseline =
+            parseNumericValue(Baseline) ??
+            (await computeBaselineFromPreviousCycle({
+              KPIId,
+              UserId: userId,
+              cycleYear: activeCycleYear,
+              fallbackBaseline: kpi.DefaultBaseline,
+            }));
+
+          const userKPI = await UserKPI.create({
+            KPIId,
+            CycleYear: activeCycleYear,
+            UserId: userId,
+            Baseline: computedBaseline,
+            AssignedTarget: parseNumericValue(AssignedTarget),
+            IsTargetIndividual: Boolean(IsTargetIndividual),
+            AssignmentBatchId: assignmentBatchId,
+            Remark,
+            CreatedBy: createdBy,
+          });
+
+          newCount++;
+          userKPIIds.push(userKPI.Id);
+          kpiIds.push(KPIId);
+          results.push(userKPI);
+        }
+      }
+
+      // Generate a single grouped notification for this user
+      if (newCount > 0 || updateCount > 0) {
+        let messageText = '';
+        let titleText = 'KPI Assignment Update';
+
+        if (newCount > 0 && updateCount > 0) {
+          titleText = 'New and updated KPI assignments';
+          messageText = `${newCount} new KPI(s) assigned and ${updateCount} KPI assignment(s) updated for ${activeCycleYear}.`;
+        } else if (newCount > 0) {
+          titleText = newCount === 1 ? 'New KPI assignment' : 'New KPI assignments';
+          messageText = newCount === 1 
+            ? `A KPI has been assigned to you for ${activeCycleYear}.`
+            : `${newCount} KPIs have been assigned to you for ${activeCycleYear}.`;
+        } else if (updateCount > 0) {
+          titleText = updateCount === 1 ? 'KPI assignment updated' : 'KPI assignments updated';
+          messageText = updateCount === 1
+            ? `Your KPI assignment was updated for ${activeCycleYear}.`
+            : `${updateCount} KPI assignments were updated for ${activeCycleYear}.`;
+        }
+
+        notificationsToCreate.push({
+          recipientUserId: userId,
+          actorUserId: createdBy || null,
+          type: 'kpi_assigned',
+          title: titleText,
+          message: messageText,
+          priority: 'medium',
+          data: {
+            UserKPIIds: userKPIIds,
+            KPIIds: kpiIds,
+            CycleYear: activeCycleYear,
+            AssignmentBatchId: userItems[0]?.AssignmentBatchId || null,
+          },
+        });
+      }
+    }
+
+    // Create notifications sequentially or in parallel
+    for (const notif of notificationsToCreate) {
+      try {
+        await createNotification(notif);
+      } catch (notifErr) {
+        console.warn('Failed to create grouped KPI assignment notification:', notifErr.message);
+      }
+    }
+
+    res.status(201).json({ success: true, count: results.length, data: results });
+  } catch (error) {
+    console.error('Bulk assign user KPIs error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 module.exports = {
   createUserKPI,
   getUserKPIs,
@@ -726,4 +873,5 @@ module.exports = {
   updateUserKPI,
   deleteUserKPI,
   bulkDeleteUserKPIs,
+  bulkAssignUserKPIs,
 };

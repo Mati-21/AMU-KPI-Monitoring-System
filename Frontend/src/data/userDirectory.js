@@ -13,7 +13,7 @@ const defaultUsers = [
     phone: '+251 912 345 678',
     role: 'System Administrator',
     roleCategory: 'Management',
-    officeLevel: 'Strategic Office',
+    officeLevel: 'President',
     department: 'Information Technology',
     institution: 'Arba Minch University',
     location: 'Arba Minch, Ethiopia',

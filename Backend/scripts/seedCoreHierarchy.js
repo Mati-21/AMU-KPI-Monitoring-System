@@ -13,7 +13,7 @@ const CATEGORIES = [
 
 const CORE_ROLES = [
   {
-    roleName: 'Strategic Office',
+    roleName: 'President',
     categoryName: 'Management',
     parentRoleName: null,
     description: 'Top-level strategic role for university-wide KPI direction',
@@ -22,7 +22,7 @@ const CORE_ROLES = [
   {
     roleName: 'Vice President',
     categoryName: 'Management',
-    parentRoleName: 'Strategic Office',
+    parentRoleName: 'President',
     description: 'Leads sector-level performance and oversight',
     hasExtraMeasures: true,
   },
@@ -58,12 +58,12 @@ const CORE_ROLES = [
 
 const CORE_USERS = [
   {
-    roleName: 'Strategic Office',
+    roleName: 'President',
     FirstName: 'Hana',
     FatherName: 'Bekele',
     GrandFatherName: 'Alemu',
-    UserName: 'strategic.office',
-    Email: 'strategic.office@amu.edu.et',
+    UserName: 'president',
+    Email: 'president@amu.edu.et',
     Phone: '0911000001',
     password: 'Amu@12345',
   },

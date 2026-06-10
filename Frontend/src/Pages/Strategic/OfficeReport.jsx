@@ -174,7 +174,7 @@ const OfficeReport = () => {
   const isMeasurer = reportData?.scopeRoleHasExtraMeasures;
   const isSubordinateOfMeasurer = reportData?.isSubordinateOfMeasurer;
 
-  // Root role = the one with no parent role (Strategic Office)
+  // Root role = the one with no parent role (President)
   // We check the authenticated user's normalized role hierarchy
   const isRootRole = authUser && authUser.parentRoleId === null;
   const activeCycleYear = selectedCycleYear || activeCycleYearFromServer || availableYears[0] || '2018';
@@ -293,8 +293,6 @@ const OfficeReport = () => {
     notify('Excel report exported successfully.', 'success');
   };
 
-
-
   return (
     <div className="flex-1 min-h-full w-full space-y-6 p-6 overflow-auto">
       <div className="shrink-0 space-y-3">
@@ -385,12 +383,7 @@ const OfficeReport = () => {
             <div className="flex items-center justify-between border border-slate-200 dark:border-border rounded-xl px-4 py-2.5 min-w-[180px] bg-slate-50/30 dark:bg-muted/50 h-[46px] self-end">
               <span className="text-sm font-semibold text-slate-700 dark:text-foreground">Color code</span>
               <label className="relative inline-flex items-center cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={colorCode}
-                  onChange={(e) => setColorCode(e.target.checked)}
-                  className="sr-only peer"
-                />
+                <input type="checkbox" checked={colorCode} onChange={(e) => setColorCode(e.target.checked)} className="sr-only peer" />
                 <div className="w-9 h-5 bg-slate-200 dark:bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 dark:peer-checked:bg-blue-500"></div>
               </label>
             </div>
@@ -582,16 +575,17 @@ const OfficeReport = () => {
 
                             if ((row.rowType === 'kpi' || !row.rowType) && !isMissingValue) {
                               const rowTargetVal = parseFloat(String(row.target).replace(/,/g, ''));
-                              const cellTargetVal = cellValue && typeof cellValue === 'object' && cellValue.target !== undefined
-                                ? parseFloat(String(cellValue.target).replace(/,/g, ''))
-                                : rowTargetVal;
+                              const cellTargetVal =
+                                cellValue && typeof cellValue === 'object' && cellValue.target !== undefined
+                                  ? parseFloat(String(cellValue.target).replace(/,/g, ''))
+                                  : rowTargetVal;
 
                               const targetVal = isNaN(cellTargetVal) ? rowTargetVal : cellTargetVal;
                               const rawVal = cellValue && typeof cellValue === 'object' ? cellValue.value : cellValue;
                               const currentVal = parseFloat(String(rawVal).replace(/,/g, ''));
 
                               if (!isNaN(targetVal) && !isNaN(currentVal)) {
-                                const divisor = selectedQuarter ? (targetVal / 4) : targetVal;
+                                const divisor = selectedQuarter ? targetVal / 4 : targetVal;
                                 if (divisor > 0) {
                                   const percentage = (currentVal / divisor) * 100;
 
@@ -609,12 +603,12 @@ const OfficeReport = () => {
                                     const hue = Math.min(120, Math.max(0, (percentage / 100) * 120));
                                     const lightness = Math.max(40, Math.min(55, 55 - (percentage / 100) * 15));
                                     const color = `hsl(${hue}, 80%, ${lightness}%)`;
-                                    
+
                                     cellStyle.background = `linear-gradient(to right, ${color} ${fillPercent}%, rgba(255, 255, 255, 0.05) ${fillPercent}%)`;
                                     textStyle = {
                                       color: 'white',
                                       fontWeight: 'bold',
-                                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.7)'
+                                      textShadow: '0 1px 3px rgba(0, 0, 0, 0.7)',
                                     };
                                   }
                                 }
@@ -631,27 +625,51 @@ const OfficeReport = () => {
                                   {showPendingValue ? (
                                     <div className="flex flex-col items-center leading-none gap-0.5">
                                       {displayValue === 'Pending' ? (
-                                        <span className={colorCode ? "text-white font-bold italic text-xs py-1" : "text-amber-600 font-bold italic text-xs py-1"}>Pending</span>
+                                        <span
+                                          className={
+                                            colorCode ? 'text-white font-bold italic text-xs py-1' : 'text-amber-600 font-bold italic text-xs py-1'
+                                          }
+                                        >
+                                          Pending
+                                        </span>
                                       ) : (
                                         <>
                                           {formattedApprovedValue !== undefined && formattedApprovedValue !== displayValue ? (
                                             <div className="flex items-baseline gap-1">
-                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"} title="Previously approved">
+                                              <span
+                                                className={colorCode ? 'text-white/80 text-xs' : 'text-muted-foreground text-xs'}
+                                                title="Previously approved"
+                                              >
                                                 {formattedApprovedValue}
                                               </span>
-                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"}>(</span>
-                                              <span className={colorCode ? "font-bold text-sm text-white" : "font-bold text-sm text-amber-600"} title="Total with pending updates">
+                                              <span className={colorCode ? 'text-white/80 text-xs' : 'text-muted-foreground text-xs'}>(</span>
+                                              <span
+                                                className={colorCode ? 'font-bold text-sm text-white' : 'font-bold text-sm text-amber-600'}
+                                                title="Total with pending updates"
+                                              >
                                                 {displayValue}
                                               </span>
-                                              <span className={colorCode ? "text-white/90 text-[9px] font-extrabold uppercase tracking-tight ml-0.5" : "text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5"}>
+                                              <span
+                                                className={
+                                                  colorCode
+                                                    ? 'text-white/90 text-[9px] font-extrabold uppercase tracking-tight ml-0.5'
+                                                    : 'text-amber-500 text-[9px] font-extrabold uppercase tracking-tight ml-0.5'
+                                                }
+                                              >
                                                 Pending
                                               </span>
-                                              <span className={colorCode ? "text-white/80 text-xs" : "text-muted-foreground text-xs"}>)</span>
+                                              <span className={colorCode ? 'text-white/80 text-xs' : 'text-muted-foreground text-xs'}>)</span>
                                             </div>
                                           ) : (
                                             <div className="flex flex-col items-center gap-0.5">
                                               <span className="font-semibold text-sm">{displayValue}</span>
-                                              <span className={colorCode ? "text-white/90 text-[9px] font-extrabold uppercase tracking-tight bg-white/20 px-1 rounded-sm border border-white/20" : "text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50"}>
+                                              <span
+                                                className={
+                                                  colorCode
+                                                    ? 'text-white/90 text-[9px] font-extrabold uppercase tracking-tight bg-white/20 px-1 rounded-sm border border-white/20'
+                                                    : 'text-amber-500 text-[9px] font-extrabold uppercase tracking-tight bg-amber-50 px-1 rounded-sm border border-amber-200/50'
+                                                }
+                                              >
                                                 Pending
                                               </span>
                                             </div>

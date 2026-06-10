@@ -7,7 +7,7 @@ import CycleManagement from "./CycleManagement";
 import Footer from "./Footer";
 import { Save, Loader2 } from "lucide-react";
 import { useDispatch } from "react-redux";
-import { logout, setMaintenance, setSystemSettings } from "../../../Features/authSlice";
+import { setMaintenance, setSystemSettings } from "../../../Features/authSlice";
 import { useNotification } from "../../../Context/NotificationContext";
 
 const Configuration = () => {
@@ -16,7 +16,6 @@ const Configuration = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [systemOnline, setSystemOnline] = useState(true);
 
   const [settings, setSettings] = useState({
     displayName: "AMU KPI Monitoring System",
@@ -40,8 +39,7 @@ const Configuration = () => {
       if (response.data.success) {
         const data = response.data.data;
         setMaintenanceMode(data.maintenance_mode || false);
-        setSystemOnline(data.system_online !== false);
-        // Strip boolean toggle keys so they don't leak into the generic settings object
+        // Strip boolean toggle keys and system_online so they don't leak into the generic settings object
         const { maintenance_mode, system_online, ...rest } = data;
         setSettings(prev => ({
           ...prev,
@@ -58,26 +56,23 @@ const Configuration = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Filter out keys that are managed by dedicated state variables
       const excludeKeys = new Set(['maintenance_mode', 'system_online', 'system_logo']);
       const settingsToSave = [
         { key: 'maintenance_mode', value: maintenanceMode, type: 'boolean' },
-        { key: 'system_online', value: systemOnline, type: 'boolean' },
         ...Object.entries(settings)
           .filter(([key]) => !excludeKeys.has(key))
           .map(([key, value]) => ({ key, value, type: 'string' }))
       ];
 
       await api.post('/settings', settingsToSave);
-      
-      // Update global state immediately
+
       dispatch(setMaintenance(maintenanceMode));
       dispatch(setSystemSettings({
         displayName: settings.displayName,
         orgName: settings.orgName,
         systemLogo: settings.system_logo || settings.systemLogo || null,
       }));
-      
+
       notify("Configuration saved successfully!", "success");
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -117,8 +112,6 @@ const Configuration = () => {
             <GeneralSystemSetting
               maintenanceMode={maintenanceMode}
               setMaintenanceMode={setMaintenanceMode}
-              systemOnline={systemOnline}
-              setSystemOnline={setSystemOnline}
               settings={settings}
               setSettings={setSettings}
             />

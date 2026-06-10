@@ -23,6 +23,7 @@ import {
   useKpiTypesQuery,
   useUserKpisQuery,
   useCreateUserKpiMutation,
+  useBulkAssignUserKpisMutation,
   useUpdateUserKpiMutation,
   useDeleteUserKpiMutation,
   useBulkDeleteUserKpisMutation,
@@ -129,6 +130,7 @@ const KpiAllocationPage = () => {
 
   // Mutations
   const createUserKpiMutation = useCreateUserKpiMutation();
+  const bulkAssignUserKpiMutation = useBulkAssignUserKpisMutation();
   const updateUserKpiMutation = useUpdateUserKpiMutation();
   const deleteUserKpiMutation = useDeleteUserKpiMutation();
   const bulkDeleteUserKpiMutation = useBulkDeleteUserKpisMutation();
@@ -845,8 +847,8 @@ const KpiAllocationPage = () => {
 
     try {
       setIsAssigning(true);
-      // Use mutateAsync to wait for completion
-      await Promise.all(uniqueAssignments.map((data) => createUserKpiMutation.mutateAsync(data)));
+      // Use bulkAssignUserKpiMutation to allocate in a single batch API call
+      await bulkAssignUserKpiMutation.mutateAsync(uniqueAssignments);
 
       const uniqueReceiverRoles = new Set(assignmentPreview.flatMap((record) => record.targetRoleIds));
 

@@ -68,11 +68,16 @@ export const useDashboardData = ({ cycleYear, focusedRoleId = '__ALL__' } = {}) 
 
   const [parentReceivedAssignmentsRes, kpisRes, kpiTypesRes, assignmentsRes, userRolesRes, rolesRes] = results;
 
-  const loading = results.some((r) => r.isLoading);
-  const error = results.find((r) => r.error)?.error?.message || '';
+  // Only block the dashboard on primary query states; optional queries (retry:false) may fail fast
+  const loading = [parentReceivedAssignmentsRes, kpisRes, kpiTypesRes].some((r) => r.isLoading);
+  // Only treat primary query errors as blocking — optional queries (user-roles, roles) may 403
+  const error = [parentReceivedAssignmentsRes, kpisRes, kpiTypesRes].find((r) => r.error)?.error?.message || '';
 
   const data = useMemo(() => {
-    if (loading || error || !results.every((r) => r.data)) return { child: null, parentReceived: null, raw: null };
+    // Block only while primary queries are still loading or errored
+    // Optional queries (assignmentsRes, userRolesRes, rolesRes) failing is handled via || [] fallbacks
+    if (loading || error) return { child: null, parentReceived: null, raw: null };
+    if (!parentReceivedAssignmentsRes.data && !kpisRes.data && !kpiTypesRes.data) return { child: null, parentReceived: null, raw: null };
 
     const parentReceivedAssignmentsRaw = parentReceivedAssignmentsRes.data || [];
     const kpis = kpisRes.data || [];

@@ -18,6 +18,7 @@ const SystemSetting = require('./SystemSetting');
 const AuditLog = require('./AuditLog');
 const Notification = require('./Notification');
 const Message = require('./Message');
+const ContactMessage = require('./ContactMessage');
 
 // Set up associations
 RoleCategory.hasMany(Role, { foreignKey: 'RoleCategoryId' });
@@ -106,4 +107,5 @@ module.exports = {
   AuditLog,
   Notification,
   Message,
+  ContactMessage,
 };

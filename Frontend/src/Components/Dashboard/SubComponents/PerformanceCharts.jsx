@@ -49,6 +49,22 @@ const PerformanceCharts = ({ config }) => {
 
   const seriesKeys = config.kpiNames && config.kpiNames.length ? config.kpiNames : inferredSeriesKeys;
 
+  const barData = config.isDistributable === false
+    ? config.quarterlyComparison || []
+    : config.quarterlyData || [];
+
+  const hasBarData = barData.length > 0;
+  const hasTrendData = yearlyTrendData.length > 0 && (seriesKeys.length > 0 || yearlyTrendData.some((d) => d.score !== undefined));
+
+  const NoDataPlaceholder = ({ label }) => (
+    <div className="h-[260px] flex items-center justify-center text-center">
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground mt-1">Submit KPI results to see data here</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
@@ -56,46 +72,50 @@ const PerformanceCharts = ({ config }) => {
           <CardTitle className="text-sm">Quarterly Performance Comparison</CardTitle>
         </CardHeader>
         <CardContent className="h-[260px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={config.isDistributable === false ? config.quarterlyComparison || [] : config.quarterlyData || []} barGap={2}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 30]} tickFormatter={(v) => `${v}`} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)} Points`, undefined]} />
-              <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+          {hasBarData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 30]} tickFormatter={(v) => `${v}`} tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)} Points`, undefined]} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
 
-              {config.isDistributable === false ? (
-                <Bar dataKey="score" name="Average Performance" radius={[3, 3, 0, 0]}>
-                  {(config.quarterlyComparison || []).map((entry, index) => (
-                    <Cell key={`cell-score-${index}`} fill={getStatusColor(entry.score, entry.submitted)} />
-                  ))}
-                </Bar>
-              ) : (
-                <>
-                  <Bar dataKey="q1" name="Quarter 1" radius={[3, 3, 0, 0]}>
-                    {(config.quarterlyData || []).map((entry, index) => (
-                      <Cell key={`cell-q1-${index}`} fill={getStatusColor(entry.q1, entry.q1Submitted)} />
+                {config.isDistributable === false ? (
+                  <Bar dataKey="score" name="Average Performance" radius={[3, 3, 0, 0]}>
+                    {(config.quarterlyComparison || []).map((entry, index) => (
+                      <Cell key={`cell-score-${index}`} fill={getStatusColor(entry.score, entry.submitted)} />
                     ))}
                   </Bar>
-                  <Bar dataKey="q2" name="Quarter 2" radius={[3, 3, 0, 0]}>
-                    {(config.quarterlyData || []).map((entry, index) => (
-                      <Cell key={`cell-q2-${index}`} fill={getStatusColor(entry.q2, entry.q2Submitted)} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="q3" name="Quarter 3" radius={[3, 3, 0, 0]}>
-                    {(config.quarterlyData || []).map((entry, index) => (
-                      <Cell key={`cell-q3-${index}`} fill={getStatusColor(entry.q3, entry.q3Submitted)} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="q4" name="Quarter 4" radius={[3, 3, 0, 0]}>
-                    {(config.quarterlyData || []).map((entry, index) => (
-                      <Cell key={`cell-q4-${index}`} fill={getStatusColor(entry.q4, entry.q4Submitted)} />
-                    ))}
-                  </Bar>
-                </>
-              )}
-            </BarChart>
-          </ResponsiveContainer>
+                ) : (
+                  <>
+                    <Bar dataKey="q1" name="Quarter 1" radius={[3, 3, 0, 0]}>
+                      {(config.quarterlyData || []).map((entry, index) => (
+                        <Cell key={`cell-q1-${index}`} fill={getStatusColor(entry.q1, entry.q1Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q2" name="Quarter 2" radius={[3, 3, 0, 0]}>
+                      {(config.quarterlyData || []).map((entry, index) => (
+                        <Cell key={`cell-q2-${index}`} fill={getStatusColor(entry.q2, entry.q2Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q3" name="Quarter 3" radius={[3, 3, 0, 0]}>
+                      {(config.quarterlyData || []).map((entry, index) => (
+                        <Cell key={`cell-q3-${index}`} fill={getStatusColor(entry.q3, entry.q3Submitted)} />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="q4" name="Quarter 4" radius={[3, 3, 0, 0]}>
+                      {(config.quarterlyData || []).map((entry, index) => (
+                        <Cell key={`cell-q4-${index}`} fill={getStatusColor(entry.q4, entry.q4Submitted)} />
+                      ))}
+                    </Bar>
+                  </>
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <NoDataPlaceholder label="No quarterly performance data yet" />
+          )}
         </CardContent>
       </Card>
 
@@ -104,44 +124,47 @@ const PerformanceCharts = ({ config }) => {
           <CardTitle className="text-sm">Yearly Performance Trend</CardTitle>
         </CardHeader>
         <CardContent className="h-[260px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={yearlyTrendData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-              <YAxis
-                domain={[0, (dataMax) => Math.max(100, Math.ceil((Number(dataMax) || 0) / 10) * 10)]}
-                tickFormatter={(v) => `${v}%`}
-                tick={{ fontSize: 11 }}
-              />
-              <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)}%`, undefined]} />
-              {seriesKeys.length > 0 && <Legend iconSize={10} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />}
-              {seriesKeys.length > 0 ? (
-                seriesKeys.map((name, i) => (
+          {hasTrendData ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={yearlyTrendData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                <YAxis
+                  domain={[0, (dataMax) => Math.max(100, Math.ceil((Number(dataMax) || 0) / 10) * 10)]}
+                  tickFormatter={(v) => `${v}%`}
+                  tick={{ fontSize: 11 }}
+                />
+                <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [`${Number(value).toFixed(1)}%`, undefined]} />
+                {seriesKeys.length > 0 && <Legend iconSize={10} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />}
+                {seriesKeys.length > 0 ? (
+                  seriesKeys.map((name, i) => (
+                    <Line
+                      key={name}
+                      type="linear"
+                      dataKey={name}
+                      stroke={COLORS_CHART[i % COLORS_CHART.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 0 }}
+                      connectNulls
+                    />
+                  ))
+                ) : (
                   <Line
-                    key={name}
                     type="linear"
-                    dataKey={name}
-                    stroke={COLORS_CHART[i % COLORS_CHART.length]}
+                    dataKey="score"
+                    stroke="var(--color-primary)"
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 4, strokeWidth: 0 }}
                     connectNulls
                   />
-                ))
-              ) : (
-                // Fallback to average series when KPI-specific series are not present
-                <Line
-                  type="linear"
-                  dataKey="score"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                  connectNulls
-                />
-              )}
-            </LineChart>
-          </ResponsiveContainer>
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <NoDataPlaceholder label="No yearly trend data yet" />
+          )}
         </CardContent>
       </Card>
     </div>

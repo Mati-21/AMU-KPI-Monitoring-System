@@ -78,6 +78,24 @@ export const useCreateUserKpiMutation = () => {
 };
 
 /**
+ * Hook for bulk assigning user KPIs
+ */
+export const useBulkAssignUserKpisMutation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (assignments) => {
+      const response = await api.post('/user-kpis/bulk-assign', { assignments });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.kpis.all });
+      emitReportDataChanged();
+    },
+  });
+};
+
+/**
  * Hook for updating a user KPI assignment
  */
 export const useUpdateUserKpiMutation = () => {

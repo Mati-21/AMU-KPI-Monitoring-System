@@ -7,7 +7,7 @@ import { api, BASE_URL } from '../../../api/axios';
 import { useNotification } from '../../../Context/NotificationContext';
 import { getFileUrl } from '../../../lib/utils';
 
-function GeneralSystemSetting({ maintenanceMode, settings, setSettings, setMaintenanceMode, systemOnline, setSystemOnline }) {
+function GeneralSystemSetting({ maintenanceMode, settings, setSettings, setMaintenanceMode }) {
   const { notify } = useNotification();
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef(null);
@@ -156,13 +156,7 @@ function GeneralSystemSetting({ maintenanceMode, settings, setSettings, setMaint
               </div>
               <Switch checked={maintenanceMode} onCheckedChange={setMaintenanceMode} />
             </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-foreground">System Online</p>
-                <p className="text-xs text-muted-foreground">The Portal is fully accessible.</p>
-              </div>
-              <Switch checked={systemOnline} onCheckedChange={setSystemOnline} />
-            </div>
+
           </div>
         </div>
       </div>

@@ -56,6 +56,7 @@ function App() {
                       </SocketProvider>
                     }
                   >
+                    {/* Dashboard is accessible to all authenticated users — role-based variants are handled inside DashboardHome */}
                     <Route path="/dashboard" element={<DashboardHome />} />
 
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Assigned KPI')} />}>
@@ -72,6 +73,8 @@ function App() {
                           permissions={[
                             permissionUtils.permissionKey('view', 'KPI Allocation'),
                             permissionUtils.permissionKey('create', 'KPI Allocation'),
+                            permissionUtils.permissionKey('assign', 'KPI Allocation'),
+                            permissionUtils.permissionKey('delete', 'KPI Allocation'),
                           ]}
                         />
                       }

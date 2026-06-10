@@ -1,11 +1,28 @@
 const express = require('express');
 const { protect, hasModulePermission } = require('../middleware/authMiddleware');
-const { createUserKPI, getUserKPIs, getUserKPIById, updateUserKPI, deleteUserKPI, bulkDeleteUserKPIs } = require('../controllers/userKPIController');
+const { createUserKPI, getUserKPIs, getUserKPIById, updateUserKPI, deleteUserKPI, bulkDeleteUserKPIs, bulkAssignUserKPIs } = require('../controllers/userKPIController');
 
 const router = express.Router();
 
 const hasAnyModulePermission = (req, checks) => checks.some(([moduleName, action]) => hasModulePermission(req, moduleName, action));
 const hasExtraMeasuresAccess = (req) => false;
+
+router.post(
+  '/bulk-assign',
+  protect,
+  (req, res, next) => {
+    const canCreateKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'create');
+    const canAssignKpiAllocation = hasModulePermission(req, 'KPI Allocation', 'assign');
+
+    if (canCreateKpiAllocation || canAssignKpiAllocation) {
+      next();
+      return;
+    }
+
+    res.status(403).json({ message: 'Not authorized for bulk assign access on KPI Allocation' });
+  },
+  bulkAssignUserKPIs
+);
 
 router
   .route('/')

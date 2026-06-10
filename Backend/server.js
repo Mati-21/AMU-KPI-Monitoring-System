@@ -29,6 +29,7 @@ const adminDashboardRoutes = require('./routes/adminDashboardRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
@@ -108,6 +109,7 @@ app.use('/api/admin-dashboard', adminDashboardRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/contact-messages', contactRoutes);
 
 app.get('/health', (req, res) => {
   res.json({

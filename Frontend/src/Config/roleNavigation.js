@@ -140,8 +140,8 @@ export const roleNavigation = {
     },
   ],
 
-  // Strategic Office
-  strategicOffice: [
+  // President
+  president: [
     {
       label: 'OVERVIEW',
       items: [{ icon: LayoutDashboard, label: 'Dashboard', path: '.' }],

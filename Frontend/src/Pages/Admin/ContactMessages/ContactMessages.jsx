@@ -1,95 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Mail, 
   Search, 
   MessageSquare, 
   CheckCircle2, 
-  Archive, 
   Eye, 
   X, 
   Send,
   MoreVertical,
-  Filter,
   Inbox,
   Clock,
-  User
+  RefreshCw,
+  InboxIcon,
+  AlertCircle
 } from 'lucide-react';
-import { Badge } from '../../../Components/UI/Badge';
+import { api } from '../../../api/axios';
 
 const ContactMessages = () => {
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [replyText, setReplyText] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
-  // Mock data matching the image
-  const messages = [
-    {
-      id: 1,
-      sender: 'abebe.kebede',
-      email: 'abebe.kebede@aau.edu.et',
-      subject: 'Access Issue',
-      content: 'I cannot access the KPI assignment page for my department. It keeps redirecting me to the dashboard. Could you check my permissions?',
-      date: '2026-05-12 09:42',
-      status: 'Unread',
-      initials: 'AK'
-    },
-    {
-      id: 2,
-      sender: 'sara.alemu',
-      email: 'sara.alemu@aau.edu.et',
-      subject: 'Feature Request',
-      content: 'Please add a way to bulk import KPI evidence files. Uploading them one by one each quarter is very time consuming for our team.',
-      date: '2026-05-11 16:18',
-      status: 'Unread',
-      initials: 'SA'
-    },
-    {
-      id: 3,
-      sender: 'daniel.tesfaye',
-      email: 'daniel.tesfaye@aau.edu.et',
-      subject: 'Data Error',
-      content: 'The Q1 report is showing an incorrect aggregated value for Theme II. The chair confirmed the submitted data is correct.',
-      date: '2026-05-10 11:05',
-      status: 'Read',
-      initials: 'DT'
-    },
-    {
-      id: 4,
-      sender: 'hanna.girma',
-      email: 'hanna.girma@aau.edu.et',
-      subject: 'Success Story',
-      content: 'Thank you for the quick fix on the approval workflow — everything is working as expected now.',
-      date: '2026-05-08 14:30',
-      status: 'Resolved',
-      initials: 'HG'
-    },
-    {
-      id: 5,
-      sender: 'yonas.mulu',
-      email: 'yonas.mulu@aau.edu.et',
-      subject: 'Archive Request',
-      content: 'Old request — please archive this thread.',
-      date: '2026-05-08 14:30',
-      status: 'Archived',
-      initials: 'YM'
+  const fetchMessages = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data } = await api.get('/contact-messages');
+      setMessages(data);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to load contact messages.');
+    } finally {
+      setIsLoading(false);
     }
-  ];
+  }, []);
 
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
+
+  const handleMarkResolved = async (id) => {
+    setUpdatingId(id);
+    try {
+      await api.patch(`/contact-messages/${id}/status`, { status: 'Resolved' });
+      setMessages(prev =>
+        prev.map(m => m.id === id ? { ...m, status: 'Resolved' } : m)
+      );
+      if (selectedMessage?.id === id) {
+        setSelectedMessage(prev => ({ ...prev, status: 'Resolved' }));
+      }
+    } catch (err) {
+      console.error('Failed to update message status:', err);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // Computed stats from real data
+  const today = new Date().toISOString().split('T')[0];
   const stats = [
-    { label: 'TOTAL', value: 5, icon: Inbox, color: 'bg-primary/10 text-primary' },
-    { label: 'UNREAD', value: 2, icon: Mail, color: 'bg-blue-500/10 text-blue-600' },
-    { label: 'RECEIVED TODAY', value: 1, icon: Clock, color: 'bg-amber-500/10 text-amber-600' },
-    { label: 'AVG. RESPONSE', value: '2.4h', icon: CheckCircle2, color: 'bg-emerald-500/10 text-emerald-600' }
+    { label: 'TOTAL', value: messages.length, icon: Inbox, color: 'bg-primary/10 text-primary' },
+    { label: 'UNREAD', value: messages.filter(m => m.status === 'Unread').length, icon: Mail, color: 'bg-blue-500/10 text-blue-600' },
+    {
+      label: 'RECEIVED TODAY',
+      value: messages.filter(m => m.date?.startsWith(today)).length,
+      icon: Clock,
+      color: 'bg-amber-500/10 text-amber-600'
+    },
+    { label: 'RESOLVED', value: messages.filter(m => m.status === 'Resolved').length, icon: CheckCircle2, color: 'bg-emerald-500/10 text-emerald-600' },
   ];
 
   const filteredMessages = messages.filter(m => {
     const matchesTab = activeTab === 'All' || m.status === activeTab;
-    const matchesSearch = m.sender.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          m.email.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          m.content.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !q ||
+      m.sender?.toLowerCase().includes(q) ||
+      m.email?.toLowerCase().includes(q) ||
+      m.content?.toLowerCase().includes(q) ||
+      m.subject?.toLowerCase().includes(q);
     return matchesTab && matchesSearch;
   });
+
+  const statusColors = {
+    Unread: 'bg-blue-500/10 text-blue-600',
+    Read: 'bg-slate-500/10 text-slate-600',
+    Resolved: 'bg-emerald-500/10 text-emerald-600',
+    Archived: 'bg-slate-400/10 text-slate-500',
+  };
 
   return (
     <div className="flex-1 p-6 space-y-6 bg-slate-50/30 dark:bg-background overflow-y-scroll">
@@ -99,15 +100,24 @@ const ContactMessages = () => {
           <h1 className="text-2xl font-bold text-foreground">Contact Messages</h1>
           <p className="text-sm text-muted-foreground mt-1">Messages submitted by users through the Contact Admin form.</p>
         </div>
-        <div className="relative max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by user, email or message..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 h-11 rounded-xl border border-border bg-card focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative max-w-md w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by user, email or message..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 h-11 rounded-xl border border-border bg-card focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all"
+            />
+          </div>
+          <button
+            onClick={fetchMessages}
+            title="Refresh messages"
+            className="p-2.5 rounded-xl border border-border bg-card hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
 
@@ -145,7 +155,10 @@ const ContactMessages = () => {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {tab} {tab === 'All' ? `(${messages.length})` : `(${messages.filter(m => m.status === tab).length})`}
+                {tab} {tab === 'All'
+                  ? `(${messages.length})`
+                  : `(${messages.filter(m => m.status === tab).length})`
+                }
               </button>
             ))}
           </div>
@@ -153,7 +166,59 @@ const ContactMessages = () => {
 
         {/* Message List */}
         <div className="divide-y divide-border">
-          {filteredMessages.length > 0 ? (
+          {isLoading ? (
+            /* Loading skeleton */
+            <div className="p-12 flex flex-col items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-muted animate-pulse" />
+              <div className="h-4 w-40 bg-muted rounded-lg animate-pulse" />
+              <div className="h-3 w-56 bg-muted/60 rounded-lg animate-pulse" />
+            </div>
+          ) : error ? (
+            /* Error state */
+            <div className="p-12 flex flex-col items-center gap-3 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500">
+                <AlertCircle className="w-7 h-7" />
+              </div>
+              <p className="font-bold text-foreground">Failed to Load Messages</p>
+              <p className="text-sm text-muted-foreground max-w-xs">{error}</p>
+              <button
+                onClick={fetchMessages}
+                className="mt-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filteredMessages.length === 0 ? (
+            /* Empty state */
+            <div className="p-16 flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary/40">
+                <InboxIcon className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-foreground text-base">
+                  {activeTab === 'All' && !searchQuery
+                    ? 'No Messages Yet'
+                    : 'No Messages Found'
+                  }
+                </p>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                  {activeTab === 'All' && !searchQuery
+                    ? 'When users submit a message through the Contact Admin form, it will appear here.'
+                    : 'Try adjusting your search or filter to find what you\'re looking for.'
+                  }
+                </p>
+              </div>
+              {(activeTab !== 'All' || searchQuery) && (
+                <button
+                  onClick={() => { setActiveTab('All'); setSearchQuery(''); }}
+                  className="px-4 py-2 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            /* Real messages */
             filteredMessages.map((message) => (
               <div key={message.id} className="group p-6 hover:bg-muted/30 transition-colors flex items-center justify-between gap-4">
                 <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -161,9 +226,14 @@ const ContactMessages = () => {
                     {message.initials}
                   </div>
                   <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-foreground text-sm">{message.sender}</span>
                       <span className="text-xs text-muted-foreground">&lt;{message.email}&gt;</span>
+                      {message.subject && (
+                        <span className="text-xs text-muted-foreground/70 italic truncate max-w-[200px]">
+                          — {message.subject}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-1">{message.content}</p>
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground/60">
@@ -172,27 +242,20 @@ const ContactMessages = () => {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                    message.status === 'Unread' ? 'bg-blue-500/10 text-blue-600' :
-                    message.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-600' :
-                    'bg-slate-500/10 text-slate-600'
-                  }`}>
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusColors[message.status] || statusColors['Read']}`}>
                     {message.status}
                   </span>
-                  <button 
-                    onClick={() => setSelectedMessage(message)}
-                    className="p-2 rounded-lg hover:bg-card border border-transparent hover:border-border text-muted-foreground hover:text-primary transition-all shadow-sm"
+                  <button
+                    onClick={() => { setSelectedMessage(message); setReplyText(''); }}
+                    title="View message"
+                    className="p-2 rounded-lg hover:bg-card border border-transparent hover:border-border text-muted-foreground hover:text-primary transition-all"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             ))
-          ) : (
-            <div className="p-12 text-center text-muted-foreground">
-              No messages found.
-            </div>
           )}
         </div>
       </div>
@@ -228,10 +291,13 @@ const ContactMessages = () => {
                   <div>
                     <h3 className="font-bold text-foreground">{selectedMessage.sender}</h3>
                     <p className="text-xs text-muted-foreground">{selectedMessage.email}</p>
+                    {selectedMessage.subject && (
+                      <p className="text-xs text-muted-foreground/70 italic mt-0.5">{selectedMessage.subject}</p>
+                    )}
                   </div>
                 </div>
                 <div className="text-right space-y-1">
-                  <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusColors[selectedMessage.status] || statusColors['Read']}`}>
                     {selectedMessage.status}
                   </span>
                   <p className="text-[10px] text-muted-foreground/60 font-medium">{selectedMessage.date}</p>
@@ -241,7 +307,7 @@ const ContactMessages = () => {
               {/* Message Content */}
               <div className="space-y-2">
                 <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-1">Message Content</h4>
-                <div className="p-5 rounded-xl border border-border bg-card text-sm leading-relaxed text-foreground/90">
+                <div className="p-5 rounded-xl border border-border bg-card text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">
                   {selectedMessage.content}
                 </div>
               </div>
@@ -251,10 +317,14 @@ const ContactMessages = () => {
                 <div className="flex items-center justify-between ml-1">
                   <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Reply Options</h4>
                   <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors" title="Send via Email">
+                    <a
+                      href={`mailto:${selectedMessage.email}`}
+                      className="p-2 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors"
+                      title="Reply via Email client"
+                    >
                       <Mail className="w-4 h-4" />
-                    </button>
-                    <button className="p-2 rounded-lg bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 transition-colors">
+                    </a>
+                    <button className="p-2 rounded-lg bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 transition-colors" title="More options">
                       <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
@@ -262,22 +332,19 @@ const ContactMessages = () => {
 
                 <div className="relative group">
                   <textarea
-                    placeholder="Type your direct message here..."
+                    placeholder="Type your reply here... (opens your email client)"
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     className="w-full h-32 p-4 rounded-xl border border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-sm resize-none"
                   />
                   <div className="absolute bottom-3 right-3">
-                    <button 
+                    <a
+                      href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject || 'Your inquiry')}&body=${encodeURIComponent(replyText)}`}
                       className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-lg shadow-lg shadow-primary/20 hover:bg-primary/90 flex items-center gap-2 transition-all"
-                      onClick={() => {
-                        alert('Direct message functionality coming soon!');
-                        setReplyText('');
-                      }}
                     >
                       <Send className="w-3 h-3" />
-                      Send Direct
-                    </button>
+                      Reply via Email
+                    </a>
                   </div>
                 </div>
               </div>
@@ -292,14 +359,19 @@ const ContactMessages = () => {
                 Close
               </button>
               <button 
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-colors flex items-center gap-2"
-                onClick={() => {
-                  alert('Message marked as resolved');
+                disabled={selectedMessage.status === 'Resolved' || updatingId === selectedMessage.id}
+                className="px-4 py-2 rounded-lg bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={async () => {
+                  await handleMarkResolved(selectedMessage.id);
                   setSelectedMessage(null);
                 }}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Mark Resolved
+                {updatingId === selectedMessage.id ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                {selectedMessage.status === 'Resolved' ? 'Already Resolved' : 'Mark Resolved'}
               </button>
             </div>
           </div>

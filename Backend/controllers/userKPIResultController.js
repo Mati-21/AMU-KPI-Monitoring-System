@@ -514,7 +514,9 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
 
     const activeValues = cumulativeValues.filter((v) => v.hasApproved || v.hasPending);
     const receiverCount = grouped.isTargetIndividual
-      ? (activeValues.length > 0 ? activeValues.length : cumulativeValues.length)
+      ? activeValues.length > 0
+        ? activeValues.length
+        : cumulativeValues.length
       : cumulativeValues.length;
     const allApproved = cumulativeValues.length > 0 && cumulativeValues.every((v) => v.isApproved);
     const hasPendingPerformance = pendingTotal > 0;
@@ -525,9 +527,7 @@ const buildRoleKpiAggregation = ({ assignments, userRoleByUserId, visibleRoleIds
         : 0
       : cumulativeTotal + pendingTotal;
 
-    const aggregatedTarget = grouped.isTargetIndividual
-      ? (receiverCount > 0 ? cumulativeTargetTotal / receiverCount : 0)
-      : cumulativeTargetTotal;
+    const aggregatedTarget = grouped.isTargetIndividual ? (receiverCount > 0 ? cumulativeTargetTotal / receiverCount : 0) : cumulativeTargetTotal;
 
     aggregation.set(key, {
       isTargetIndividual: grouped.isTargetIndividual,
@@ -678,7 +678,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     .map((assignment) => String(assignment.UserId || ''))
     .filter(Boolean);
 
-
   const scopeOwnerUserIds = activeUserRoles
     .filter((assignment) => String(assignment.RoleId || assignment.Role?.Id || '') === String(selectedScopeRole.Id))
     .map((assignment) => String(assignment.UserId || ''))
@@ -742,14 +741,14 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   // or any other authority, and we still want them to appear in the parent report.
   const childAssignments = uniqueVisibleUserIds.length
     ? await UserKPI.findAll({
-      where: {
-        IsArchived: false,
-        CycleYear: cycleYear,
-        UserId: { [Op.in]: uniqueVisibleUserIds },
-      },
-      include: kpiInclude,
-      order: [['CreatedAt', 'ASC']],
-    })
+        where: {
+          IsArchived: false,
+          CycleYear: cycleYear,
+          UserId: { [Op.in]: uniqueVisibleUserIds },
+        },
+        include: kpiInclude,
+        order: [['CreatedAt', 'ASC']],
+      })
     : [];
 
   // Keep the raw (non-deduplicated) list for result filtering — child assignment IDs
@@ -787,7 +786,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     yps.forEach((yp) => yearPlanByKpiId.set(String(yp.KPIId), yp));
   }
 
-  // Root role = the one with no parent role (Strategic Office)
+  // Root role = the one with no parent role (President)
   const isTopLevelFallback = selectedScopeRole.ParentRoleId === null;
 
   const getSubmissionQuarter = (sub) => {
@@ -841,14 +840,14 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   let results =
     uniqueVisibleUserIds.length && kpiIds.length
       ? await UserKPIResult.findAll({
-        where: {
-          IsArchived: false,
-          CycleYear: cycleYear,
-          UserId: { [Op.in]: uniqueVisibleUserIds },
-          KPIId: { [Op.in]: kpiIds },
-        },
-        attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'EvidenceURL'],
-      })
+          where: {
+            IsArchived: false,
+            CycleYear: cycleYear,
+            UserId: { [Op.in]: uniqueVisibleUserIds },
+            KPIId: { [Op.in]: kpiIds },
+          },
+          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'EvidenceURL'],
+        })
       : [];
 
   if (quarter) {
@@ -950,7 +949,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         console.log('[DEBUG_USERS_IN_ROLE]', {
           roleId,
           roleName: role.RoleName,
-          usersInRoleCount: usersInRole.length
+          usersInRoleCount: usersInRole.length,
         });
         if (usersInRole.length > 0) {
           const uniqueUsers = usersInRole.filter(
@@ -984,7 +983,10 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   // Build a map for efficient individual performance lookup
   // Key: UserId::RowKey, Value: UserKPIId (assignment ID of the child)
-  console.log('[COLUMNS_TO_AGGREGATE]', columnsToAggregate.map(c => ({ id: c.id, name: c.name, isUserColumn: c.isUserColumn, isCurrentOffice: c.isCurrentOffice })));
+  console.log(
+    '[COLUMNS_TO_AGGREGATE]',
+    columnsToAggregate.map((c) => ({ id: c.id, name: c.name, isUserColumn: c.isUserColumn, isCurrentOffice: c.isCurrentOffice }))
+  );
   const userAssignmentMap = new Map();
   childAssignments.forEach((a) => {
     const rowKey = String(a.KPIId);
@@ -1046,7 +1048,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     scopeRoleId: selectedScopeRole.Id,
   });
 
-
   const resultsByAssignmentId = new Map();
   resultsWithAssignmentIds.forEach((r) => {
     const aid = String(r.UserKPIId || '');
@@ -1068,10 +1069,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   });
 
   // Identify KPIs that have been delegated (sent to others)
-  const delegatedKpiKeys = new Set([
-    ...childAssignments.map((a) => String(a.KPIId)),
-    ...viewerSentAssignments.map((a) => String(a.KPIId)),
-  ]);
+  const delegatedKpiKeys = new Set([...childAssignments.map((a) => String(a.KPIId)), ...viewerSentAssignments.map((a) => String(a.KPIId))]);
 
   const scopeOwnerUserIdsSet = new Set(scopeOwnerUserIds);
 
@@ -1089,11 +1087,15 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         existing.isHomeOfficeKpi = !isDelegated;
         existing.quarterlyResults = resultsByAssignmentId.get(String(assignment.Id)) || [];
         existing.baseline = formatNumericValue(
-          isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+          isTopLevelFallback
+            ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+            : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
         );
         existing.baselineNumeric =
           parseNumericValue(
-            isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+            isTopLevelFallback
+              ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+              : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
           ) ?? 0;
         existing.target = formatNumericValue(
           isTopLevelFallback
@@ -1133,18 +1135,24 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       weightNumeric: parseNumericValue(kpi?.Weight) ?? 0,
       baseline: formatNumericValue(
         isScopeOfficeAssignment
-          ? (isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline))
+          ? isTopLevelFallback
+            ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+            : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
           : (assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
       ),
       baselineNumeric:
         parseNumericValue(
           isScopeOfficeAssignment
-            ? (isTopLevelFallback ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline) : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline))
+            ? isTopLevelFallback
+              ? (assignment.KPIYearPlan?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
+              : (assignment.Baseline ?? assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
             : (assignment.KPIYearPlan?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
         ) ?? 0,
       target: formatNumericValue(
         isScopeOfficeAssignment
-          ? (isTopLevelFallback ? (assignment.KPIYearPlan?.Target ?? assignment.AssignedTarget ?? yearPlanByKpiId.get(rowKey)?.Target) : (assignment.AssignedTarget ?? assignment.KPIYearPlan?.Target ?? yearPlanByKpiId.get(rowKey)?.Target))
+          ? isTopLevelFallback
+            ? (assignment.KPIYearPlan?.Target ?? assignment.AssignedTarget ?? yearPlanByKpiId.get(rowKey)?.Target)
+            : (assignment.AssignedTarget ?? assignment.KPIYearPlan?.Target ?? yearPlanByKpiId.get(rowKey)?.Target)
           : (assignment.KPIYearPlan?.Target ?? yearPlanByKpiId.get(rowKey)?.Target)
       ),
       remark:
@@ -1196,7 +1204,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         const childAssignment = assignments.find((a) => String(a.Id) === String(assignmentId));
         const assignedTarget = childAssignment
           ? (parseNumericValue(childAssignment.AssignedTarget ?? childAssignment.KPIYearPlan?.Target) ?? 0)
-          : (parseNumericValue(row.target) || 0);
+          : parseNumericValue(row.target) || 0;
 
         if (details === undefined) {
           if (cycleYear !== getCurrentCycleYear()) {
@@ -1208,7 +1216,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
               lookupRoleId,
               rowId: row.id,
               hasMetrics: !!metrics,
-              metricsVal: metrics ? metrics.aggregatedPerformance : null
+              metricsVal: metrics ? metrics.aggregatedPerformance : null,
             });
             if (metrics) {
               const isApproved = metrics.approved ?? metrics.isApproved;
@@ -1389,7 +1397,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
     row.allEvidenceUrls = [...allEvidenceUrls];
     row.allQuarterlyResults = allQuarterlyResults;
-
   });
 
   // Second pass: Overlay submitted payload values for child columns
@@ -1670,9 +1677,9 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   const directCol = reportColumns.find((c) => c.isCurrentOffice && String(c.id) === String(scopeRoleId));
   if (directCol) {
-    directCol.isSubmitted = cycleYear !== getCurrentCycleYear() ? true : (ownSubmissions.length > 0 && !canSubmit);
+    directCol.isSubmitted = cycleYear !== getCurrentCycleYear() ? true : ownSubmissions.length > 0 && !canSubmit;
   }
-  const isSubmitted = cycleYear !== getCurrentCycleYear() ? true : (ownSubmissions.length > 0 && !canSubmit);
+  const isSubmitted = cycleYear !== getCurrentCycleYear() ? true : ownSubmissions.length > 0 && !canSubmit;
 
   return {
     year: cycleYear,
@@ -1732,8 +1739,8 @@ const getAffiliatedOfficeReport = async (req, res) => {
 
     const availableScopeRoles = canSeeOtherAffiliatedOfficeReports
       ? [selectedScopeRole, ...roles.filter((role) => roles.some((child) => String(child.ParentRoleId || '') === String(role.Id)))].filter(
-        (role, index, items) => items.findIndex((entry) => String(entry.Id) === String(role.Id)) === index
-      )
+          (role, index, items) => items.findIndex((entry) => String(entry.Id) === String(role.Id)) === index
+        )
       : [selectedScopeRole];
     const selectedRoleHasChildren = await Role.findOne({
       where: { IsArchived: false, ParentRoleId: selectedScopeRole.Id },
@@ -1742,45 +1749,45 @@ const getAffiliatedOfficeReport = async (req, res) => {
 
     const reportData = selectedRoleHasChildren
       ? await buildAffiliatedOfficeReportDataForScope({
-        cycleYear,
-        scopeRoleId: selectedScopeRole.Id,
-        viewerUserId: req.user?.Id,
-        viewerRoleId: currentRoleId,
-        reportType: req.query.reportType || undefined,
-        reportMode: req.query.reportMode || 'individual',
-        quarter: req.query.quarter || undefined,
-      })
-      : (async () => {
-        // For leaf roles, check if they have submitted to the requester if the requester is the parent
-        if (String(selectedScopeRole.Id) !== String(currentRoleId)) {
-          const submission = await OfficeReportSubmission.findOne({
-            where: {
-              SourceRoleId: selectedScopeRole.Id,
-              ParentRoleId: currentRoleId,
-              CycleYear: cycleYear,
-              IsArchived: false,
-            },
-          });
-          if (!submission) {
-            // If no submission, return an empty shell report
-            return await buildCurrentOfficeReportData({
-              cycleYear,
-              currentRoleId: selectedScopeRole.Id,
-              viewerUserId: req.user?.Id,
-              reportType: req.query.reportType || undefined,
-              quarter: quarter || undefined,
-              forceEmpty: true,
-            });
-          }
-        }
-        return await buildCurrentOfficeReportData({
           cycleYear,
-          currentRoleId: selectedScopeRole.Id,
+          scopeRoleId: selectedScopeRole.Id,
           viewerUserId: req.user?.Id,
+          viewerRoleId: currentRoleId,
           reportType: req.query.reportType || undefined,
-          quarter: quarter || undefined,
-        });
-      })();
+          reportMode: req.query.reportMode || 'individual',
+          quarter: req.query.quarter || undefined,
+        })
+      : (async () => {
+          // For leaf roles, check if they have submitted to the requester if the requester is the parent
+          if (String(selectedScopeRole.Id) !== String(currentRoleId)) {
+            const submission = await OfficeReportSubmission.findOne({
+              where: {
+                SourceRoleId: selectedScopeRole.Id,
+                ParentRoleId: currentRoleId,
+                CycleYear: cycleYear,
+                IsArchived: false,
+              },
+            });
+            if (!submission) {
+              // If no submission, return an empty shell report
+              return await buildCurrentOfficeReportData({
+                cycleYear,
+                currentRoleId: selectedScopeRole.Id,
+                viewerUserId: req.user?.Id,
+                reportType: req.query.reportType || undefined,
+                quarter: quarter || undefined,
+                forceEmpty: true,
+              });
+            }
+          }
+          return await buildCurrentOfficeReportData({
+            cycleYear,
+            currentRoleId: selectedScopeRole.Id,
+            viewerUserId: req.user?.Id,
+            reportType: req.query.reportType || undefined,
+            quarter: quarter || undefined,
+          });
+        })();
 
     res.json({
       success: true,
@@ -1818,26 +1825,26 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const parentRole = currentRole.ParentRoleId
     ? await Role.findByPk(currentRole.ParentRoleId, {
-      attributes: ['Id', 'RoleName'],
-    })
+        attributes: ['Id', 'RoleName'],
+      })
     : null;
 
   const parentAssignerUserIds = parentRole?.Id
     ? [
-      ...new Set(
-        (
-          await UserRole.findAll({
-            where: {
-              RoleId: parentRole.Id,
-              ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
-            },
-            attributes: ['UserId'],
-          })
-        )
-          .map((assignment) => String(assignment.UserId || ''))
-          .filter(Boolean)
-      ),
-    ]
+        ...new Set(
+          (
+            await UserRole.findAll({
+              where: {
+                RoleId: parentRole.Id,
+                ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
+              },
+              attributes: ['UserId'],
+            })
+          )
+            .map((assignment) => String(assignment.UserId || ''))
+            .filter(Boolean)
+        ),
+      ]
     : [];
 
   const activeUserRoles = await UserRole.findAll({
@@ -1869,34 +1876,34 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const allAssignments = uniqueVisibleUserIds.length
     ? await UserKPI.findAll({
-      where: {
-        IsArchived: false,
-        CycleYear: cycleYear,
-        UserId: { [Op.in]: uniqueVisibleUserIds },
-      },
-      include: [
-        {
-          model: KPI,
-          attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark', 'IsEvedenceRequired'],
-          include: [
-            {
-              model: KPIType,
-              attributes: ['Id', 'KPIName', 'ParentKPIID'],
-            },
-            {
-              model: Unit,
-              attributes: ['Id', 'Code', 'Name'],
-            },
-          ],
+        where: {
+          IsArchived: false,
+          CycleYear: cycleYear,
+          UserId: { [Op.in]: uniqueVisibleUserIds },
         },
-        {
-          model: require('../models').KPIYearPlan,
-          attributes: ['Id', 'Baseline', 'Target'],
-          required: false,
-        },
-      ],
-      order: [['CreatedAt', 'ASC']],
-    })
+        include: [
+          {
+            model: KPI,
+            attributes: ['Id', 'KPITypeId', 'UnitId', 'Weight', 'Description', 'Remark', 'IsEvedenceRequired'],
+            include: [
+              {
+                model: KPIType,
+                attributes: ['Id', 'KPIName', 'ParentKPIID'],
+              },
+              {
+                model: Unit,
+                attributes: ['Id', 'Code', 'Name'],
+              },
+            ],
+          },
+          {
+            model: require('../models').KPIYearPlan,
+            attributes: ['Id', 'Baseline', 'Target'],
+            required: false,
+          },
+        ],
+        order: [['CreatedAt', 'ASC']],
+      })
     : [];
 
   const assignments = allAssignments;
@@ -1914,13 +1921,13 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
   let results =
     !forceEmpty && uniqueVisibleUserIds.length && relevantAssignmentIds.length
       ? await UserKPIResult.findAll({
-        where: {
-          IsArchived: false,
-          CycleYear: cycleYear,
-          UserKPIId: { [Op.in]: relevantAssignmentIds },
-        },
-        attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'EvidenceURL'],
-      })
+          where: {
+            IsArchived: false,
+            CycleYear: cycleYear,
+            UserKPIId: { [Op.in]: relevantAssignmentIds },
+          },
+          attributes: ['Id', 'UserId', 'KPIId', 'UserKPIId', 'KPIResult', 'AdjustedResult', 'Status', 'Quarter', 'CreatedAt', 'EvidenceURL'],
+        })
       : [];
 
   if (quarter) {
@@ -2132,7 +2139,7 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
     return targetQIdx > subQIdx;
   })();
 
-  const isSubmitted = cycleYear !== getCurrentCycleYear() ? true : (!!existingSubmission && !canSubmit);
+  const isSubmitted = cycleYear !== getCurrentCycleYear() ? true : !!existingSubmission && !canSubmit;
   const submittedQuarter = isSubmitted ? getSubmissionQuarter(existingSubmission) : null;
 
   return {
@@ -2144,9 +2151,9 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
     },
     parentRole: parentRole
       ? {
-        id: parentRole.Id,
-        name: parentRole.RoleName,
-      }
+          id: parentRole.Id,
+          name: parentRole.RoleName,
+        }
       : null,
     columns: [
       {
@@ -2237,72 +2244,72 @@ const getCurrentOfficeReport = async (req, res) => {
 
     const reportData = selectedRoleHasChildren
       ? await buildAffiliatedOfficeReportDataForScope({
-        cycleYear,
-        scopeRoleId: selectedRoleId,
-        viewerUserId: req.user?.Id,
-        viewerRoleId: requesterRole.Id,
-        reportType: reportType || undefined,
-        reportMode: req.query.reportMode || 'individual',
-        quarter: quarter || undefined,
-      })
-      : await (async () => {
-        // For leaf roles, check if they have submitted to the requester if the requester is the parent
-        if (String(selectedRoleId) !== String(requesterRoleId)) {
-          const submissions = await OfficeReportSubmission.findAll({
-            where: {
-              SourceRoleId: selectedRoleId,
-              ParentRoleId: requesterRoleId,
-              CycleYear: cycleYear,
-              IsArchived: false,
-            },
-          });
-          const getSubmissionQuarter = (sub) => {
-            if (!sub) return null;
-            if (sub.ReportPayload?.quarter) {
-              return sub.ReportPayload.quarter;
-            }
-            const rows = sub.ReportPayload?.rows || [];
-            for (const r of rows) {
-              const qList = r.allQuarterlyResults || r.quarterlyResults || [];
-              if (qList.length > 0 && qList[0].Quarter) {
-                return qList[0].Quarter;
-              }
-            }
-            return 'Q1';
-          };
-          const submission = quarter
-            ? (() => {
-              const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
-              const targetQIdx = quarterMap[normalizeQuarter(quarter)] || 0;
-              // Sort descending by date first to find the most recent valid submission
-              const sorted = [...submissions].sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt));
-              return sorted.find((s) => {
-                const subQIdx = quarterMap[normalizeQuarter(getSubmissionQuarter(s))] || 0;
-                return subQIdx >= targetQIdx;
-              });
-            })()
-            : submissions.sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt))[0];
-
-          if (!submission && cycleYear === getCurrentCycleYear()) {
-            // If no submission, return an empty shell report
-            return await buildCurrentOfficeReportData({
-              cycleYear,
-              currentRoleId: selectedRoleId,
-              viewerUserId: req.user?.Id,
-              reportType: reportType || undefined,
-              quarter: quarter || undefined,
-              forceEmpty: true,
-            });
-          }
-        }
-        return await buildCurrentOfficeReportData({
           cycleYear,
-          currentRoleId: selectedRoleId,
+          scopeRoleId: selectedRoleId,
           viewerUserId: req.user?.Id,
+          viewerRoleId: requesterRole.Id,
           reportType: reportType || undefined,
+          reportMode: req.query.reportMode || 'individual',
           quarter: quarter || undefined,
-        });
-      })();
+        })
+      : await (async () => {
+          // For leaf roles, check if they have submitted to the requester if the requester is the parent
+          if (String(selectedRoleId) !== String(requesterRoleId)) {
+            const submissions = await OfficeReportSubmission.findAll({
+              where: {
+                SourceRoleId: selectedRoleId,
+                ParentRoleId: requesterRoleId,
+                CycleYear: cycleYear,
+                IsArchived: false,
+              },
+            });
+            const getSubmissionQuarter = (sub) => {
+              if (!sub) return null;
+              if (sub.ReportPayload?.quarter) {
+                return sub.ReportPayload.quarter;
+              }
+              const rows = sub.ReportPayload?.rows || [];
+              for (const r of rows) {
+                const qList = r.allQuarterlyResults || r.quarterlyResults || [];
+                if (qList.length > 0 && qList[0].Quarter) {
+                  return qList[0].Quarter;
+                }
+              }
+              return 'Q1';
+            };
+            const submission = quarter
+              ? (() => {
+                  const quarterMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+                  const targetQIdx = quarterMap[normalizeQuarter(quarter)] || 0;
+                  // Sort descending by date first to find the most recent valid submission
+                  const sorted = [...submissions].sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt));
+                  return sorted.find((s) => {
+                    const subQIdx = quarterMap[normalizeQuarter(getSubmissionQuarter(s))] || 0;
+                    return subQIdx >= targetQIdx;
+                  });
+                })()
+              : submissions.sort((a, b) => new Date(b.SubmittedAt) - new Date(a.SubmittedAt))[0];
+
+            if (!submission && cycleYear === getCurrentCycleYear()) {
+              // If no submission, return an empty shell report
+              return await buildCurrentOfficeReportData({
+                cycleYear,
+                currentRoleId: selectedRoleId,
+                viewerUserId: req.user?.Id,
+                reportType: reportType || undefined,
+                quarter: quarter || undefined,
+                forceEmpty: true,
+              });
+            }
+          }
+          return await buildCurrentOfficeReportData({
+            cycleYear,
+            currentRoleId: selectedRoleId,
+            viewerUserId: req.user?.Id,
+            reportType: reportType || undefined,
+            quarter: quarter || undefined,
+          });
+        })();
 
     // Ensure parentRole is always present in response
     if (!reportData.parentRole && requesterRole.ParentRoleId) {
@@ -2355,8 +2362,8 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
 
     const parentRole = currentRole.ParentRoleId
       ? await Role.findByPk(currentRole.ParentRoleId, {
-        attributes: ['Id', 'RoleName'],
-      })
+          attributes: ['Id', 'RoleName'],
+        })
       : null;
 
     if (!parentRole) {
@@ -2372,17 +2379,17 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
 
     const reportData = hasChildren
       ? await buildAffiliatedOfficeReportDataForScope({
-        cycleYear,
-        scopeRoleId: currentRoleId,
-        viewerUserId: req.user?.Id,
-        viewerRoleId: currentRoleId,
-        reportMode: 'combined',
-      })
+          cycleYear,
+          scopeRoleId: currentRoleId,
+          viewerUserId: req.user?.Id,
+          viewerRoleId: currentRoleId,
+          reportMode: 'combined',
+        })
       : await buildCurrentOfficeReportData({
-        cycleYear,
-        currentRoleId,
-        viewerUserId: req.user?.Id,
-      });
+          cycleYear,
+          currentRoleId,
+          viewerUserId: req.user?.Id,
+        });
 
     // Ensure parentRole is in reportData for the rest of the logic
     reportData.parentRole = {
@@ -2862,12 +2869,12 @@ const getKPIApprovals = async (req, res) => {
         approverRemark: r.ApproverRemark,
         evidence: r.EvidenceURL
           ? [
-            {
-              name: r.EvidenceURL.split('/').pop(),
-              size: 'Unknown',
-              url: r.EvidenceURL,
-            },
-          ]
+              {
+                name: r.EvidenceURL.split('/').pop(),
+                size: 'Unknown',
+                url: r.EvidenceURL,
+              },
+            ]
           : [],
         evidenceRequired: !!kpiRecord?.IsEvedenceRequired,
       };

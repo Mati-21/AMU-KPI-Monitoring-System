@@ -559,6 +559,27 @@ const PermissionManagement = () => {
     }
   };
 
+  const stats = useMemo(() => {
+    let activeCount = 0;
+    let restrictedCount = 0;
+    permissions.forEach((perm) => {
+      ['view', 'create', 'assign', 'edit', 'delete', 'approve'].forEach((action) => {
+        if (perm[action]) {
+          activeCount++;
+        } else {
+          restrictedCount++;
+        }
+      });
+    });
+
+    return {
+      totalRoles: roles.length,
+      systemModules: permissions.length,
+      activePermissions: activeCount,
+      restrictedPermissions: restrictedCount,
+    };
+  }, [roles, permissions]);
+
   const tabs = [
     { key: 'matrix', label: 'Permission Matrix' },
     { key: 'sidebarMatrix', label: 'Sidebar Visibility Matrix' },
@@ -574,7 +595,12 @@ const PermissionManagement = () => {
           <Header />
 
           {/* Stats */}
-          <StatCard />
+          <StatCard
+            totalRoles={stats.totalRoles}
+            systemModules={stats.systemModules}
+            activePermissions={stats.activePermissions}
+            restrictedPermissions={stats.restrictedPermissions}
+          />
 
           {/* Tabs */}
           <div className="flex gap-2">
