@@ -26,7 +26,7 @@ export const SocketProvider = ({ children }) => {
 
     const newSocket = io(BASE_URL, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,

@@ -1,4 +1,4 @@
-const { sequelize } = require('../config/database');
+import { sequelize  } from '../config/database.js';
 
 const run = async () => {
   try {
@@ -19,4 +19,4 @@ if (require.main === module) {
   run();
 }
 
-module.exports = { run };
+export {  run  };

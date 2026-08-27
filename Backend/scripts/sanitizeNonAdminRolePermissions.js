@@ -1,6 +1,6 @@
-const { sequelize } = require('../config/database');
-const { Role } = require('../models');
-const { normalizeRolePermissions } = require('../utils/rolePermissions');
+import { sequelize  } from '../config/database.js';
+import { Role  } from '../models.js';
+import { normalizeRolePermissions  } from '../utils/rolePermissions.js';
 
 const sanitizeNonAdminRolePermissions = async () => {
   try {
@@ -32,4 +32,4 @@ if (require.main === module) {
   sanitizeNonAdminRolePermissions();
 }
 
-module.exports = { sanitizeNonAdminRolePermissions };
+export {  sanitizeNonAdminRolePermissions  };

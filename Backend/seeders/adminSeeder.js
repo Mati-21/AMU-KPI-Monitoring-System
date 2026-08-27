@@ -1,6 +1,5 @@
-const { Op } = require('sequelize');
-const { sequelize } = require('../config/database');
-const { User, RoleCategory, Role, UserRole } = require('../models');
+import { prisma  } from '../config/database.js';
+import bcrypt from 'bcryptjs'; // Assuming password hashing might be needed eventually, though it wasn't before? Wait, the model hook probably hashed it. With Prisma we must hash it explicitly!
 
 const ADMIN_EMAIL = 'Mule@gmail.com';
 const ADMIN_PASSWORD = 'Mule@123';
@@ -8,83 +7,71 @@ const ADMIN_USERNAME = 'mule.admin';
 
 const now = () => new Date();
 
-const ensureAdminRole = async (transaction) => {
-  let roleCategory = await RoleCategory.findOne({
+const ensureAdminRole = async () => {
+  let roleCategory = await prisma.roleCategories.findFirst({
     where: {
-      CategoryName: {
-        [Op.iLike]: 'Administration',
-      },
-    },
-    transaction,
+      CategoryName: { equals: 'Administration', mode: 'insensitive' },
+    }
   });
 
   if (!roleCategory) {
-    roleCategory = await RoleCategory.create(
-      {
+    roleCategory = await prisma.roleCategories.create({
+      data: {
         CategoryName: 'Administration',
         Description: 'System administration roles',
         CreatedAt: now(),
         CreatedBy: null,
         IsArchived: false,
-      },
-      { transaction }
-    );
+      }
+    });
   } else if (roleCategory.IsArchived) {
-    await roleCategory.update(
-      {
+    roleCategory = await prisma.roleCategories.update({
+      where: { Id: roleCategory.Id },
+      data: {
         IsArchived: false,
         Description: roleCategory.Description || 'System administration roles',
-      },
-      { transaction }
-    );
+      }
+    });
   }
 
-  let adminRole = await Role.findOne({
+  let adminRole = await prisma.roles.findFirst({
     where: {
-      RoleName: {
-        [Op.iLike]: 'System Administrator',
-      },
-    },
-    transaction,
+      RoleName: { equals: 'System Administrator', mode: 'insensitive' },
+    }
   });
 
   if (!adminRole) {
-    adminRole = await Role.create(
-      {
+    adminRole = await prisma.roles.create({
+      data: {
         RoleCategoryId: roleCategory.Id,
         RoleName: 'System Administrator',
-        ParentRoleId: null,
         Description: 'Full administrative access to the KPI system',
         HasExtraMeasures: true,
         CreatedAt: now(),
         CreatedBy: null,
         IsArchived: false,
         PermissionVersion: 1,
-      },
-      { transaction }
-    );
+      }
+    });
   } else if (adminRole.IsArchived) {
-    await adminRole.update(
-      {
+    adminRole = await prisma.roles.update({
+      where: { Id: adminRole.Id },
+      data: {
         IsArchived: false,
         RoleCategoryId: adminRole.RoleCategoryId || roleCategory.Id,
         PermissionVersion: adminRole.PermissionVersion || 1,
-      },
-      { transaction }
-    );
+      }
+    });
   }
 
   return adminRole;
 };
 
-const upsertAdminUser = async (transaction) => {
-  let adminUser = await User.findOne({
+const upsertAdminUser = async () => {
+  let adminUser = await prisma.users.findFirst({
     where: {
-      Email: {
-        [Op.iLike]: ADMIN_EMAIL,
-      },
-    },
-    transaction,
+      Email: { equals: ADMIN_EMAIL, mode: 'insensitive' },
+    }
   });
 
   const payload = {
@@ -94,66 +81,69 @@ const upsertAdminUser = async (transaction) => {
     Email: ADMIN_EMAIL,
     UserName: ADMIN_USERNAME,
     Phone: '0911000000',
-    password: ADMIN_PASSWORD,
+    password: ADMIN_PASSWORD, // Wait, if Prisma doesn't hash automatically we must hash it. 
     IsArchived: false,
   };
+  
+  if (bcrypt && typeof bcrypt.hashSync === 'function') {
+      const salt = bcrypt.genSaltSync(10);
+      payload.password = bcrypt.hashSync(payload.password, salt);
+  }
 
   if (!adminUser) {
-    adminUser = await User.create(
-      {
+    adminUser = await prisma.users.create({
+      data: {
         ...payload,
         CreatedAt: now(),
         CreatedBy: null,
-      },
-      { transaction }
-    );
+      }
+    });
 
     return adminUser;
   }
 
-  adminUser.set(payload);
-  await adminUser.save({ transaction });
+  adminUser = await prisma.users.update({
+    where: { Id: adminUser.Id },
+    data: payload
+  });
+  
   return adminUser;
 };
 
-const ensureRoleAssignment = async ({ userId, roleId, transaction }) => {
-  const latestAssignment = await UserRole.findOne({
+const ensureRoleAssignment = async ({ userId, roleId }) => {
+  const latestAssignment = await prisma.userRoles.findFirst({
     where: {
       UserId: userId,
       RoleId: roleId,
     },
-    order: [['CreatedAt', 'DESC']],
-    transaction,
+    orderBy: { CreatedAt: 'desc' }
   });
 
   if (latestAssignment) {
-    await latestAssignment.update(
-      {
+    return await prisma.userRoles.update({
+      where: { Id: latestAssignment.Id },
+      data: {
         IsArchived: false,
         ToDate: null,
-      },
-      { transaction }
-    );
-
-    return latestAssignment;
+      }
+    });
   }
 
-  const activeAssignment = await UserRole.findOne({
+  const activeAssignment = await prisma.userRoles.findFirst({
     where: {
       UserId: userId,
       RoleId: roleId,
       IsArchived: false,
-      [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: now() } }],
-    },
-    transaction,
+      OR: [{ ToDate: null }, { ToDate: { gte: now() } }],
+    }
   });
 
   if (activeAssignment) {
     return activeAssignment;
   }
 
-  return UserRole.create(
-    {
+  return await prisma.userRoles.create({
+    data: {
       UserId: userId,
       RoleId: roleId,
       FromDate: now(),
@@ -161,33 +151,24 @@ const ensureRoleAssignment = async ({ userId, roleId, transaction }) => {
       CreatedAt: now(),
       CreatedBy: userId,
       IsArchived: false,
-    },
-    { transaction }
-  );
+    }
+  });
 };
 
 const seedAdmin = async () => {
-  const transaction = await sequelize.transaction();
-
   try {
-    await sequelize.authenticate();
-    await sequelize.sync();
-
-    const adminRole = await ensureAdminRole(transaction);
-    const adminUser = await upsertAdminUser(transaction);
-    await ensureRoleAssignment({ userId: adminUser.Id, roleId: adminRole.Id, transaction });
-
-    await transaction.commit();
+    const adminRole = await ensureAdminRole();
+    const adminUser = await upsertAdminUser();
+    await ensureRoleAssignment({ userId: adminUser.Id, roleId: adminRole.Id });
 
     console.log('Admin user seeded successfully.');
     console.log(`Email: ${ADMIN_EMAIL}`);
     console.log(`Password: ${ADMIN_PASSWORD}`);
   } catch (error) {
-    await transaction.rollback();
     console.error('Failed to seed admin user:', error.message);
     process.exitCode = 1;
   } finally {
-    await sequelize.close();
+    await prisma.$disconnect();
   }
 };
 
@@ -195,4 +176,4 @@ if (require.main === module) {
   seedAdmin();
 }
 
-module.exports = { seedAdmin };
+export {  seedAdmin  };

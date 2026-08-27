@@ -1,6 +1,6 @@
-const { Op } = require('sequelize');
-const { connectDB, sequelize } = require('../config/database');
-const { User, RoleCategory, Role, UserRole } = require('../models');
+import { Op  } from 'sequelize';
+import { connectDB, sequelize  } from '../config/database.js';
+import { User, RoleCategory, Role, UserRole  } from '../models.js';
 
 const now = () => new Date();
 

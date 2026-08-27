@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useDashboardData } from '../../hooks/useDashboardData';
+import { useDashboardData } from '../../Hooks/useDashboardData';
 import PerformanceDashboard from '../../Components/Dashboard/PerformanceDashboard';
 import { useCycleYearsQuery } from '../../Hooks/Queries/useKpis';
 

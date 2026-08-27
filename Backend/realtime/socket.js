@@ -1,5 +1,5 @@
-const jwt = require('jsonwebtoken');
-const { Server } = require('socket.io');
+import jwt from 'jsonwebtoken';
+import { Server  } from 'socket.io';
 
 let ioInstance = null;
 
@@ -86,8 +86,8 @@ const emitToUser = (userId, event, payload) => {
   return true;
 };
 
-module.exports = {
+export { 
   initSocket,
   getIO,
   emitToUser,
-};
+ };

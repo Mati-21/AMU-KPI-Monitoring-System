@@ -53,8 +53,8 @@ const normalizeRolePermissions = (roleName, permissions) => {
   return permissions.map(normalizePermissionEntry).filter(Boolean);
 };
 
-module.exports = {
+export { 
   permissionKey,
   isAdminRoleName,
   normalizeRolePermissions,
-};
+ };

@@ -1,9 +1,8 @@
-const jwt = require('jsonwebtoken');
-const { User, UserRole, Role, UserActivityLog, SystemSetting, sequelize } = require('../models');
-const { Op } = require('sequelize');
+import jwt from 'jsonwebtoken';
+import { prisma  } from '../config/database.js';
 
 const checkMaintenance = async (user) => {
-  const setting = await SystemSetting.findOne({ where: { Key: 'maintenance_mode' } });
+  const setting = await prisma.systemSettings.findFirst({ where: { Key: 'maintenance_mode' } });
   const isMaintenance = setting ? setting.Value === 'true' : false;
   
   if (isMaintenance) {
@@ -20,15 +19,14 @@ const trackActivity = async (userId) => {
     const today = new Date().toISOString().split('T')[0];
     
     // 1. Update User LastActiveAt
-    await User.update({ LastActiveAt: new Date() }, { where: { Id: userId } });
+    await prisma.users.update({ where: { Id: userId }, data: { LastActiveAt: new Date() } });
 
     // 2. Upsert Daily Activity Log
-    await UserActivityLog.upsert({
-      UserId: userId,
-      ActivityDate: today,
-      LastActiveAt: new Date()
-    }, {
-      conflictFields: ['UserId', 'ActivityDate']
+    const logWhere = { UserId_ActivityDate: { UserId: userId, ActivityDate: today } };
+    await prisma.userActivityLogs.upsert({
+      where: logWhere,
+      update: { LastActiveAt: new Date() },
+      create: { UserId: userId, ActivityDate: today, LastActiveAt: new Date() }
     });
   } catch (err) {
     console.error('Failed to track user activity:', err);
@@ -156,7 +154,7 @@ const hasSystemAdminRole = (user) => {
 
   // Prefer checking all active roles when present (more robust than relying on currentRole)
   if (Array.isArray(user.UserRoles) && user.UserRoles.length > 0) {
-    return user.UserRoles.some((userRole) => SYSTEM_ADMIN_ROLE_NAMES.has(normalizeToken(userRole?.Role?.RoleName || '')));
+    return user.UserRoles.some((userRole) => SYSTEM_ADMIN_ROLE_NAMES.has(normalizeToken((userRole?.Roles || userRole?.Role)?.RoleName || '')));
   }
 
   const normalizedRoleName = normalizeToken(user?.currentRole?.RoleName || user?.roleName || '');
@@ -171,38 +169,16 @@ const selectPrimaryRole = (userRoles) => {
   if (!Array.isArray(userRoles) || userRoles.length === 0) return null;
 
   const validUserRoles = userRoles
-    .filter((userRole) => userRole?.Role)
+    .filter((userRole) => (userRole?.Roles || userRole?.Role))
     .sort((left, right) => new Date(right?.CreatedAt || 0).getTime() - new Date(left?.CreatedAt || 0).getTime());
 
   if (validUserRoles.length === 0) return null;
 
-  const systemAdminRole = validUserRoles.find((userRole) => SYSTEM_ADMIN_ROLE_NAMES.has(normalizeToken(userRole?.Role?.RoleName)));
-  return systemAdminRole?.Role || validUserRoles[0]?.Role || null;
+  const systemAdminRole = validUserRoles.find((userRole) => SYSTEM_ADMIN_ROLE_NAMES.has(normalizeToken((userRole?.Roles || userRole?.Role)?.RoleName)));
+  return (systemAdminRole?.Roles || systemAdminRole?.Role) || (validUserRoles[0]?.Roles || validUserRoles[0]?.Role) || null;
 };
 
-const SYSTEM_ADMIN_FALLBACK_PERMISSIONS = [
-  'admin_dashboard',
-  permissionKey('manage', 'Users'),
-  permissionKey('manage', 'Roles'),
-  permissionKey('manage', 'Permissions'),
-  permissionKey('view', 'Assigned KPI'),
-  permissionKey('view', 'KPI Approvals'),
-  permissionKey('create', 'KPI Approvals'),
-  permissionKey('view', 'KPI Allocation'),
-  ...AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS,
-  permissionKey('view', 'User Management'),
-  permissionKey('create', 'User Management'),
-  permissionKey('edit', 'User Management'),
-  permissionKey('delete', 'User Management'),
-  permissionKey('view', 'Role Management'),
-  permissionKey('create', 'Role Management'),
-  permissionKey('edit', 'Role Management'),
-  permissionKey('delete', 'Role Management'),
-  permissionKey('view', 'Configuration'),
-  permissionKey('view', 'Alerts & Notifications'),
-  permissionKey('view', 'Personal Profile'),
-  permissionKey('view', 'Direct Messages'),
-].filter(Boolean);
+
 
 const getEffectivePermissions = (req) => {
   const rolePermissions = Array.isArray(req.user?.currentRole?.Permissions) ? req.user.currentRole.Permissions : [];
@@ -242,26 +218,25 @@ const protect = async (req, res, next) => {
       token = req.cookies.token;
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      req.user = await User.findByPk(decoded.Id, {
-        attributes: { exclude: ['password'] },
-        include: [
-          {
-            model: UserRole,
+      req.user = await prisma.users.findUnique({
+        where: { Id: decoded.Id },
+        include: {
+          UserRoles: {
             where: {
               IsArchived: false,
-              [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+              OR: [{ ToDate: null }, { ToDate: { gte: new Date() } }],
+              Roles: { IsArchived: false },
             },
-            required: false,
-            include: [
-              {
-                model: Role,
-                where: { IsArchived: false },
-                required: false,
-              },
-            ],
+            include: {
+              Roles: true,
+            },
           },
-        ],
+        },
       });
+
+      if (req.user) {
+        delete req.user.password;
+      }
 
       if (!req.user) {
         return res.status(401).json({ message: 'User not found' });
@@ -270,9 +245,7 @@ const protect = async (req, res, next) => {
       if (Array.isArray(req.user.UserRoles) && req.user.UserRoles.length > 0) {
         const activeRole = selectPrimaryRole(req.user.UserRoles);
 
-        console.log(`[AUTH] User ${req.user.Id} has roles:`, req.user.UserRoles.map((ur) => ur?.Role?.RoleName).filter(Boolean));
-        console.log(`[AUTH] Active Role:`, activeRole?.RoleName);
-        console.log(`[AUTH] Is System Admin:`, hasSystemAdminRole(req.user));
+
 
         req.user.currentRole = activeRole;
         req.user.roleName = activeRole?.RoleName || null;
@@ -299,10 +272,10 @@ const protect = async (req, res, next) => {
       console.error('Auth error (cookie):', error.message);
       
       if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({ message: 'Session expired, please login again', expired: true });
+        return res.status(401).json({ message: 'Session expired, please login again', expired: true, error: error.message });
       }
       
-      return res.status(401).json({ message: 'Not authorized, token failed' });
+      return res.status(401).json({ message: 'Not authorized, token failed', error: error.message, stack: error.stack });
     }
   }
 
@@ -351,4 +324,4 @@ const requirePermission = (permission) => (req, res, next) => {
   res.status(403).json({ message: `Not authorized for ${permission}` });
 };
 
-module.exports = { protect, admin, requireModulePermission, hasModulePermission, requirePermission, hasPermission, permissionKey };
+export {  protect, admin, requireModulePermission, hasModulePermission, requirePermission, hasPermission, permissionKey  };

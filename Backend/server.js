@@ -1,35 +1,24 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const cookieParser = require('cookie-parser');
-const morgan = require('morgan');
-const compression = require('compression');
-const dotenv = require('dotenv');
-const path = require('path');
-const http = require('http');
-const { connectDB } = require('./config/database');
-const errorHandler = require('./middleware/errorMiddleware');
-const { initSocket } = require('./realtime/socket');
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import morgan from 'morgan';
+import compression from 'compression';
+import dotenv from 'dotenv';
+import path from 'path';
+import http from 'http';
+import { connectDB } from './config/database.js';
+import errorHandler from './middleware/errorMiddleware.js';
+import { initSocket } from './realtime/socket.js';
 
 dotenv.config();
 
-const authRoutes = require('./routes/authRoutes');
-const userRoutes = require('./routes/userRoutes');
-const roleCategoryRoutes = require('./routes/roleCategoryRoutes');
-const roleRoutes = require('./routes/roleRoutes');
-const userRoleRoutes = require('./routes/userRoleRoutes');
-const unitRoutes = require('./routes/unitRoutes');
-const kpiTypeRoutes = require('./routes/kpiTypeRoutes');
-const kpiRoutes = require('./routes/kpiRoutes');
-const userKpiRoutes = require('./routes/userKpiRoutes');
-const userKpiResultRoutes = require('./routes/userKpiResultRoutes');
-const kpiDocumentRoutes = require('./routes/kpiDocumentRoutes');
-const kpiYearPlanRoutes = require('./routes/kpiYearPlanRoutes');
-const adminDashboardRoutes = require('./routes/adminDashboardRoutes');
-const settingRoutes = require('./routes/settingRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
-const messageRoutes = require('./routes/messageRoutes');
-const contactRoutes = require('./routes/contactRoutes');
+import routes from './routes/index.js';
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'errors').toLowerCase();
@@ -93,23 +82,7 @@ if (httpLogMode !== 'off') {
   }
 }
 
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/role-categories', roleCategoryRoutes);
-app.use('/api/roles', roleRoutes);
-app.use('/api/user-roles', userRoleRoutes);
-app.use('/api/units', unitRoutes);
-app.use('/api/kpi-types', kpiTypeRoutes);
-app.use('/api/kpis', kpiRoutes);
-app.use('/api/user-kpis', userKpiRoutes);
-app.use('/api/user-kpi-results', userKpiResultRoutes);
-app.use('/api/kpi-documents', kpiDocumentRoutes);
-app.use('/api/kpi-year-plans', kpiYearPlanRoutes);
-app.use('/api/admin-dashboard', adminDashboardRoutes);
-app.use('/api/settings', settingRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/contact-messages', contactRoutes);
+app.use('/api', routes);
 
 app.get('/health', (req, res) => {
   res.json({
@@ -132,7 +105,7 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    const { loadCycleYearFromDB } = require('./utils/kpiCycle');
+    const { loadCycleYearFromDB } = await import('./utils/kpiCycle.js');
     await loadCycleYearFromDB();
 
     const server = http.createServer(app);

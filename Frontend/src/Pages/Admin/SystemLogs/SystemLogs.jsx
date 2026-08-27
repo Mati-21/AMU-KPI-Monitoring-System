@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import TabButton from '../../../Components/UI/TabButton';
 import ActivityLog from '../components/ActivityLog';
-import { useAdminDashboard } from '../../../hooks/useAdminDashboard';
+import { useAdminDashboard } from '../../../Hooks/useAdminDashboard';
 import { History, ShieldCheck } from 'lucide-react';
 
 const SystemLogs = () => {

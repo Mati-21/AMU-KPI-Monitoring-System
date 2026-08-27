@@ -1,6 +1,5 @@
-const { Notification, UserRole } = require('../models');
-const { Op } = require('sequelize');
-const { emitToUser } = require('../realtime/socket');
+import { prisma  } from '../config/database.js';
+import { emitToUser  } from '../realtime/socket.js';
 
 const normalizePriority = (value) => {
   const normalized = String(value || '')
@@ -25,18 +24,20 @@ const createNotification = async ({
     throw new Error('recipientUserId is required');
   }
 
-  const created = await Notification.create({
-    RecipientUserId: recipientUserId,
-    ActorUserId: actorUserId,
-    Type: type,
-    Title: title,
-    Message: message,
-    Priority: normalizePriority(priority),
-    Data: data,
+  const created = await prisma.notifications.create({
+    data: {
+      RecipientUserId: recipientUserId,
+      ActorUserId: actorUserId,
+      Type: type,
+      Title: title,
+      Message: message,
+      Priority: normalizePriority(priority),
+      Data: data,
+    }
   });
 
   try {
-    emitToUser(String(recipientUserId), 'notifications:new', created.toJSON());
+    emitToUser(String(recipientUserId), 'notifications:new', created);
   } catch {
     // ignore realtime failures
   }
@@ -69,11 +70,12 @@ const createBulkNotifications = async ({
     return [];
   }
 
-  const created = await Notification.bulkCreate(records);
+  await prisma.notifications.createMany({ data: records });
+  const created = records;
 
   try {
     created.forEach((row) => {
-      emitToUser(String(row.RecipientUserId), 'notifications:new', row.toJSON());
+      emitToUser(String(row.RecipientUserId), 'notifications:new', row);
     });
   } catch {
     // ignore realtime failures
@@ -85,20 +87,20 @@ const createBulkNotifications = async ({
 const getActiveRoleUserIds = async (roleId) => {
   if (!roleId) return [];
 
-  const assignments = await UserRole.findAll({
+  const assignments = await prisma.userRoles.findMany({
     where: {
       RoleId: roleId,
       IsArchived: false,
-      [Op.or]: [{ ToDate: null }, { ToDate: { [Op.gte]: new Date() } }],
+      OR: [{ ToDate: null }, { ToDate: { gte: new Date() } }],
     },
-    attributes: ['UserId'],
+    select: { UserId: true }
   });
 
-  return [...new Set(assignments.map((assignment) => assignment.UserId).filter(Boolean))];
+  return [...new Set(assignments.map((assignment) => String(assignment.UserId)).filter(Boolean))];
 };
 
-module.exports = {
+export { 
   createNotification,
   createBulkNotifications,
   getActiveRoleUserIds,
-};
+ };

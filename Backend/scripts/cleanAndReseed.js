@@ -1,7 +1,7 @@
-const { Op } = require('sequelize');
-const { connectDB, sequelize } = require('../config/database');
-const { User, RoleCategory, Role, UserRole } = require('../models');
-const bcrypt = require('bcryptjs');
+import { Op  } from 'sequelize';
+import { connectDB, sequelize  } from '../config/database.js';
+import { User, RoleCategory, Role, UserRole  } from '../models.js';
+import bcrypt from 'bcryptjs';
 
 /**
  * Complete System Cleanup Script
@@ -181,4 +181,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = cleanAndReseedDatabase;
+export default cleanAndReseedDatabase;

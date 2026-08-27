@@ -1,6 +1,11 @@
-const multer = require('multer');
-const fs = require('fs');
-const path = require('path');
+
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 
 // Base uploads directory
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -66,10 +71,10 @@ const profileStorage = new LocalUrlStorage(createDiskStorage('user-profiles'), '
 const evidenceStorage = new LocalUrlStorage(createDiskStorage('evidence'), 'evidence');
 const systemStorage = new LocalUrlStorage(createDiskStorage('system-assets'), 'system-assets');
 
-module.exports = {
+export { 
   profileStorage,
   evidenceStorage,
-  logoStorage: systemStorage,
-  messageStorage: systemStorage,
+  systemStorage as logoStorage,
+  systemStorage as messageStorage,
   systemStorage,
 };

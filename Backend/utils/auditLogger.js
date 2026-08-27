@@ -1,4 +1,4 @@
-const { AuditLog } = require('../models');
+import { prisma  } from '../config/database.js';
 
 /**
  * Logs a user or system activity to the database.
@@ -12,18 +12,18 @@ const { AuditLog } = require('../models');
  */
 const logActivity = async ({ userId, action, resource, description, status = 'Success', ipAddress }) => {
   try {
-    await AuditLog.create({
+    await prisma.auditLogs.create({ data: {
       UserId: userId,
       Action: action,
       Resource: resource,
       Description: description,
       Status: status,
       IpAddress: ipAddress
-    });
+    } });
     console.log(`[AUDIT] ${action}: ${description}`);
   } catch (error) {
     console.error('[AUDIT ERROR] Failed to create log:', error);
   }
 };
 
-module.exports = { logActivity };
+export {  logActivity  };

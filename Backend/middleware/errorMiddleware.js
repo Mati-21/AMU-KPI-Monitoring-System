@@ -4,12 +4,12 @@ const errorHandler = (err, req, res, next) => {
   
   console.error(err);
   
-  if (err.name === 'SequelizeValidationError') {
+  if (err.name === 'PrismaClientValidationError') {
     const message = Object.values(err.errors).map(val => val.message).join(', ');
     return res.status(400).json({ message });
   }
   
-  if (err.name === 'SequelizeUniqueConstraintError') {
+  if (err.code === 'P2002') {
     return res.status(400).json({ message: 'Duplicate field value entered' });
   }
   
@@ -19,4 +19,4 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = errorHandler;
+export default errorHandler;

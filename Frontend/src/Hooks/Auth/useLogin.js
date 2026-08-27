@@ -6,6 +6,7 @@ import { api } from '../../api/axios';
 import { setCredentials } from '../../Features/authSlice';
 import { normalizeAuthUser } from '../../lib/authUser';
 import { useNotification } from '../../Context/NotificationContext';
+import { queryKeys } from '../../Config/queryKeys';
 
 export const useLogin = () => {
   const dispatch = useDispatch();
@@ -27,6 +28,18 @@ export const useLogin = () => {
       // Save user in React Query cache
       queryClient.setQueryData(['user'], normalizedUser);
       notify('Logged in successfully.', 'success');
+
+      // Prefetch dashboard data to make initial navigation instant
+      if (normalizedUser.permissions?.includes('admin_dashboard') || normalizedUser.roleName === 'System Administrator') {
+        queryClient.prefetchQuery({
+          queryKey: [...queryKeys.dashboard.admin, undefined], 
+          queryFn: async () => {
+            const response = await api.get('/admin-dashboard/summary');
+            return response.data?.data;
+          },
+          staleTime: 1000 * 60 * 2,
+        });
+      }
     },
   });
 };

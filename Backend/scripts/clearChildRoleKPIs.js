@@ -1,4 +1,4 @@
-const { sequelize, Role, UserKPI, UserRole, OfficeReportSubmission } = require('../models');
+import { sequelize, Role, UserKPI, UserRole, OfficeReportSubmission  } from '../models.js';
 
 const clearChildRoleKPIs = async () => {
   try {

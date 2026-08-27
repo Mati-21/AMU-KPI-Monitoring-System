@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AuditLogs {
+  Id String @id @default(uuid()) @db.Uuid
+  UserId      String?  @db.Uuid
+  Action      String   @db.VarChar(255)
+  Resource    String?  @db.VarChar(255)
+  Description String?
+  Status      String?  @default("Success") @db.VarChar(255)
+  IpAddress   String?  @db.VarChar(255)
+  createdAt   DateTime @db.Timestamptz(6)
+  Users       Users?   @relation(fields: [UserId], references: [Id])
+}
+
+model ContactMessages {
+  Id String @id @default(uuid()) @db.Uuid
+  Username  String   @db.VarChar(255)
+  Email     String   @db.VarChar(255)
+  Subject   String?  @db.VarChar(255)
+  Message   String
+  Status    String   @default("Unread") @db.VarChar(255)
+  createdAt DateTime @db.Timestamptz(6)
+  updatedAt DateTime @db.Timestamptz(6)
+}
+
+model KPIDocuments {
+  Id String @id @default(uuid()) @db.Uuid
+  UserId     String    @db.Uuid
+  KPIId      String    @db.Uuid
+  DOCTitle   String    @db.VarChar(255)
+  FileURL    String    @db.VarChar(255)
+  Remark     String?
+  CreatedAt  DateTime? @db.Timestamptz(6)
+  CreatedBy  String?   @db.Uuid
+  IsArchived Boolean?  @default(false)
+  KPIs       KPIs      @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
+  Users      Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+}
+
+model KPITypes {
+  Id String @id @default(uuid()) @db.Uuid
+  KPIName        String     @db.VarChar(255)
+  ParentKPIID    String?    @db.Uuid
+  Description    String?
+  CreatedAt      DateTime?  @db.Timestamptz(6)
+  CreatedBy      String?    @db.Uuid
+  IsArchived     Boolean?   @default(false)
+  KPITypes       KPITypes?  @relation("KPITypesToKPITypes", fields: [ParentKPIID], references: [Id])
+  other_KPITypes KPITypes[] @relation("KPITypesToKPITypes")
+  KPIs           KPIs[]
+}
+
+model KPIYearPlans {
+  Id String @id @default(uuid()) @db.Uuid
+  KPIId            String                    @db.Uuid
+  CycleYear        String                    @db.VarChar(255)
+  Baseline         Decimal?                  @default(0) @db.Decimal(10, 2)
+  Target           Decimal                   @db.Decimal(10, 2)
+  FinalPerformance Decimal?                  @db.Decimal(10, 2)
+  Status           enum_KPIYearPlans_Status? @default(ACTIVE)
+  IsLocked         Boolean?                  @default(false)
+  CreatedAt        DateTime?                 @db.Timestamptz(6)
+  KPIs             KPIs                      @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
+  UserKPIs         UserKPIs[]
+}
+
+model KPIs {
+  Id String @id @default(uuid()) @db.Uuid
+  KPITypeId          String                  @db.Uuid
+  UnitId             String                  @db.Uuid
+  Weight             Decimal                 @db.Decimal(5, 2)
+  Description        String?
+  IsEvedenceRequired Boolean?                @default(false)
+  Remark             String?
+  CreatedAt          DateTime?               @db.Timestamptz(6)
+  CreatedBy          String?                 @db.Uuid
+  IsArchived         Boolean?                @default(false)
+  LifecycleType      enum_KPIs_LifecycleType @default(RECURRING)
+  DefaultBaseline    Decimal?                @default(0) @db.Decimal(10, 2)
+  IsActive           Boolean?                @default(true)
+  KPIDocuments       KPIDocuments[]
+  KPIYearPlans       KPIYearPlans[]
+  KPITypes           KPITypes                @relation(fields: [KPITypeId], references: [Id], onDelete: Cascade)
+  Units              Units                   @relation(fields: [UnitId], references: [Id], onDelete: Cascade)
+  UserKPIResults     UserKPIResults[]
+  UserKPIs           UserKPIs[]
+}
+
+model Messages {
+  Id String @id @default(uuid()) @db.Uuid
+  SenderId                         String   @db.Uuid
+  ReceiverId                       String   @db.Uuid
+  Content                          String?
+  IsRead                           Boolean? @default(false)
+  createdAt                        DateTime @db.Timestamptz(6)
+  updatedAt                        DateTime @db.Timestamptz(6)
+  FileUrl                          String?  @db.VarChar(255)
+  FileName                         String?  @db.VarChar(255)
+  FileType                         String?  @db.VarChar(255)
+  Attachments                      Json?    @db.Json
+  Users_Messages_ReceiverIdToUsers Users    @relation("Messages_ReceiverIdToUsers", fields: [ReceiverId], references: [Id], onDelete: Cascade)
+  Users_Messages_SenderIdToUsers   Users    @relation("Messages_SenderIdToUsers", fields: [SenderId], references: [Id], onDelete: Cascade)
+}
+
+model Notifications {
+  Id String @id @default(uuid()) @db.Uuid
+  RecipientUserId                            String                      @db.Uuid
+  ActorUserId                                String?                     @db.Uuid
+  Type                                       String?                     @db.VarChar(255)
+  Title                                      String?                     @db.VarChar(255)
+  Message                                    String?
+  Priority                                   enum_Notifications_Priority @default(medium)
+  Data                                       Json?
+  IsRead                                     Boolean                     @default(false)
+  ReadAt                                     DateTime?                   @db.Timestamptz(6)
+  CreatedAt                                  DateTime?                   @db.Timestamptz(6)
+  IsArchived                                 Boolean?                    @default(false)
+  Users_Notifications_ActorUserIdToUsers     Users?                      @relation("Notifications_ActorUserIdToUsers", fields: [ActorUserId], references: [Id])
+  Users_Notifications_RecipientUserIdToUsers Users                       @relation("Notifications_RecipientUserIdToUsers", fields: [RecipientUserId], references: [Id], onDelete: Cascade)
+
+  @@index([RecipientUserId, IsArchived, CreatedAt], map: "notifications__recipient_user_id__is_archived__created_at")
+  @@index([RecipientUserId, IsRead, IsArchived], map: "notifications__recipient_user_id__is_read__is_archived")
+  @@index([Type], map: "notifications__type")
+}
+
+model OfficeReportSubmissions {
+  Id String @id @default(uuid()) @db.Uuid
+  CycleYear     String   @db.VarChar(255)
+  SourceRoleId  String   @db.Uuid
+  ParentRoleId  String   @db.Uuid
+  ReportPayload Json     @default("{}")
+  SubmittedAt   DateTime @db.Timestamptz(6)
+  SubmittedBy   String?  @db.Uuid
+  IsArchived    Boolean? @default(false)
+}
+
+model RoleCategories {
+  Id String @id @default(uuid()) @db.Uuid
+  CategoryName String    @unique @db.VarChar(255)
+  Description  String?
+  CreatedAt    DateTime? @db.Timestamptz(6)
+  CreatedBy    String?   @db.Uuid
+  IsArchived   Boolean?  @default(false)
+  Roles        Roles[]
+}
+
+model Roles {
+  Id String @id @default(uuid()) @db.Uuid
+  RoleCategoryId    String?         @db.Uuid
+  RoleName          String          @db.VarChar(255)
+  ParentRoleId      String?         @db.Uuid
+  Description       String?
+  HasExtraMeasures  Boolean?        @default(false)
+  CreatedAt         DateTime?       @db.Timestamptz(6)
+  CreatedBy         String?         @db.Uuid
+  IsArchived        Boolean?        @default(false)
+  Permissions       Json?
+  PermissionVersion Int             @default(0)
+  IsDistributable   Boolean?        @default(true)
+  Roles             Roles?          @relation("RolesToRoles", fields: [ParentRoleId], references: [Id])
+  other_Roles       Roles[]         @relation("RolesToRoles")
+  RoleCategories    RoleCategories? @relation(fields: [RoleCategoryId], references: [Id])
+  UserRoles         UserRoles[]
+}
+
+model SystemSettings {
+  Id String @id @default(uuid()) @db.Uuid
+  Key       String   @unique @db.VarChar(255)
+  Value     String?
+  Type      String?  @default("string") @db.VarChar(255)
+  createdAt DateTime @db.Timestamptz(6)
+  updatedAt DateTime @db.Timestamptz(6)
+}
+
+model Units {
+  Id String @id @default(uuid()) @db.Uuid
+  Name        String    @db.VarChar(255)
+  Code        String    @unique @db.VarChar(255)
+  Description String?
+  CreatedAt   DateTime? @db.Timestamptz(6)
+  CreatedBy   String?   @db.Uuid
+  IsArchived  Boolean?  @default(false)
+  KPIs        KPIs[]
+}
+
+model UserActivityLogs {
+  Id String @id @default(uuid()) @db.Uuid
+  UserId       String    @db.Uuid
+  ActivityDate DateTime  @db.Date
+  LastActiveAt DateTime? @db.Timestamptz(6)
+  Users        Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+
+  @@unique([UserId, ActivityDate], map: "user_activity_logs__user_id__activity_date")
+}
+
+model UserKPIResults {
+  Id String @id @default(uuid()) @db.Uuid
+  KPIId            String                     @db.Uuid
+  UserId           String                     @db.Uuid
+  KPIResult        String                     @db.VarChar(255)
+  Description      String?
+  CreatedAt        DateTime?                  @db.Timestamptz(6)
+  CreatedBy        String?                    @db.Uuid
+  IsArchived       Boolean?                   @default(false)
+  CycleYear        String                     @db.VarChar(255)
+  Quarter          String                     @db.VarChar(255)
+  PerformanceTitle String?                    @db.VarChar(255)
+  EvidenceURL      String?                    @db.VarChar(255)
+  UserKPIId        String?                    @db.Uuid
+  Status           enum_UserKPIResults_Status @default(pending)
+  AdjustedResult   String?                    @db.VarChar(255)
+  ApproverRemark   String?
+  KPIs             KPIs                       @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
+  Users            Users                      @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+  UserKPIs         UserKPIs?                  @relation(fields: [UserKPIId], references: [Id])
+}
+
+model UserKPIs {
+  Id String @id @default(uuid()) @db.Uuid
+  KPIId                String           @db.Uuid
+  UserId               String           @db.Uuid
+  Remark               String?
+  CreatedAt            DateTime?        @db.Timestamptz(6)
+  CreatedBy            String?          @db.Uuid
+  IsArchived           Boolean?         @default(false)
+  CycleYear            String           @db.VarChar(255)
+  Baseline             Decimal?         @db.Decimal(10, 2)
+  AssignedTarget       Decimal?         @db.Decimal(10, 2)
+  IsTargetIndividual   Boolean          @default(false)
+  IncludeCurrentOffice Boolean          @default(false)
+  AssignmentBatchId    String?          @db.Uuid
+  Name                 String?          @db.VarChar(255)
+  KPIYearPlanId        String?          @db.Uuid
+  UserKPIResults       UserKPIResults[]
+  KPIs                 KPIs             @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
+  KPIYearPlans         KPIYearPlans?    @relation(fields: [KPIYearPlanId], references: [Id])
+  Users                Users            @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+}
+
+model UserRoles {
+  Id String @id @default(uuid()) @db.Uuid
+  UserId     String    @db.Uuid
+  RoleId     String    @db.Uuid
+  FromDate   DateTime  @db.Timestamptz(6)
+  ToDate     DateTime? @db.Timestamptz(6)
+  CreatedAt  DateTime? @db.Timestamptz(6)
+  CreatedBy  String?   @db.Uuid
+  IsArchived Boolean?  @default(false)
+  Roles      Roles     @relation(fields: [RoleId], references: [Id], onDelete: Cascade)
+  Users      Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+}
+
+model Users {
+  Id String @id @default(uuid()) @db.Uuid
+  FirstName                                          String             @db.VarChar(255)
+  FatherName                                         String             @db.VarChar(255)
+  GrandFatherName                                    String             @db.VarChar(255)
+  Email                                              String             @unique @db.VarChar(255)
+  UserName                                           String             @unique @db.VarChar(255)
+  Phone                                              String             @db.VarChar(255)
+  password                                           String             @db.VarChar(255)
+  CreatedAt                                          DateTime?          @db.Timestamptz(6)
+  CreatedBy                                          String?            @db.Uuid
+  IsArchived                                         Boolean?           @default(false)
+  LastActiveAt                                       DateTime?          @db.Timestamptz(6)
+  ProfilePicture                                     String?            @db.VarChar(255)
+  AuditLogs                                          AuditLogs[]
+  KPIDocuments                                       KPIDocuments[]
+  Messages_Messages_ReceiverIdToUsers                Messages[]         @relation("Messages_ReceiverIdToUsers")
+  Messages_Messages_SenderIdToUsers                  Messages[]         @relation("Messages_SenderIdToUsers")
+  Notifications_Notifications_ActorUserIdToUsers     Notifications[]    @relation("Notifications_ActorUserIdToUsers")
+  Notifications_Notifications_RecipientUserIdToUsers Notifications[]    @relation("Notifications_RecipientUserIdToUsers")
+  UserActivityLogs                                   UserActivityLogs[]
+  UserKPIResults                                     UserKPIResults[]
+  UserKPIs                                           UserKPIs[]
+  UserRoles                                          UserRoles[]
+}
+
+enum enum_KPIYearPlans_Status {
+  ACTIVE
+  LOCKED
+  COMPLETED
+}
+
+enum enum_KPIs_LifecycleType {
+  RECURRING
+  PROGRESSIVE
+  ONE_TIME
+}
+
+enum enum_Notifications_Priority {
+  low
+  medium
+  high
+}
+
+enum enum_UserKPIResults_Status {
+  pending
+  approved
+  adjusted
+}

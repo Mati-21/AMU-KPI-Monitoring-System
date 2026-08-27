@@ -1,6 +1,6 @@
-const { Op } = require('sequelize');
-const { connectDB, sequelize } = require('../config/database');
-const { Role, User } = require('../models');
+import { Op  } from 'sequelize';
+import { connectDB, sequelize  } from '../config/database.js';
+import { Role, User  } from '../models.js';
 
 /**
  * Migration script to rename "Strategic Office" role to "President"
@@ -93,4 +93,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = migrateStrategicOfficeToPresident;
+export default migrateStrategicOfficeToPresident;

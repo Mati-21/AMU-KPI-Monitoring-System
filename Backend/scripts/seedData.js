@@ -1,5 +1,5 @@
-const { sequelize } = require('../config/database');
-const { User, RoleCategory, Role, UserRole } = require('../models');
+import { sequelize  } from '../config/database.js';
+import { User, RoleCategory, Role, UserRole  } from '../models.js';
 
 const seedData = async () => {
   try {

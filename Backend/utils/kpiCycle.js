@@ -1,3 +1,5 @@
+import { prisma } from '../config/database.js';
+
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 
 const FALLBACK_CYCLE_YEAR = '2018';
@@ -16,16 +18,13 @@ const getCurrentCycleYear = () => {
  */
 const loadCycleYearFromDB = async () => {
   try {
-    const { SystemSetting } = require('../models');
-    const setting = await SystemSetting.findOne({ where: { Key: ACTIVE_CYCLE_YEAR_KEY } });
+
+    const setting = await prisma.systemSettings.findFirst({ where: { Key: ACTIVE_CYCLE_YEAR_KEY } });
     if (setting?.Value) {
       _cachedCycleYear = setting.Value;
     } else {
       // Seed default if not exists
-      await SystemSetting.findOrCreate({
-        where: { Key: ACTIVE_CYCLE_YEAR_KEY },
-        defaults: { Value: FALLBACK_CYCLE_YEAR, Type: 'string' },
-      });
+      await prisma.systemSettings.upsert({ where: { Key: ACTIVE_CYCLE_YEAR_KEY }, update: {}, create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: FALLBACK_CYCLE_YEAR, Type: 'string' } });
       _cachedCycleYear = FALLBACK_CYCLE_YEAR;
     }
   } catch (err) {
@@ -38,14 +37,11 @@ const loadCycleYearFromDB = async () => {
  * Update the active cycle year in both the in-memory cache and the DB.
  */
 const setActiveCycleYear = async (newYear) => {
-  const { SystemSetting } = require('../models');
-  const [setting] = await SystemSetting.findOrCreate({
-    where: { Key: ACTIVE_CYCLE_YEAR_KEY },
-    defaults: { Value: newYear, Type: 'string' },
-  });
+
+  const [setting] = await prisma.systemSettings.upsert({ where: { Key: ACTIVE_CYCLE_YEAR_KEY }, update: {}, create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: FALLBACK_CYCLE_YEAR, Type: 'string' } });
   if (setting.Value !== newYear) {
     setting.Value = newYear;
-    await setting.save();
+    await prisma.systemSettings.update({ where: { Id: setting.Id }, data: { Value: setting.Value } });
   }
   _cachedCycleYear = newYear;
 };
@@ -78,7 +74,7 @@ const getNextCycleYear = (cycleYear) => {
   return String(year + 1);
 };
 
-module.exports = {
+export { 
   QUARTERS,
   FALLBACK_CYCLE_YEAR,
   ACTIVE_CYCLE_YEAR_KEY,
@@ -89,4 +85,4 @@ module.exports = {
   normalizeQuarter,
   getPreviousCycleYear,
   getNextCycleYear,
-};
+ };

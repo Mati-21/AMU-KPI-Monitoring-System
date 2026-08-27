@@ -74,3 +74,4 @@ coverage/
 *.zip
 *.tar
 *.gz
+/generated/prisma
