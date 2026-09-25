@@ -294,8 +294,8 @@ const Navbar = () => {
     // 3. Optional: Clear specific non-theme items if needed
     // localStorage.removeItem('some-other-key');
 
-    // 4. Force a clean redirect to the sign-in page
-    window.location.replace('/signin');
+    // 4. Seamless SPA redirect to sign-in page
+    navigate('/signin');
   };
 
   const isLandingPage = location.pathname === '/';

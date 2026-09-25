@@ -52,7 +52,7 @@ const SignIn = () => {
   };
 
   return (
-    <div className="flex-1 bg-background flex flex-col">
+    <div className="flex-1 bg-background flex flex-col overflow-y-auto w-full min-h-screen">
       <Navbar />
       <div className="flex-1 flex items-center justify-center px-6 py-8 relative">
         <div className="absolute inset-0 opacity-[0.08] bg-white z-0" style={{ backgroundImage: `url(${kpiImage})` }} />

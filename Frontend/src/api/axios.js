@@ -4,7 +4,7 @@ import { store } from '../app/store';
 import { queryClient } from '../app/queryClient';
 import { logout } from '../Features/authSlice';
 
-export const BASE_URL = 'http://localhost:5000';
+export const BASE_URL = 'http://localhost:8058';
 
 export const api = axios.create({
   baseURL: `${BASE_URL}/api`,

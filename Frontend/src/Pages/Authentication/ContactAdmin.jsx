@@ -1,17 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  Mail, 
-  User, 
-  MessageSquare, 
-  Send, 
-  ShieldCheck, 
-  Clock, 
-  CheckCircle2, 
-  ArrowLeft,
-  AlertCircle
-} from 'lucide-react';
+import { Mail, User, MessageSquare, Send, ShieldCheck, Clock, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
 import Navbar from '../../Components/UI/Navbar';
 
 const ContactAdmin = () => {
@@ -19,7 +9,7 @@ const ContactAdmin = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    message: ''
+    message: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error'
@@ -31,7 +21,7 @@ const ContactAdmin = () => {
     setSubmitStatus(null);
 
     try {
-      await axios.post('http://localhost:5000/api/contact-messages', {
+      await axios.post('http://localhost:6000/api/contact-messages', {
         username: formData.username,
         email: formData.email,
         message: formData.message,
@@ -44,9 +34,7 @@ const ContactAdmin = () => {
       setTimeout(() => navigate('/signin'), 2500);
     } catch (err) {
       setSubmitStatus('error');
-      setSubmitMessage(
-        err?.response?.data?.message || 'Failed to send message. Please try again.'
-      );
+      setSubmitMessage(err?.response?.data?.message || 'Failed to send message. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -55,10 +43,9 @@ const ContactAdmin = () => {
   return (
     <div className="flex-1 bg-background flex flex-col min-h-screen">
       <Navbar />
-      
+
       <main className="flex-1 flex items-center justify-center p-4 bg-slate-50/50 dark:bg-background">
         <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-          
           {/* Main Form Section */}
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
@@ -129,15 +116,18 @@ const ContactAdmin = () => {
 
                 {/* Status Banner */}
                 {submitStatus && (
-                  <div className={`flex items-start gap-3 p-4 rounded-xl text-sm font-medium border ${
-                    submitStatus === 'success'
-                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
-                      : 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400'
-                  }`}>
-                    {submitStatus === 'success'
-                      ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-                      : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                    }
+                  <div
+                    className={`flex items-start gap-3 p-4 rounded-xl text-sm font-medium border ${
+                      submitStatus === 'success'
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400'
+                    }`}
+                  >
+                    {submitStatus === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    )}
                     <span>{submitMessage}</span>
                   </div>
                 )}
@@ -163,8 +153,8 @@ const ContactAdmin = () => {
                 </div>
               </form>
             </div>
-            
-            <button 
+
+            <button
               onClick={() => navigate('/signin')}
               className="flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors ml-2"
             >
@@ -195,9 +185,7 @@ const ContactAdmin = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-foreground">Fast Response</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                    Most inquiries are answered within one business day.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Most inquiries are answered within one business day.</p>
                 </div>
               </div>
 
@@ -207,9 +195,7 @@ const ContactAdmin = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-foreground">Tracked Tickets</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                    Every submission gets a reference ID for follow-up.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Every submission gets a reference ID for follow-up.</p>
                 </div>
               </div>
             </div>
@@ -223,7 +209,6 @@ const ContactAdmin = () => {
               </div>
             </div>
           </div>
-
         </div>
       </main>
     </div>

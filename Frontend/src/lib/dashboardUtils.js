@@ -221,6 +221,49 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
   const inProgressKpis = subUnits.reduce((acc, s) => acc + s.inProgress, 0);
   const delayedKpis = subUnits.reduce((acc, s) => acc + s.delayed, 0);
 
+  // Compute unique KPI status across all assignments (de-duplicating same KPI sent to multiple users)
+  const uniqueKpiStatusMap = new Map();
+  (Array.isArray(assignments) ? assignments : []).forEach((assignment) => {
+    const kpiId = String(assignment.KPIId || assignment.Id || '');
+    if (!kpiId) return;
+
+    const kpiRecord = kpiById.get(assignment.KPIId) || assignment.KPI;
+    const target = toNumber(assignment.AssignedTarget ?? kpiRecord?.Target) || 0;
+    const baseline = toNumber(assignment.Baseline ?? kpiRecord?.Baseline) || 0;
+    const totalNeeded = Math.max(0.1, target - baseline);
+
+    const q1 = toNumber(assignment.q1);
+    const q2 = toNumber(assignment.q2);
+    const q3 = toNumber(assignment.q3);
+    const q4 = toNumber(assignment.q4);
+
+    const qValues = [q1, q2, q3, q4].map((v) => (v === null ? 0 : v));
+    const totalPerformance = sum(qValues);
+    const hasSubmission = q1 !== null || q2 !== null || q3 !== null || q4 !== null;
+    const hasAnyPendingQuarter = !!(assignment.q1Pending || assignment.q2Pending || assignment.q3Pending || assignment.q4Pending);
+
+    const isAchieved = hasSubmission && totalNeeded > 0 ? (totalPerformance >= totalNeeded && !hasAnyPendingQuarter) : false;
+
+    if (!uniqueKpiStatusMap.has(kpiId)) {
+      uniqueKpiStatusMap.set(kpiId, { total: 0, achieved: 0 });
+    }
+    const stat = uniqueKpiStatusMap.get(kpiId);
+    stat.total += 1;
+    if (isAchieved) stat.achieved += 1;
+  });
+
+  let uniqueAssignedKpis = uniqueKpiStatusMap.size;
+  let uniqueAchievedKpis = 0;
+  let uniqueInProgressKpis = 0;
+
+  uniqueKpiStatusMap.forEach((stat) => {
+    if (stat.total > 0 && stat.achieved === stat.total) {
+      uniqueAchievedKpis += 1;
+    } else {
+      uniqueInProgressKpis += 1;
+    }
+  });
+
   const avgScore = average(subUnits.map(s => s.score)) || 0;
 
   const yearlyTrend = [
@@ -298,6 +341,9 @@ export const buildDashboardData = (assignments, kpis, kpiTypes, roleNameByUserId
     achievedKpis,
     inProgressKpis,
     delayedKpis,
+    uniqueAssignedKpis,
+    uniqueAchievedKpis,
+    uniqueInProgressKpis,
     avgScore: safePercent(avgScore),
     subUnits: subUnits,
     quarterlyData: subUnits.map(s => ({

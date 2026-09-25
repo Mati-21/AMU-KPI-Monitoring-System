@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "powershell -Command \"$ErrorActionPreference='SilentlyContinue'; $conn = Get-NetTCPConnection -LocalPort 5174; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }; vite\"",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -14,6 +14,7 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-switch": "^1.2.6",
     "@reduxjs/toolkit": "^1.9.7",
+    "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.96.2",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.17.0",
@@ -29,6 +30,7 @@
     "recharts": "^3.8.0",
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.3.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

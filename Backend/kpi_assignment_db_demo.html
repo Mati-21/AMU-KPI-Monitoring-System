@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KPI Assignment Database Schema & Data Flow Demonstration</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --accent-green: #10b981;
+      --accent-purple: #8b5cf6;
+      --accent-amber: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .badge-primary { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6; }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+    .badge-purple { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid #8b5cf6; }
+
+    .workflow-steps {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+
+    .step-card {
+      flex: 1;
+      min-width: 220px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      position: relative;
+    }
+
+    .step-number {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+    }
+
+    .step-card h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .step-card p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .db-table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 0.75rem;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .db-table-card.highlight {
+      border: 2px solid var(--primary);
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .table-header {
+      padding: 1rem 1.25rem;
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .table-title {
+      font-weight: 700;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .table-body {
+      padding: 1rem;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    th {
+      background: #0f172a;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+      color: #e2e8f0;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .fk-tag {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      background: #334155;
+      color: #cbd5e1;
+      font-family: monospace;
+    }
+
+    .fk-pk { background: rgba(59, 130, 246, 0.3); color: #93c5fd; }
+    .fk-ref { background: rgba(139, 92, 246, 0.3); color: #c4b5fd; }
+
+    .note-box {
+      margin-top: 2.5rem;
+      background: rgba(30, 41, 59, 0.8);
+      border-left: 4px solid var(--primary);
+      padding: 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+    }
+
+    .note-box h4 {
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .note-box p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .relationship-arrow {
+      color: var(--accent-amber);
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="badge badge-primary">Database Architecture</span>
+    <h1>KPI Assignment (Dispatch) Database Tables Demonstration</h1>
+    <p>Visualizing relational schema & live data flow when a leadership role dispatches KPIs</p>
+  </header>
+
+  <!-- WORKFLOW STEPS -->
+  <div class="workflow-steps">
+    <div class="step-card">
+      <div class="step-number">01</div>
+      <h3>Master Definitions</h3>
+      <p>KPIs & Units defined. Baseline and targets defined in <code>KPIYearPlans</code>.</p>
+    </div>
+    <div class="step-card" style="border-color: var(--primary);">
+      <div class="step-number" style="color: #60a5fa;">02</div>
+      <h3>Dispatch (Assignment)</h3>
+      <p>Leader assigns KPI to child user. Row inserted into <code>UserKPIs</code> table.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-number">03</div>
+      <h3>Quarterly Reporting</h3>
+      <p>Recipient inputs performance. Rows inserted into <code>UserKPIResults</code>.</p>
+    </div>
+    <div class="step-card">
+      <div class="step-number">04</div>
+      <h3>Formal Submission</h3>
+      <p>Child office submits final report. Row saved in <code>OfficeReportSubmissions</code>.</p>
+    </div>
+  </div>
+
+  <!-- DB TABLES GRID -->
+  <div class="grid-container">
+
+    <!-- TABLE 1: UserKPIs (THE PRIMARY DISPATCH TABLE) -->
+    <div class="db-table-card highlight" style="grid-column: span 2;">
+      <div class="table-header">
+        <div class="table-title">
+          <span>⚡ UserKPIs</span>
+          <span class="badge badge-primary">Primary Dispatch Table</span>
+        </div>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Records target assignments</span>
+      </div>
+      <div class="table-body">
+        <p style="margin-bottom: 0.75rem; font-size: 0.85rem; color: #94a3b8;">
+          When a parent role (e.g. President Mule) assigns a KPI to a child role (e.g. Academic VP Adam), a row is created here linking <code>KPIId</code>, <code>UserId</code> (receiver), and <code>CreatedBy</code> (dispatcher).
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Id <span class="fk-tag fk-pk">PK</span></th>
+              <th>UserId <span class="fk-tag fk-ref">FK → Users</span></th>
+              <th>CreatedBy <span class="fk-tag fk-ref">FK → Users</span></th>
+              <th>KPIId <span class="fk-tag fk-ref">FK → KPIs</span></th>
+              <th>CycleYear</th>
+              <th>Baseline</th>
+              <th>AssignedTarget</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ukpi-001</code></td>
+              <td><code>user-adam</code> (Adam - Academic VP)</td>
+              <td><code>user-mule</code> (Mule - President)</td>
+              <td><code>kpi-pub-01</code> (Journal Articles)</td>
+              <td>2018</td>
+              <td>50</td>
+              <td><strong>60</strong></td>
+            </tr>
+            <tr>
+              <td><code>ukpi-002</code></td>
+              <td><code>user-kidus</code> (Kidus - Admin VP)</td>
+              <td><code>user-mule</code> (Mule - President)</td>
+              <td><code>kpi-pub-01</code> (Journal Articles)</td>
+              <td>2018</td>
+              <td>50</td>
+              <td><strong>60</strong></td>
+            </tr>
+            <tr>
+              <td><code>ukpi-003</code></td>
+              <td><code>user-adam</code> (Adam - Academic VP)</td>
+              <td><code>user-mule</code> (Mule - President)</td>
+              <td><code>kpi-cit-02</code> (Scopus Citations)</td>
+              <td>2018</td>
+              <td>200</td>
+              <td><strong>250</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 2: KPIs -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">📌 KPIs</div>
+        <span class="badge badge-purple">Master KPI Definitions</span>
+      </div>
+      <div class="table-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Id <span class="fk-tag fk-pk">PK</span></th>
+              <th>KPITypeId</th>
+              <th>UnitId</th>
+              <th>Weight</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>kpi-pub-01</code></td>
+              <td>Publications</td>
+              <td>Count (CNT)</td>
+              <td>15.0</td>
+              <td>Peer-Reviewed Journal Articles Published</td>
+            </tr>
+            <tr>
+              <td><code>kpi-cit-02</code></td>
+              <td>Publications</td>
+              <td>Count (CNT)</td>
+              <td>10.0</td>
+              <td>Citations Count in Scopus</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 3: KPIYearPlans -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">📅 KPIYearPlans</div>
+        <span class="badge badge-purple">Annual Targets</span>
+      </div>
+      <div class="table-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Id <span class="fk-tag fk-pk">PK</span></th>
+              <th>KPIId <span class="fk-tag fk-ref">FK → KPIs</span></th>
+              <th>CycleYear</th>
+              <th>Baseline</th>
+              <th>Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>plan-001</code></td>
+              <td><code>kpi-pub-01</code></td>
+              <td>2018</td>
+              <td>50</td>
+              <td>120</td>
+            </tr>
+            <tr>
+              <td><code>plan-002</code></td>
+              <td><code>kpi-cit-02</code></td>
+              <td>2018</td>
+              <td>200</td>
+              <td>500</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 4: Roles -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">🏢 Roles</div>
+        <span class="badge badge-green">Organizational Hierarchy</span>
+      </div>
+      <div class="table-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Id <span class="fk-tag fk-pk">PK</span></th>
+              <th>RoleName</th>
+              <th>ParentRoleId <span class="fk-tag fk-ref">FK → Self</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>role-pres</code></td>
+              <td>President</td>
+              <td><code>NULL</code> (Root)</td>
+            </tr>
+            <tr>
+              <td><code>role-academ</code></td>
+              <td>Academic VP</td>
+              <td><code>role-pres</code></td>
+            </tr>
+            <tr>
+              <td><code>role-admin</code></td>
+              <td>Administration VP</td>
+              <td><code>role-pres</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 5: UserRoles & Users -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">👤 UserRoles & Users</div>
+        <span class="badge badge-green">User Role Mapping</span>
+      </div>
+      <div class="table-body">
+        <table>
+          <thead>
+            <tr>
+              <th>UserId <span class="fk-tag fk-pk">PK</span></th>
+              <th>Name</th>
+              <th>RoleId <span class="fk-tag fk-ref">FK → Roles</span></th>
+              <th>RoleName</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>user-mule</code></td>
+              <td>Mule</td>
+              <td><code>role-pres</code></td>
+              <td>President (Dispatcher)</td>
+            </tr>
+            <tr>
+              <td><code>user-adam</code></td>
+              <td>Adam</td>
+              <td><code>role-academ</code></td>
+              <td>Academic VP (Recipient)</td>
+            </tr>
+            <tr>
+              <td><code>user-kidus</code></td>
+              <td>Kidus</td>
+              <td><code>role-admin</code></td>
+              <td>Administration VP (Recipient)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 6: UserKPIResults -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">📊 UserKPIResults</div>
+        <span class="badge badge-primary">Performance Entries</span>
+      </div>
+      <div class="table-body">
+        <p style="margin-bottom: 0.5rem; font-size: 0.8rem; color: #94a3b8;">Populated after child users submit their quarterly results.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>UserKPIId <span class="fk-tag fk-ref">FK → UserKPIs</span></th>
+              <th>UserId</th>
+              <th>Quarter</th>
+              <th>KPIResult</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ukpi-001</code></td>
+              <td><code>user-adam</code></td>
+              <td>Q1</td>
+              <td>15</td>
+              <td><span style="color: #f59e0b;">pending</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLE 7: OfficeReportSubmissions -->
+    <div class="db-table-card">
+      <div class="table-header">
+        <div class="table-title">📄 OfficeReportSubmissions</div>
+        <span class="badge badge-primary">Formal Submissions</span>
+      </div>
+      <div class="table-body">
+        <p style="margin-bottom: 0.5rem; font-size: 0.8rem; color: #94a3b8;">Formal report payload submitted from child office to parent leadership.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>SourceRoleId <span class="fk-tag fk-ref">FK → Roles</span></th>
+              <th>ParentRoleId <span class="fk-tag fk-ref">FK → Roles</span></th>
+              <th>CycleYear</th>
+              <th>SubmittedAt</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>role-academ</code></td>
+              <td><code>role-pres</code></td>
+              <td>2018</td>
+              <td>2026-08-28 10:15</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SUMMARY NOTE -->
+  <div class="note-box">
+    <h4>💡 Key Takeaway: What happens in DB during Dispatch?</h4>
+    <p>
+      When a leader dispatches a KPI, the system writes a new record into the <strong><code>UserKPIs</code></strong> table. 
+      It links the <strong><code>UserId</code></strong> (recipient child user) and <strong><code>CreatedBy</code></strong> (dispatching parent user), storing the assigned baseline, target, and cycle year. 
+      The report table then reads from <strong><code>UserKPIs</code></strong> to list all assigned KPIs even before any quarterly results are logged into <strong><code>UserKPIResults</code></strong>!
+    </p>
+  </div>
+
+</body>
+</html>

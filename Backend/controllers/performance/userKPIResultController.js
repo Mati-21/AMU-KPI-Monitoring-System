@@ -647,7 +647,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   const activeUserRoles = await prisma.userRoles.findMany({
     where: {
       RoleId: { in: Array.from(visibleRoleIds) },
-      ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
     },
     select: {
       UserId: true, RoleId: true, CreatedAt: true,
@@ -691,7 +690,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     const pUserRoles = await prisma.userRoles.findMany({
       where: {
         RoleId: parentRoleIdOfScope,
-        ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
       },
       select: { UserId: true },
     });
@@ -700,7 +698,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
   const kpiInclude = {
     KPIs: {
-      select: { Id: true, KPITypeId: true, UnitId: true, Weight: true, Description: true, Remark: true, IsEvedenceRequired: true, isEvidenceRequired: true, KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } }, Units: { select: { Id: true, Code: true, Name: true } } }
+      select: { Id: true, KPITypeId: true, UnitId: true, Weight: true, Description: true, Remark: true, IsEvedenceRequired: true, KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } }, Units: { select: { Id: true, Code: true, Name: true } } }
     },
     KPIYearPlans: { select: { Id: true, Baseline: true, Target: true } }
   };
@@ -719,30 +717,88 @@ const buildAffiliatedOfficeReportDataForScope = async ({
   // 3. Fetch KPIs assigned to child users for this cycle year.
   // We intentionally do NOT filter by CreatedBy here — KPIs may be assigned by an admin
   // or any other authority, and we still want them to appear in the parent report.
-  const childAssignments = uniqueVisibleUserIds.length
-    ? await prisma.userKPIs.findMany({
-        where: {
-          IsArchived: false,
-          CycleYear: cycleYear,
-          UserId: { in: uniqueVisibleUserIds },
-        },
-        include: kpiInclude,
-        orderBy: { CreatedAt: 'asc' },
-      })
-    : [];
+  const childAssignments = await prisma.userKPIs.findMany({
+    where: {
+      IsArchived: false,
+      CycleYear: cycleYear,
+      OR: [
+        ...(uniqueVisibleUserIds.length ? [{ UserId: { in: uniqueVisibleUserIds } }] : []),
+        ...(uniqueScopeOwnerUserIds.length ? [{ CreatedBy: { in: uniqueScopeOwnerUserIds } }] : []),
+      ],
+    },
+    include: kpiInclude,
+    orderBy: { CreatedAt: 'asc' },
+  });
 
-  // Keep the raw (non-deduplicated) list for result filtering — child assignment IDs
-  // must be found even when a parent assignment for the same KPI takes priority in the
-  // deduplicated row-building list.
-  // Raw assignments for result-lookup — both parent and child assignments
-  const allRawAssignments = [...officialParentAssignments, ...childAssignments];
+  // If the selected role has no parent role (root role like President/System Admin),
+  // include ALL active KPIs registered in the system so top-level leaders can see everything,
+  // even if a KPI has not been explicitly assigned to any sub-office yet.
+  let systemKpiAssignments = [];
+  if (selectedScopeRole?.ParentRoleId === null) {
+    const allSystemKpis = await prisma.kPIs.findMany({
+      where: { IsArchived: false },
+      select: {
+        Id: true,
+        KPITypeId: true,
+        UnitId: true,
+        Weight: true,
+        Description: true,
+        Remark: true,
+        IsEvedenceRequired: true,
+        DefaultBaseline: true,
+        CreatedBy: true,
+        CreatedAt: true,
+        KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } },
+        Units: { select: { Id: true, Code: true, Name: true } },
+        KPIYearPlans: {
+          where: { CycleYear: cycleYear },
+          select: { Id: true, Baseline: true, Target: true },
+        },
+      },
+      orderBy: { CreatedAt: 'asc' },
+    });
+
+    const ownerUserId = uniqueScopeOwnerUserIds[0] || viewerUserId;
+
+    systemKpiAssignments = allSystemKpis.map((kpi) => {
+      const yearPlan = kpi.KPIYearPlans?.[0] || null;
+      return {
+        Id: `system-${kpi.Id}`,
+        KPIId: kpi.Id,
+        UserId: ownerUserId,
+        Remark: kpi.Remark || kpi.Description || '',
+        CreatedAt: kpi.CreatedAt,
+        CreatedBy: kpi.CreatedBy,
+        IsArchived: false,
+        CycleYear: cycleYear,
+        Baseline: yearPlan?.Baseline ?? kpi.DefaultBaseline ?? 0,
+        AssignedTarget: yearPlan?.Target ?? 0,
+        IsTargetIndividual: false,
+        KPIs: {
+          Id: kpi.Id,
+          KPITypeId: kpi.KPITypeId,
+          UnitId: kpi.UnitId,
+          Weight: kpi.Weight,
+          Description: kpi.Description,
+          Remark: kpi.Remark,
+          IsEvedenceRequired: kpi.IsEvedenceRequired,
+          KPITypes: kpi.KPITypes,
+          Units: kpi.Units,
+        },
+        KPIYearPlans: yearPlan,
+      };
+    });
+  }
+
+  // Keep the raw (non-deduplicated) list for result filtering
+  const allRawAssignments = [...officialParentAssignments, ...childAssignments, ...systemKpiAssignments];
 
   const allAssignments = [];
   const seenAssignmentKeys = new Set();
 
   allRawAssignments.forEach((assignment) => {
     const leafType = (assignment.KPIs || assignment.KPI)?.KPIType || null;
-    const assignmentKey = `${String(assignment.KPIId)}::${(leafType?.KPIName || '').trim()}::${(assignment.Name || '').trim()}::${(assignment.Remark || '').trim()}`;
+    const assignmentKey = String(assignment.KPIId);
     if (seenAssignmentKeys.has(assignmentKey)) {
       return;
     }
@@ -751,7 +807,6 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     allAssignments.push(assignment);
   });
 
-  // Derived KPI logic removed. Only return standard assignments.
   const assignments = allAssignments;
   const hasOriginal = assignments.length > 0;
   const hasDerived = false;
@@ -844,16 +899,8 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       isCombined: true,
     });
   } else {
-    // Include the current scope role itself as the first column in individual mode
-    reportColumns.push({
-      id: scopeRoleId,
-      name: `${selectedScopeRole.RoleName} (Direct)`,
-      isCurrentOffice: true,
-      roleId: scopeRoleId,
-      isSubmitted: cycleYear !== getCurrentCycleYear() ? true : ownSubmissions.length > 0, // Will be updated correctly after canSubmit is calculated
-      submittedQuarter: ownSubmissions.length > 0 ? getSubmissionQuarter(ownSubmissions[0]) : null,
-    });
-
+    // Individual mode: only include CHILD roles as columns.
+    // The dispatching (scope) role itself is NOT shown — the report is about what children received.
     childRoles.forEach((role) => {
       const roleId = String(role.Id);
       const childSub = childSubmissions.find((s) => String(s.SourceRoleId) === roleId);
@@ -1060,28 +1107,24 @@ const buildAffiliatedOfficeReportDataForScope = async ({
     const isScopeOfficeAssignment = scopeOwnerUserIdsSet.has(String(assignment.UserId));
     const isDelegated = delegatedKpiKeys.has(rowKey);
 
+    const masterYearPlan = yearPlanByKpiId.get(rowKey);
+    const parentOwnAssignment = officialParentAssignments.find((a) => String(a.KPIId) === rowKey);
+
+    const parentTarget = parentOwnAssignment?.AssignedTarget ?? masterYearPlan?.Target ?? (assignment.KPIs || assignment.KPI)?.Target;
+    const parentBaseline = parentOwnAssignment?.Baseline ?? masterYearPlan?.Baseline ?? (assignment.KPIs || assignment.KPI)?.Baseline;
+
+    const receivedTarget = parentTarget ?? assignment.AssignedTarget ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target;
+    const receivedBaseline = parentBaseline ?? assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline;
+
     if (rows.has(rowKey)) {
       if (isScopeOfficeAssignment) {
         const existing = rows.get(rowKey);
         existing.assignmentId = assignment.Id;
         existing.isHomeOfficeKpi = !isDelegated;
         existing.quarterlyResults = resultsByAssignmentId.get(String(assignment.Id)) || [];
-        existing.baseline = formatNumericValue(
-          isTopLevelFallback
-            ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-            : (assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-        );
-        existing.baselineNumeric =
-          parseNumericValue(
-            isTopLevelFallback
-              ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-              : (assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-          ) ?? 0;
-        existing.target = formatNumericValue(
-          isTopLevelFallback
-            ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target ?? assignment.AssignedTarget ?? yearPlanByKpiId.get(rowKey)?.Target)
-            : (assignment.AssignedTarget ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target ?? yearPlanByKpiId.get(rowKey)?.Target)
-        );
+        existing.baseline = formatNumericValue(receivedBaseline);
+        existing.baselineNumeric = parseNumericValue(receivedBaseline) ?? 0;
+        existing.target = formatNumericValue(receivedTarget);
         existing.remark =
           (String(assignment.Remark || '')
             .trim()
@@ -1110,31 +1153,12 @@ const buildAffiliatedOfficeReportDataForScope = async ({
       stableName: hierarchy.stableName || '—',
       themeName: hierarchy.themeName || '—',
       subThemeName: hierarchy.subThemeName || '—',
-      unit: kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
+      unit: kpi?.Units?.Code || kpi?.Units?.Name || kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
       weight: formatNumericValue(kpi?.Weight),
       weightNumeric: parseNumericValue(kpi?.Weight) ?? 0,
-      baseline: formatNumericValue(
-        isScopeOfficeAssignment
-          ? isTopLevelFallback
-            ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-            : (assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-          : ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-      ),
-      baselineNumeric:
-        parseNumericValue(
-          isScopeOfficeAssignment
-            ? isTopLevelFallback
-              ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? assignment.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-              : (assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-            : ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline ?? yearPlanByKpiId.get(rowKey)?.Baseline)
-        ) ?? 0,
-      target: formatNumericValue(
-        isScopeOfficeAssignment
-          ? isTopLevelFallback
-            ? ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target ?? assignment.AssignedTarget ?? yearPlanByKpiId.get(rowKey)?.Target)
-            : (assignment.AssignedTarget ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target ?? yearPlanByKpiId.get(rowKey)?.Target)
-          : ((assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target ?? yearPlanByKpiId.get(rowKey)?.Target)
-      ),
+      baseline: formatNumericValue(receivedBaseline),
+      baselineNumeric: parseNumericValue(receivedBaseline) ?? 0,
+      target: formatNumericValue(receivedTarget),
       remark:
         (String(assignment.Remark || '')
           .trim()
@@ -1144,7 +1168,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
         kpi?.Remark ||
         kpi?.Description ||
         '—',
-      isEvidenceRequired: !!(kpi?.isEvidenceRequired || kpi?.IsEvidenceRequired || kpi?.IsEvedenceRequired),
+      isEvidenceRequired: !!(kpi?.IsEvedenceRequired || kpi?.IsEvidenceRequired),
       isTargetIndividual: !!assignment.IsTargetIndividual,
       quarterlyResults: resultsByAssignmentId.get(String(assignment.Id)) || [],
       values: {},
@@ -1285,8 +1309,13 @@ const buildAffiliatedOfficeReportDataForScope = async ({
           const metrics = aggregation.get(`${String(column.id)}::${String(row.id)}`);
           const hasDirectPerformance = metrics && metrics.hasAnySubmission;
 
-          if (!row.isHomeOfficeKpi && !hasDirectPerformance) {
-            // KPI was delegated to a child and parent has no direct performance — show N/A, not a dash
+          // In a single-office report view, every KPI listed IS the office's own KPI.
+          // Only show N/A if the KPI was NOT assigned to this office at all (isHomeOfficeKpi=false
+          // AND no performance data exists AND no assignment exists in the list).
+          // Since we only include assigned KPIs in the list, we should NEVER show N/A here.
+          // Delegated-only KPIs (where the office sent to sub-units and has no direct measure)
+          // are still the office's responsibility — show '—' not N/A.
+          if (!row.isHomeOfficeKpi && !hasDirectPerformance && !row.assignmentId) {
             row.values[String(column.id)] = 'N/A';
             return;
           }
@@ -1688,7 +1717,7 @@ const buildAffiliatedOfficeReportDataForScope = async ({
 
 const getAffiliatedOfficeReport = async (req, res) => {
   try {
-    const { year, cycleYear: cycleYearParam, parentRoleId, quarter } = req.query;
+    const { year, cycleYear: cycleYearParam, parentRoleId, roleId, quarter } = req.query;
     const cycleYear = year || cycleYearParam || getCurrentCycleYear();
     const currentRoleId = String(req.user?.currentRole?.Id || req.user?.roleId || '');
     const canSeeOtherAffiliatedOfficeReports = hasPermission(req.user?.currentRole?.Permissions, AFFILIATED_OFFICE_REPORT_PERMISSION_KEYS);
@@ -1697,10 +1726,10 @@ const getAffiliatedOfficeReport = async (req, res) => {
       return res.status(400).json({ message: 'Current role is required to build the affiliated office report.' });
     }
 
-    const requestedParentRoleId = String(parentRoleId || '').trim();
-    const selectedParentRoleId = requestedParentRoleId || currentRoleId;
+    const requestedScopeRoleId = String(roleId || parentRoleId || '').trim();
+    const selectedScopeRoleId = requestedScopeRoleId || currentRoleId;
 
-    if (selectedParentRoleId !== currentRoleId && !canSeeOtherAffiliatedOfficeReports) {
+    if (selectedScopeRoleId !== currentRoleId && !canSeeOtherAffiliatedOfficeReports) {
       return res.status(403).json({ message: 'Not authorized to view other affiliated office reports.' });
     }
 
@@ -1711,16 +1740,14 @@ const getAffiliatedOfficeReport = async (req, res) => {
     });
 
     const roleById = new Map(roles.map((role) => [String(role.Id), role]));
-    const selectedScopeRole = roleById.get(String(selectedParentRoleId)) || roleById.get(String(currentRoleId)) || null;
+    const selectedScopeRole = roleById.get(String(selectedScopeRoleId)) || roleById.get(String(currentRoleId)) || null;
 
     if (!selectedScopeRole) {
       return res.status(404).json({ message: 'Selected role not found.' });
     }
 
     const availableScopeRoles = canSeeOtherAffiliatedOfficeReports
-      ? [selectedScopeRole, ...roles.filter((role) => roles.some((child) => String(child.ParentRoleId || '') === String(role.Id)))].filter(
-          (role, index, items) => items.findIndex((entry) => String(entry.Id) === String(role.Id)) === index
-        )
+      ? roles
       : [selectedScopeRole];
     const selectedRoleHasChildren = await prisma.roles.findFirst({
       where: { IsArchived: false, ParentRoleId: selectedScopeRole.Id },
@@ -1737,9 +1764,9 @@ const getAffiliatedOfficeReport = async (req, res) => {
           reportMode: req.query.reportMode || 'individual',
           quarter: req.query.quarter || undefined,
         })
-      : (async () => {
-          // For leaf roles, check if they have submitted to the requester if the requester is the parent
-          if (String(selectedScopeRole.Id) !== String(currentRoleId)) {
+      : await (async () => {
+          // For leaf roles, check if authorized leader is viewing or if submission exists
+          if (String(selectedScopeRole.Id) !== String(currentRoleId) && !canSeeOtherAffiliatedOfficeReports) {
             const submission = await prisma.officeReportSubmissions.findFirst({
               where: {
                 SourceRoleId: selectedScopeRole.Id,
@@ -1749,7 +1776,6 @@ const getAffiliatedOfficeReport = async (req, res) => {
               },
             });
             if (!submission) {
-              // If no submission, return an empty shell report
               return await buildCurrentOfficeReportData({
                 cycleYear,
                 currentRoleId: selectedScopeRole.Id,
@@ -1830,7 +1856,6 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
   const activeUserRoles = await prisma.userRoles.findMany({
     where: {
       RoleId: currentRoleId,
-      ...(cycleYear === getCurrentCycleYear() ? { IsArchived: false } : {}),
     },
     select: {
       UserId: true, RoleId: true, CreatedAt: true,
@@ -1851,24 +1876,97 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
 
   const uniqueVisibleUserIds = [...new Set(activeUserRoles.map((assignment) => String(assignment.UserId || '')).filter(Boolean))];
 
-  const allAssignments = uniqueVisibleUserIds.length
-    ? await prisma.userKPIs.findMany({
-        where: {
-          IsArchived: false,
-          CycleYear: cycleYear,
-          UserId: { in: uniqueVisibleUserIds },
-        },
-        include: {
-          KPIs: {
-            select: { Id: true, KPITypeId: true, UnitId: true, Weight: true, Description: true, Remark: true, IsEvedenceRequired: true, isEvidenceRequired: true, KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } }, Units: { select: { Id: true, Code: true, Name: true } } }
-          },
-          KPIYearPlans: { select: { Id: true, Baseline: true, Target: true } }
-        },
-        orderBy: { CreatedAt: 'asc' },
-      })
-    : [];
+  const roleObj = await prisma.roles.findUnique({
+    where: { Id: currentRoleId },
+    select: { ParentRoleId: true },
+  });
 
-  const assignments = allAssignments;
+  const existingAssignments = await prisma.userKPIs.findMany({
+    where: {
+      IsArchived: false,
+      CycleYear: cycleYear,
+      OR: [
+        ...(uniqueVisibleUserIds.length ? [{ UserId: { in: uniqueVisibleUserIds } }] : []),
+        ...(parentAssignerUserIds.length ? [{ CreatedBy: { in: parentAssignerUserIds } }] : []),
+        ...(viewerUserId ? [{ CreatedBy: viewerUserId }] : []),
+      ],
+    },
+    include: {
+      KPIs: {
+        select: { Id: true, KPITypeId: true, UnitId: true, Weight: true, Description: true, Remark: true, IsEvedenceRequired: true, KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } }, Units: { select: { Id: true, Code: true, Name: true } } }
+      },
+      KPIYearPlans: { select: { Id: true, Baseline: true, Target: true } }
+    },
+    orderBy: { CreatedAt: 'asc' },
+  });
+
+  let systemKpiAssignments = [];
+  if (roleObj && roleObj.ParentRoleId === null) {
+    const allSystemKpis = await prisma.kPIs.findMany({
+      where: { IsArchived: false },
+      select: {
+        Id: true,
+        KPITypeId: true,
+        UnitId: true,
+        Weight: true,
+        Description: true,
+        Remark: true,
+        IsEvedenceRequired: true,
+        DefaultBaseline: true,
+        CreatedBy: true,
+        CreatedAt: true,
+        KPITypes: { select: { Id: true, KPIName: true, ParentKPIID: true } },
+        Units: { select: { Id: true, Code: true, Name: true } },
+        KPIYearPlans: {
+          where: { CycleYear: cycleYear },
+          select: { Id: true, Baseline: true, Target: true },
+        },
+      },
+      orderBy: { CreatedAt: 'asc' },
+    });
+
+    const ownerUserId = uniqueVisibleUserIds[0] || viewerUserId;
+
+    systemKpiAssignments = allSystemKpis.map((kpi) => {
+      const yearPlan = kpi.KPIYearPlans?.[0] || null;
+      return {
+        Id: `system-${kpi.Id}`,
+        KPIId: kpi.Id,
+        UserId: ownerUserId,
+        Remark: kpi.Remark || kpi.Description || '',
+        CreatedAt: kpi.CreatedAt,
+        CreatedBy: kpi.CreatedBy,
+        IsArchived: false,
+        CycleYear: cycleYear,
+        Baseline: yearPlan?.Baseline ?? kpi.DefaultBaseline ?? 0,
+        AssignedTarget: yearPlan?.Target ?? 0,
+        IsTargetIndividual: false,
+        KPIs: {
+          Id: kpi.Id,
+          KPITypeId: kpi.KPITypeId,
+          UnitId: kpi.UnitId,
+          Weight: kpi.Weight,
+          Description: kpi.Description,
+          Remark: kpi.Remark,
+          IsEvedenceRequired: kpi.IsEvedenceRequired,
+          KPITypes: kpi.KPITypes,
+          Units: kpi.Units,
+        },
+        KPIYearPlans: yearPlan,
+      };
+    });
+  }
+
+  const rawAssignments = [...existingAssignments, ...systemKpiAssignments];
+  const assignments = [];
+  const seenKpiIds = new Set();
+
+  rawAssignments.forEach((assignment) => {
+    const kpiId = String(assignment.KPIId);
+    if (seenKpiIds.has(kpiId)) return;
+    seenKpiIds.add(kpiId);
+    assignments.push(assignment);
+  });
   const hasOriginal = assignments.length > 0;
   const hasDerived = false;
 
@@ -1878,15 +1976,49 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
   });
   const { buildCode, byId } = buildKpiCodeIndex(kpiTypes);
 
-  const relevantAssignmentIds = assignments.map((a) => String(a.Id)).filter(Boolean);
+  // If currentRoleId is a parent role, include child roles' assignments and results so parent performance displays combined child performance
+  const childRolesOfCurrent = await prisma.roles.findMany({
+    where: { ParentRoleId: currentRoleId, IsArchived: false },
+    select: { Id: true }
+  });
+
+  let childUserIds = [];
+  let childAssignments = [];
+  if (childRolesOfCurrent.length > 0) {
+    const childRoleIds = childRolesOfCurrent.map((r) => r.Id);
+    const childUserRoles = await prisma.userRoles.findMany({
+      where: { RoleId: { in: childRoleIds } },
+      select: { UserId: true, RoleId: true }
+    });
+    childUserIds = [...new Set(childUserRoles.map((ur) => String(ur.UserId)))];
+
+    childAssignments = await prisma.userKPIs.findMany({
+      where: {
+        IsArchived: false,
+        CycleYear: cycleYear,
+        UserId: { in: childUserIds }
+      },
+      select: { Id: true, KPIId: true, UserId: true, AssignedTarget: true, Baseline: true }
+    });
+  }
+
+  const allAssignmentsForScope = [...assignments, ...childAssignments];
+  const allRelevantAssignmentIds = [...new Set(allAssignmentsForScope.map((a) => String(a.Id)))];
+  const allRelevantUserIds = [...new Set([...uniqueVisibleUserIds, ...childUserIds])];
+
+  const userChildColumnByUserId = new Map();
+  allRelevantUserIds.forEach((uId) => userChildColumnByUserId.set(uId, String(currentRoleId)));
 
   let results =
-    !forceEmpty && uniqueVisibleUserIds.length && relevantAssignmentIds.length
+    !forceEmpty && allRelevantUserIds.length && allRelevantAssignmentIds.length
       ? await prisma.userKPIResults.findMany({
           where: {
             IsArchived: false,
             CycleYear: cycleYear,
-            UserKPIId: { in: relevantAssignmentIds },
+            OR: [
+              { UserKPIId: { in: allRelevantAssignmentIds } },
+              { UserId: { in: allRelevantUserIds } }
+            ]
           },
           select: { Id: true, UserId: true, KPIId: true, UserKPIId: true, KPIResult: true, AdjustedResult: true, Status: true, Quarter: true, CreatedAt: true, EvidenceURL: true },
         })
@@ -1899,8 +2031,8 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
   const visibleRoleIds = new Set([String(currentRoleId)]);
   const userKpiSums = sumUserKpiPerformance(results);
   const aggregation = buildRoleKpiAggregation({
-    assignments,
-    userRoleByUserId,
+    assignments: allAssignmentsForScope,
+    userRoleByUserId: userChildColumnByUserId,
     visibleRoleIds,
     userKpiSums,
     scopeRoleId: currentRoleId,
@@ -1932,14 +2064,15 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
     const leafType = (assignment.KPIs || assignment.KPI)?.KPIType || null;
     const rowKey = String(assignment.KPIId);
 
+    const isOfficeAssignment = uniqueVisibleUserIds.map(String).includes(String(assignment.UserId));
     const isViewerAssignment = String(assignment.UserId) === String(viewerUserId);
     const isDelegated = delegatedKpiKeys.has(rowKey);
 
     if (rows.has(rowKey)) {
-      if (isViewerAssignment) {
+      if (isOfficeAssignment || isViewerAssignment) {
         const existing = rows.get(rowKey);
         existing.assignmentId = assignment.Id;
-        existing.isHomeOfficeKpi = !isDelegated;
+        existing.isHomeOfficeKpi = isOfficeAssignment || (!isDelegated);
         existing.quarterlyResults = resultsByAssignmentId.get(String(assignment.Id)) || [];
       }
       return rows;
@@ -1952,20 +2085,20 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
       id: rowKey,
       kpiId: String(assignment.KPIId),
       assignmentId: assignment.Id,
-      isHomeOfficeKpi: isViewerAssignment && !isDelegated,
+      isHomeOfficeKpi: isOfficeAssignment || (!isDelegated),
       no: leafType?.Id ? buildCode(leafType.Id) : '',
       kpi: leafType?.KPIName || kpi?.Description || '—',
       stableName: hierarchy.stableName || '—',
       themeName: hierarchy.themeName || '—',
       subThemeName: hierarchy.subThemeName || '—',
-      unit: kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
+      unit: kpi?.Units?.Code || kpi?.Units?.Name || kpi?.Unit?.Code || kpi?.Unit?.Name || '—',
       weight: formatNumericValue(kpi?.Weight),
       weightNumeric: parseNumericValue(kpi?.Weight) ?? 0,
       baseline: formatNumericValue(assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline),
       baselineNumeric: parseNumericValue(assignment.Baseline ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Baseline) ?? 0,
       target: formatNumericValue(assignment.AssignedTarget ?? (assignment.KPIYearPlans || assignment.KPIYearPlan)?.Target),
       remark: assignment.Remark || kpi?.Remark || kpi?.Description || '—',
-      isEvidenceRequired: !!(kpi?.IsEvedenceRequired || kpi?.IsEvidenceRequired || kpi?.isEvidenceRequired),
+      isEvidenceRequired: !!(kpi?.IsEvedenceRequired || kpi?.IsEvidenceRequired),
       quarterlyResults: resultsByAssignmentId.get(String(assignment.Id)) || [],
       values: {},
     });
@@ -1974,15 +2107,16 @@ const buildCurrentOfficeReportData = async ({ cycleYear, currentRoleId, viewerUs
   }, new Map());
 
   reportRows.forEach((row) => {
-    // If the KPI is not the viewer's responsibility (delegated to a child), show N/A
-    if (!row.isHomeOfficeKpi) {
+    // If the KPI has no assignment for this office at all, show N/A
+    if (!row.assignmentId && !row.isHomeOfficeKpi) {
       row.values[String(currentRoleId)] = 'N/A';
       return;
     }
 
     const metrics = aggregation.get(`${String(currentRoleId)}::${String(row.id)}`);
     if (!metrics) {
-      row.values[String(currentRoleId)] = 'N/A';
+      // KPI is assigned but aggregation has no entry — no data submitted yet
+      row.values[String(currentRoleId)] = row.assignmentId ? '—' : 'N/A';
     } else if (!metrics.hasAnySubmission && cycleYear === getCurrentCycleYear()) {
       row.values[String(currentRoleId)] = '—';
     } else {
@@ -2544,18 +2678,20 @@ const submitCurrentOfficeReportToParent = async (req, res) => {
     }
 
     const submission = await prisma.officeReportSubmissions.create({
-      CycleYear: cycleYear,
-      SourceRoleId: reportData.scopeRole.id,
-      ParentRoleId: reportData.parentRole.id,
-      ReportPayload: {
-        scopeRole: reportData.scopeRole,
-        parentRole: reportData.parentRole,
-        columns: reportData.columns,
-        rows: summaryRows,
-        quarter: targetQuarter,
+      data: {
+        CycleYear: cycleYear,
+        SourceRoleId: reportData.scopeRole.id,
+        ParentRoleId: reportData.parentRole.id,
+        ReportPayload: {
+          scopeRole: reportData.scopeRole,
+          parentRole: reportData.parentRole,
+          columns: reportData.columns,
+          rows: summaryRows,
+          quarter: targetQuarter,
+        },
+        SubmittedBy: req.user?.Id || null,
+        SubmittedAt: new Date(),
       },
-      SubmittedBy: req.user?.Id || null,
-      SubmittedAt: new Date(),
     });
 
     await logActivity({
@@ -2658,7 +2794,7 @@ const createUserKPIResult = async (req, res) => {
       return res.status(200).json({ success: true, data: updated, message: 'KPI result updated successfully.' });
     }
 
-    const result = await prisma.userKPIResults.create(payload);
+    const result = await prisma.userKPIResults.create({ data: payload });
 
     // Notify parent office approvers if evidence-based and pending
     if (payload.Status === 'pending' && req.user?.currentRole?.ParentRoleId) {

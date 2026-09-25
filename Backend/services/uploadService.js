@@ -1,4 +1,3 @@
-
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
@@ -34,7 +33,7 @@ const createDiskStorage = (subfolder) => {
         .split('.')[0]
         .replace(/[^a-z0-9_.-]/gi, '_');
       cb(null, `${Date.now()}-${safeName}${path.extname(file.originalname)}`);
-    }
+    },
   });
 };
 
@@ -51,9 +50,9 @@ class LocalUrlStorage {
         return cb(err);
       }
       // Form local static URL
-      const baseUrl = req ? `${req.protocol}://${req.get('host')}` : 'http://localhost:5000';
+      const baseUrl = req ? `${req.protocol}://${req.get('host')}` : 'http://localhost:6000';
       const fileUrl = `${baseUrl}/uploads/${this.subfolder}/${info.filename}`;
-      
+
       cb(null, {
         path: fileUrl,
         size: info.size,
@@ -71,10 +70,4 @@ const profileStorage = new LocalUrlStorage(createDiskStorage('user-profiles'), '
 const evidenceStorage = new LocalUrlStorage(createDiskStorage('evidence'), 'evidence');
 const systemStorage = new LocalUrlStorage(createDiskStorage('system-assets'), 'system-assets');
 
-export { 
-  profileStorage,
-  evidenceStorage,
-  systemStorage as logoStorage,
-  systemStorage as messageStorage,
-  systemStorage,
-};
+export { profileStorage, evidenceStorage, systemStorage as logoStorage, systemStorage as messageStorage, systemStorage };

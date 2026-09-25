@@ -16,17 +16,18 @@ const checkMaintenance = async (user) => {
 
 const trackActivity = async (userId) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    
+    const todayStr = new Date().toISOString().split('T')[0];
+    const activityDate = new Date(`${todayStr}T00:00:00.000Z`);
+
     // 1. Update User LastActiveAt
     await prisma.users.update({ where: { Id: userId }, data: { LastActiveAt: new Date() } });
 
     // 2. Upsert Daily Activity Log
-    const logWhere = { UserId_ActivityDate: { UserId: userId, ActivityDate: today } };
+    const logWhere = { UserId_ActivityDate: { UserId: userId, ActivityDate: activityDate } };
     await prisma.userActivityLogs.upsert({
       where: logWhere,
       update: { LastActiveAt: new Date() },
-      create: { UserId: userId, ActivityDate: today, LastActiveAt: new Date() }
+      create: { UserId: userId, ActivityDate: activityDate, LastActiveAt: new Date() }
     });
   } catch (err) {
     console.error('Failed to track user activity:', err);

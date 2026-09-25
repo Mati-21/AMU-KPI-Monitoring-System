@@ -18,7 +18,8 @@ const logActivity = async ({ userId, action, resource, description, status = 'Su
       Resource: resource,
       Description: description,
       Status: status,
-      IpAddress: ipAddress
+      IpAddress: ipAddress,
+      createdAt: new Date()
     } });
     console.log(`[AUDIT] ${action}: ${description}`);
   } catch (error) {

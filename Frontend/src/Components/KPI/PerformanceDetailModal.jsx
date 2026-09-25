@@ -12,7 +12,7 @@ import {
   Info,
   CalendarDays,
   History,
-  ShieldCheck
+  ShieldCheck,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../UI/dialog';
 import { Progress } from '../UI/progress';
@@ -33,7 +33,12 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
   const goal = Math.max(0, target - baseline);
 
   const quarterlyResults = useMemo(() => {
-    const results = { Q1: { val: 0, evidence: null }, Q2: { val: 0, evidence: null }, Q3: { val: 0, evidence: null }, Q4: { val: 0, evidence: null } };
+    const results = {
+      Q1: { val: 0, evidence: null },
+      Q2: { val: 0, evidence: null },
+      Q3: { val: 0, evidence: null },
+      Q4: { val: 0, evidence: null },
+    };
     const rawResults = Array.isArray(kpi.quarterlyResults) ? kpi.quarterlyResults : [];
     rawResults.forEach((r) => {
       const q = String(r.quarter || '').toUpperCase();
@@ -57,15 +62,15 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
       }));
 
     // Add any aggregated evidence URLs that might not be in the direct quarterlyResults
-    const existingUrls = new Set(evidenceItems.map(item => item.url));
+    const existingUrls = new Set(evidenceItems.map((item) => item.url));
     if (Array.isArray(kpi.allEvidenceUrls)) {
-      kpi.allEvidenceUrls.forEach(url => {
+      kpi.allEvidenceUrls.forEach((url) => {
         if (!existingUrls.has(url)) {
           evidenceItems.push({
             url,
             quarter: 'Evidence',
             result: null,
-            date: null
+            date: null,
           });
         }
       });
@@ -87,7 +92,10 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent hideClose className="max-w-3xl p-0 overflow-hidden border border-border/60 bg-background shadow-2xl rounded-3xl max-h-[85vh] flex flex-col">
+      <DialogContent
+        hideClose
+        className="max-w-3xl p-0 overflow-hidden border border-border/60 bg-background shadow-2xl rounded-3xl max-h-[85vh] flex flex-col"
+      >
         {/* Header Section */}
         <div className="bg-card border-b border-border px-6 py-5 flex-shrink-0">
           <div className="flex items-start justify-between gap-4">
@@ -97,15 +105,11 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                   KPI Performance Detail
                 </Badge>
               </div>
-              <DialogTitle className="text-xl font-bold text-foreground leading-tight">
-                {kpi.name}
-              </DialogTitle>
+              <DialogTitle className="text-xl font-bold text-foreground leading-tight">{kpi.name}</DialogTitle>
             </div>
             <div className="flex flex-col items-end gap-1">
               <status.icon className={`h-6 w-6 ${status.color.replace('bg-', 'text-')}`} />
-              <span className={`text-xs font-bold uppercase ${status.color.replace('bg-', 'text-')}`}>
-                {status.label}
-              </span>
+              <span className={`text-xs font-bold uppercase ${status.color.replace('bg-', 'text-')}`}>{status.label}</span>
             </div>
           </div>
         </div>
@@ -185,7 +189,7 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                 {allEvidence.map((ev, idx) => (
                   <a
                     key={idx}
-                    href={ev.url?.startsWith('http') ? ev.url : `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/uploads/${ev.url}`}
+                    href={ev.url?.startsWith('http') ? ev.url : `${import.meta.env.VITE_API_URL || 'http://localhost:6000'}/uploads/${ev.url}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-3 bg-card border border-border rounded-2xl p-4 shadow-sm hover:border-primary/30 hover:bg-primary/[0.02] transition-all min-w-[180px]"
@@ -194,9 +198,7 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                       <FileText size={20} />
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-bold text-foreground truncate">
-                        {ev.quarter} Evidence
-                      </span>
+                      <span className="text-xs font-bold text-foreground truncate">{ev.quarter} Evidence</span>
                       <span className="text-[10px] text-muted-foreground uppercase font-medium">Result: {formatValue(ev.result)}</span>
                     </div>
                   </a>
@@ -218,67 +220,68 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
 
             {Array.isArray(kpi.quarterlyResults) && kpi.quarterlyResults.length > 0 ? (
               <div className="relative space-y-4 before:absolute before:left-[15px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-border pl-4">
-                {[...kpi.quarterlyResults].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).map((entry, index) => (
-                  <div key={entry.id || index} className="relative pl-8">
-                    <div className="absolute left-[-21px] top-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm">
-                      <CalendarDays size={10} />
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-3 shadow-sm">
-                      <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                              {entry.quarter}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-foreground">
-                              Result: <span className="text-primary">{formatValue(entry.result)}</span>
-                            </p>
-                            {entry.status === 'adjusted' && (
-                              <Badge variant="outline" className="text-[9px] h-4 bg-sky-500/10 text-sky-500 border-sky-500/20 uppercase font-bold px-1.5 py-0">
-                                Parent Adjusted
-                              </Badge>
+                {[...kpi.quarterlyResults]
+                  .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+                  .map((entry, index) => (
+                    <div key={entry.id || index} className="relative pl-8">
+                      <div className="absolute left-[-21px] top-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm">
+                        <CalendarDays size={10} />
+                      </div>
+                      <div className="bg-card rounded-xl border border-border p-3 shadow-sm">
+                        <div className="flex flex-col md:flex-row gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold uppercase text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                                {entry.quarter}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-foreground">
+                                Result: <span className="text-primary">{formatValue(entry.result)}</span>
+                              </p>
+                              {entry.status === 'adjusted' && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] h-4 bg-sky-500/10 text-sky-500 border-sky-500/20 uppercase font-bold px-1.5 py-0"
+                                >
+                                  Parent Adjusted
+                                </Badge>
+                              )}
+                            </div>
+                            {entry.remark && entry.remark !== entry.performanceTitle && (
+                              <div className="text-[11px] text-muted-foreground bg-muted/50 p-2 rounded-lg flex gap-2 italic">
+                                <Info size={12} className="shrink-0 mt-0.5" />
+                                Submitter: {entry.remark}
+                              </div>
                             )}
                           </div>
-                          {entry.remark && entry.remark !== entry.performanceTitle && (
-                            <div className="text-[11px] text-muted-foreground bg-muted/50 p-2 rounded-lg flex gap-2 italic">
-                              <Info size={12} className="shrink-0 mt-0.5" />
-                              Submitter: {entry.remark}
+
+                          {(entry.approverRemark || (entry.remark && entry.remark !== entry.performanceTitle)) && (
+                            <div className="flex-1 md:border-l md:pl-4 space-y-2 border-t md:border-t-0 pt-2 md:pt-0 border-border">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Review Remarks</p>
+                              {entry.approverRemark ? (
+                                <div className="text-[11px] text-emerald-600 bg-emerald-500/10 p-2 rounded-lg flex gap-2">
+                                  <ShieldCheck size={12} className="shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-bold">Approver: </span>
+                                    {entry.approverRemark}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-[11px] text-muted-foreground italic p-2">Pending final review remark</div>
+                              )}
                             </div>
                           )}
                         </div>
-
-                        {(entry.approverRemark || (entry.remark && entry.remark !== entry.performanceTitle)) && (
-                          <div className="flex-1 md:border-l md:pl-4 space-y-2 border-t md:border-t-0 pt-2 md:pt-0 border-border">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Review Remarks</p>
-                            {entry.approverRemark ? (
-                              <div className="text-[11px] text-emerald-600 bg-emerald-500/10 p-2 rounded-lg flex gap-2">
-                                <ShieldCheck size={12} className="shrink-0 mt-0.5" />
-                                <div>
-                                  <span className="font-bold">Approver: </span>
-                                  {entry.approverRemark}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-muted-foreground italic p-2">
-                                Pending final review remark
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-xs text-muted-foreground italic">
-                No submissions recorded yet.
-              </div>
+              <div className="text-center py-6 text-xs text-muted-foreground italic">No submissions recorded yet.</div>
             )}
           </div>
 
@@ -289,9 +292,7 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                 <AlertCircle size={14} />
                 Latest Remark
               </div>
-              <p className="text-sm text-amber-600/90 leading-relaxed italic">
-                "{kpi.remark}"
-              </p>
+              <p className="text-sm text-amber-600/90 leading-relaxed italic">"{kpi.remark}"</p>
             </div>
           )}
         </div>

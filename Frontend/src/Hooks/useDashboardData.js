@@ -202,14 +202,29 @@ export const useDashboardData = ({ cycleYear, focusedRoleId = '__ALL__' } = {}) 
     // Keep overall gating ("No Performance Data" screen) based on the unfiltered dataset.
     const overallAssignedKpis = data.parentReceived?.assignedKpis || 0;
     const overallChildAssignedKpis = data.child?.assignedKpis || 0;
+    const totalRegisteredKpis = data.raw?.kpis?.length || 0;
+
+    const currentRoleObj = (data.raw?.roles || []).find((r) => String(r.Id) === currentRoleId) || authUser?.currentRole;
+    const hasParentRole = !!(currentRoleObj?.ParentRoleId);
 
     const receivedAssignedKpis = computed.parentReceived?.assignedKpis || 0;
     const receivedAchievedKpis = computed.parentReceived?.achievedKpis || 0;
     const receivedInProgressKpis = computed.parentReceived?.inProgressKpis || 0;
-    const receivedDelayedKpis = computed.parentReceived?.delayedKpis || 0;
     const receivedAvgScore = computed.parentReceived?.avgScore || 0;
 
-    const hasData = overallAssignedKpis > 0 || overallChildAssignedKpis > 0;
+    const childAssignedKpis = computed.child?.uniqueAssignedKpis ?? computed.child?.assignedKpis ?? 0;
+    const childAchievedKpis = computed.child?.uniqueAchievedKpis ?? computed.child?.achievedKpis ?? 0;
+    const childInProgressKpis = computed.child?.uniqueInProgressKpis ?? computed.child?.inProgressKpis ?? 0;
+    const childAvgScore = computed.child?.avgScore || 0;
+
+    const displayAssignedKpis = hasParentRole ? receivedAssignedKpis : totalRegisteredKpis;
+    const displayAchievedKpis = hasParentRole ? receivedAchievedKpis : childAchievedKpis;
+    const displayInProgressKpis = hasParentRole ? receivedInProgressKpis : childInProgressKpis;
+    const displayAvgScore = hasParentRole ? receivedAvgScore : childAvgScore;
+
+    const totalDenom = hasParentRole ? receivedAssignedKpis : (childAssignedKpis || totalRegisteredKpis || 1);
+
+    const hasData = overallAssignedKpis > 0 || overallChildAssignedKpis > 0 || totalRegisteredKpis > 0;
 
     return {
       title: `${roleName} Dashboard`,
@@ -223,29 +238,29 @@ export const useDashboardData = ({ cycleYear, focusedRoleId = '__ALL__' } = {}) 
       isDistributable: !isStaffView,
       stats: [
         {
-          label: 'Assigned KPIs',
-          value: String(receivedAssignedKpis),
+          label: hasParentRole ? 'Assigned KPI' : 'Registered KPI',
+          value: String(displayAssignedKpis),
           color: 'primary',
-          progress: safePercent(receivedAssignedKpis ? (receivedAchievedKpis / receivedAssignedKpis) * 100 : 0),
-          subtitle: 'KPIs assigned to you',
+          progress: safePercent(totalDenom ? (displayAchievedKpis / totalDenom) * 100 : 0),
+          subtitle: hasParentRole ? 'KPIs assigned to you' : 'Total KPIs registered in system',
         },
         {
           label: 'Achieved',
-          value: String(receivedAchievedKpis),
+          value: String(displayAchievedKpis),
           color: 'green',
-          progress: safePercent(receivedAssignedKpis ? (receivedAchievedKpis / receivedAssignedKpis) * 100 : 0),
+          progress: safePercent(totalDenom ? (displayAchievedKpis / totalDenom) * 100 : 0),
         },
         {
           label: 'In Progress',
-          value: String(receivedInProgressKpis),
+          value: String(displayInProgressKpis),
           color: 'blue',
-          progress: safePercent(receivedAssignedKpis ? (receivedInProgressKpis / receivedAssignedKpis) * 100 : 0),
+          progress: safePercent(totalDenom ? (displayInProgressKpis / totalDenom) * 100 : 0),
         },
         {
-          label: 'My Score',
-          value: `${receivedAvgScore}%`,
-          color: receivedAvgScore >= 80 ? 'green' : receivedAvgScore >= 60 ? 'amber' : 'red',
-          progress: receivedAvgScore,
+          label: hasParentRole ? 'My Score' : 'Overall Score',
+          value: `${displayAvgScore}%`,
+          color: displayAvgScore >= 80 ? 'green' : displayAvgScore >= 60 ? 'amber' : 'red',
+          progress: displayAvgScore,
         },
       ],
       subUnitLabel: unitLabel,

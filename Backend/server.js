@@ -28,6 +28,7 @@ const defaultAllowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
+  'http://localhost:8058',
 ];
 const envOrigins = (process.env.CLIENT_URL || '')
   .split(',')
@@ -43,8 +44,8 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'http://localhost:5000', 'blob:'],
-        connectSrc: ["'self'", 'http://localhost:5000', 'ws://localhost:5000'],
+        imgSrc: ["'self'", 'data:', 'http://localhost:8058', 'blob:'],
+        connectSrc: ["'self'", 'http://localhost:8058', 'ws://localhost:8058'],
       },
     },
   })
@@ -99,7 +100,7 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8058;
 
 const startServer = async () => {
   try {

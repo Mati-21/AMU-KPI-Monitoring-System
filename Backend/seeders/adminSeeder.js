@@ -1,9 +1,14 @@
-import { prisma  } from '../config/database.js';
-import bcrypt from 'bcryptjs'; // Assuming password hashing might be needed eventually, though it wasn't before? Wait, the model hook probably hashed it. With Prisma we must hash it explicitly!
+import 'dotenv/config';
+import { prisma } from '../config/database.js';
+import bcrypt from 'bcryptjs';
 
-const ADMIN_EMAIL = 'Mule@gmail.com';
-const ADMIN_PASSWORD = 'Mule@123';
-const ADMIN_USERNAME = 'mule.admin';
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'Mati@gmail.com').trim();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Mati@8196';
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'mati.admin').trim();
+const ADMIN_FIRST_NAME = (process.env.ADMIN_FIRST_NAME || 'Mati').trim();
+const ADMIN_FATHER_NAME = (process.env.ADMIN_FATHER_NAME || 'Admin').trim();
+const ADMIN_GRANDFATHER_NAME = (process.env.ADMIN_GRANDFATHER_NAME || 'User').trim();
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || '0911000000').trim();
 
 const now = () => new Date();
 
@@ -70,25 +75,25 @@ const ensureAdminRole = async () => {
 const upsertAdminUser = async () => {
   let adminUser = await prisma.users.findFirst({
     where: {
-      Email: { equals: ADMIN_EMAIL, mode: 'insensitive' },
+      OR: [
+        { Email: { equals: ADMIN_EMAIL, mode: 'insensitive' } },
+        { UserName: { equals: ADMIN_USERNAME, mode: 'insensitive' } },
+      ],
     }
   });
 
+  const hashedPassword = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+
   const payload = {
-    FirstName: 'Mule',
-    FatherName: 'System',
-    GrandFatherName: 'Admin',
+    FirstName: ADMIN_FIRST_NAME,
+    FatherName: ADMIN_FATHER_NAME,
+    GrandFatherName: ADMIN_GRANDFATHER_NAME,
     Email: ADMIN_EMAIL,
     UserName: ADMIN_USERNAME,
-    Phone: '0911000000',
-    password: ADMIN_PASSWORD, // Wait, if Prisma doesn't hash automatically we must hash it. 
+    Phone: ADMIN_PHONE,
+    password: hashedPassword,
     IsArchived: false,
   };
-  
-  if (bcrypt && typeof bcrypt.hashSync === 'function') {
-      const salt = bcrypt.genSaltSync(10);
-      payload.password = bcrypt.hashSync(payload.password, salt);
-  }
 
   if (!adminUser) {
     adminUser = await prisma.users.create({
@@ -98,7 +103,6 @@ const upsertAdminUser = async () => {
         CreatedBy: null,
       }
     });
-
     return adminUser;
   }
 
@@ -129,19 +133,6 @@ const ensureRoleAssignment = async ({ userId, roleId }) => {
     });
   }
 
-  const activeAssignment = await prisma.userRoles.findFirst({
-    where: {
-      UserId: userId,
-      RoleId: roleId,
-      IsArchived: false,
-      OR: [{ ToDate: null }, { ToDate: { gte: now() } }],
-    }
-  });
-
-  if (activeAssignment) {
-    return activeAssignment;
-  }
-
   return await prisma.userRoles.create({
     data: {
       UserId: userId,
@@ -161,19 +152,24 @@ const seedAdmin = async () => {
     const adminUser = await upsertAdminUser();
     await ensureRoleAssignment({ userId: adminUser.Id, roleId: adminRole.Id });
 
-    console.log('Admin user seeded successfully.');
-    console.log(`Email: ${ADMIN_EMAIL}`);
-    console.log(`Password: ${ADMIN_PASSWORD}`);
+    console.log('\n========================================');
+    console.log('🎉 SYSTEM ADMIN SEEDED SUCCESSFULLY!');
+    console.log('========================================');
+    console.log(`📧 Email       : ${ADMIN_EMAIL}`);
+    console.log(`👤 Username    : ${ADMIN_USERNAME}`);
+    console.log(`🔑 Password    : [HIDDEN] (Length: ${ADMIN_PASSWORD.length})`);
+    console.log(`🏷️  Role        : System Administrator`);
+    console.log('========================================\n');
   } catch (error) {
     console.error('Failed to seed admin user:', error.message);
     process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
+    process.exit(process.exitCode || 0);
   }
 };
 
-if (require.main === module) {
-  seedAdmin();
-}
+export { seedAdmin };
 
-export {  seedAdmin  };
+seedAdmin();
+

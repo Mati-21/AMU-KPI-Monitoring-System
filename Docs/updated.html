@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AMU System — Full Schema (Access Control + KPI Monitoring)</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --panel:#ffffff;
+    --border:#e2e5ea;
+    --header-border:#e9ebef;
+    --text:#1f2430;
+    --muted:#8a94a6;
+    --row-border:#f0f1f4;
+    --pk-bg:#d6f5e6; --pk-text:#0f8a5f;
+    --fk-bg:#ffe3c2; --fk-text:#c46a10;
+    --line:#a7adba;
+    --label:#6b7280;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg);
+    font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+    color:var(--text);
+    padding:36px 20px 60px;
+    padding-top:calc(36px + env(safe-area-inset-top,0px));
+    padding-bottom:calc(60px + env(safe-area-inset-bottom,0px));
+  }
+  header{max-width:1160px;margin:0 auto 12px;text-align:center;}
+  header h1{font-size:22px;letter-spacing:.3px;}
+  header p{color:var(--muted);font-size:13px;margin-top:6px;}
+  .note{
+    max-width:960px;margin:14px auto 30px;text-align:center;
+    font-size:12px;color:var(--muted);background:#fff;border:1px dashed var(--border);
+    border-radius:8px;padding:10px 16px;line-height:1.6;
+  }
+  .note b{color:var(--text);}
+  h2.section-title{max-width:1160px;margin:44px auto 16px;font-size:15px;color:var(--text);}
+
+  .canvas-wrap{max-width:1160px;margin:0 auto;overflow-x:auto;}
+  .canvas{position:relative;width:1160px;height:1780px;}
+  svg.lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+  svg.lines line, svg.lines path{stroke:var(--line);stroke-width:1.6;}
+  svg.lines text{font-size:11px;fill:var(--label);font-family:inherit;font-weight:700;}
+
+  .card{
+    position:absolute;width:260px;background:var(--panel);
+    border:1px solid var(--border);border-radius:10px;
+    box-shadow:0 6px 18px rgba(20,20,30,.05);overflow:hidden;
+  }
+  .card .head{
+    padding:10px 14px;font-size:13px;font-weight:700;
+    border-bottom:1px solid var(--header-border);
+    display:flex;align-items:center;gap:8px;
+  }
+  .field{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:7px 14px;font-size:12px;border-bottom:1px solid var(--row-border);
+  }
+  .field:last-child{border-bottom:none;}
+  .fname.bold{font-weight:700;}
+  .badge{font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:4px;}
+  .badge.pk{background:var(--pk-bg);color:var(--pk-text);}
+  .badge.fk{background:var(--fk-bg);color:var(--fk-text);}
+  .badge.opt{background:#eef0f4;color:var(--muted);}
+  .badge.flag{background:#e6ecff;color:#3a5bd9;}
+
+  /* access control cluster */
+  .person{ left:0px;   top:0px; }
+  .office{ left:380px; top:0px; }
+  .role  { left:780px; top:0px; }
+  .permission{ left:780px; top:380px; }
+  .user  { left:190px; top:520px; }
+
+  /* kpi cluster */
+  .kpis{ left:780px; top:780px; }
+  .user_kpis{ left:400px; top:1240px; }
+  .reporting_periods{ left:0px; top:1480px; }
+  .performance{ left:780px; top:1480px; }
+
+  .person .head{color:#0369a1;}
+  .office .head{color:#b45309;}
+  .role   .head{color:#059669;}
+  .permission .head{color:#dc2626;}
+  .user   .head{color:#2563eb;}
+  .kpis .head{color:#7c3aed;}
+  .user_kpis .head{color:#059669;}
+  .reporting_periods .head{color:#d97706;}
+  .performance .head{color:#dc2626;}
+
+  .legend{max-width:1160px;margin:26px auto 0;display:flex;gap:22px;justify-content:center;
+    font-size:12px;color:var(--muted);flex-wrap:wrap;}
+  .legend span b{color:var(--text);}
+
+  .hierarchy{max-width:960px;margin:34px auto 0;background:#fff;border:1px solid var(--border);
+    border-radius:10px;padding:18px 22px;font-size:12.5px;line-height:1.9;}
+  .hierarchy h3{font-size:13px;margin-bottom:8px;color:var(--text);}
+  .hierarchy .l1{color:#b45309;font-weight:700;}
+  .hierarchy .l2{padding-left:22px;color:var(--text);}
+  .hierarchy .l3{padding-left:44px;color:var(--muted);}
+
+  /* ===== sample data section ===== */
+  .data-section{max-width:1160px;margin:50px auto 0;}
+  .data-section > h2{font-size:16px;margin-bottom:18px;color:var(--text);}
+  .data-block{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    margin-bottom:22px;
+    overflow:hidden;
+    box-shadow:0 4px 14px rgba(20,20,30,.04);
+  }
+  .data-block .dhead{
+    padding:12px 16px;
+    display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--header-border);
+  }
+  .data-block .dhead .name{font-size:13px;font-weight:700;}
+  .data-block .dhead .desc{font-size:11px;color:var(--muted);}
+  .data-block table{width:100%;border-collapse:collapse;min-width:640px;}
+  .data-block .tblwrap{overflow-x:auto;}
+  .data-block th{
+    text-align:left;font-size:11px;color:var(--muted);font-weight:700;
+    background:#fafbfc;padding:8px 14px;border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  .data-block td{
+    font-size:12px;padding:8px 14px;border-bottom:1px solid var(--row-border);
+    white-space:nowrap;color:var(--text);
+  }
+  .data-block tr:last-child td{border-bottom:none;}
+  .stat{
+    font-size:9.5px;font-weight:700;letter-spacing:.3px;
+    padding:2px 7px;border-radius:999px;display:inline-block;
+  }
+  .stat.active,.stat.open,.stat.approved{background:#d6f5e6;color:#0f8a5f;}
+  .stat.pending{background:#fdedc9;color:#9a6b0a;}
+  .stat.submitted{background:#dbe8fe;color:#2454c9;}
+  .stat.closed{background:#e7e9ee;color:#5b6472;}
+  .stat.upcoming{background:#e3e8fe;color:#4451c9;}
+
+  .d-kpis .dhead .name{color:#7c3aed;}
+  .d-user_kpis .dhead .name{color:#059669;}
+  .d-reporting_periods .dhead .name{color:#d97706;}
+  .d-performance .dhead .name{color:#dc2626;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AMU System — Full Schema</h1>
+  <p>Access Control (person, office, user, role, permission) + KPI Monitoring (kpis, user_kpis, reporting_periods, performance)</p>
+</header>
+
+<div class="note">
+  <b>person</b> is the source of truth for identity. <b>office</b> and <b>role</b> are both
+  self-referencing trees, so the org chart and the permission hierarchy can nest arbitrarily
+  deep. <b>user</b> is the hub: it ties a person to an office, carries roles, and is the same
+  <code>user</code> that <b>user_kpis</b> assigns KPI targets to below — one system, one
+  identity, everything else layered on top.
+</div>
+
+<div class="canvas-wrap">
+<div class="canvas">
+
+  <svg class="lines" viewBox="0 0 1160 1780" preserveAspectRatio="none">
+    <!-- person -> user : 1 : 0..1 -->
+    <line x1="130" y1="495" x2="310" y2="520"/>
+    <text x="150" y="510">1</text>
+    <text x="285" y="513">0..1</text>
+
+    <!-- office -> user : 1 : N -->
+    <line x1="500" y1="245" x2="310" y2="520"/>
+    <text x="480" y="268">1</text>
+    <text x="335" y="513">N</text>
+
+    <!-- user -> role : N : M -->
+    <line x1="440" y1="520" x2="780" y2="270"/>
+    <text x="455" y="512">N</text>
+    <text x="750" y="282">M</text>
+
+    <!-- role -> permission : N : M -->
+    <line x1="910" y1="275" x2="910" y2="380"/>
+    <text x="920" y="295">N</text>
+    <text x="920" y="372">M</text>
+
+    <!-- role self-reference (parent_role_id) -->
+    <path d="M 1040,150 C 1110,150 1110,225 1045,222" fill="none"/>
+    <text x="1055" y="140">1</text>
+    <text x="1055" y="235">N</text>
+
+    <!-- office self-reference (parent_office_id) -->
+    <path d="M 640,150 C 710,150 710,225 645,222" fill="none"/>
+    <text x="650" y="140">1</text>
+    <text x="650" y="235">N</text>
+
+    <!-- user -> user_kpis : 1 : N -->
+    <line x1="320" y1="825" x2="530" y2="1240"/>
+    <text x="335" y="850">1</text>
+    <text x="500" y="1230">N</text>
+
+    <!-- kpis -> user_kpis : 1 : N -->
+    <line x1="780" y1="1130" x2="660" y2="1250"/>
+    <text x="755" y="1150">1</text>
+    <text x="670" y="1240">N</text>
+
+    <!-- user_kpis -> performance : 1 : N -->
+    <line x1="660" y1="1470" x2="780" y2="1545"/>
+    <text x="670" y="1490">1</text>
+    <text x="755" y="1538">N</text>
+
+    <!-- reporting_periods -> performance : 1 : N -->
+    <line x1="260" y1="1620" x2="780" y2="1620"/>
+    <text x="270" y="1610">1</text>
+    <text x="755" y="1610">N</text>
+  </svg>
+
+  <!-- PERSON -->
+  <div class="card person">
+    <div class="head">◆ person</div>
+    <div class="field"><span class="fname bold">person_id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">first_name</span><span></span></div>
+    <div class="field"><span class="fname">middle_name</span><span></span></div>
+    <div class="field"><span class="fname">last_name</span><span></span></div>
+    <div class="field"><span class="fname">phone_number</span><span></span></div>
+    <div class="field"><span class="fname">national_id</span><span></span></div>
+    <div class="field"><span class="fname">email</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">date_of_birth</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">gender</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">address</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">emergency_contact</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">photo_url</span><span class="badge opt">OPT</span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">archived_at</span><span></span></div>
+    <div class="field"><span class="fname">archived_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- OFFICE -->
+  <div class="card office">
+    <div class="head">◆ office</div>
+    <div class="field"><span class="fname bold">office_id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">parent_office_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">name</span><span></span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">archived_at</span><span></span></div>
+    <div class="field"><span class="fname">archived_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- ROLE -->
+  <div class="card role">
+    <div class="head">◆ role</div>
+    <div class="field"><span class="fname bold">role_id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">parent_role_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">name</span><span></span></div>
+    <div class="field"><span class="fname">description</span><span></span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">archived_at</span><span></span></div>
+    <div class="field"><span class="fname">archived_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- PERMISSION -->
+  <div class="card permission">
+    <div class="head">◆ permission</div>
+    <div class="field"><span class="fname bold">permission_id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">action</span><span></span></div>
+    <div class="field"><span class="fname">resource</span><span></span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">archived_at</span><span></span></div>
+    <div class="field"><span class="fname">archived_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- USER -->
+  <div class="card user">
+    <div class="head">◆ user</div>
+    <div class="field"><span class="fname bold">user_id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">person_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">office_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">username</span><span></span></div>
+    <div class="field"><span class="fname">password_hash</span><span></span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">archived_at</span><span></span></div>
+    <div class="field"><span class="fname">archived_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- KPIS -->
+  <div class="card kpis" style="width:280px;">
+    <div class="head">◆ kpis</div>
+    <div class="field"><span class="fname bold">id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">number</span><span></span></div>
+    <div class="field"><span class="fname">theme</span><span></span></div>
+    <div class="field"><span class="fname">unit</span><span></span></div>
+    <div class="field"><span class="fname">weight</span><span></span></div>
+    <div class="field"><span class="fname">operational_definition</span><span></span></div>
+    <div class="field"><span class="fname">baseline</span><span></span></div>
+    <div class="field"><span class="fname">target</span><span></span></div>
+    <div class="field"><span class="fname">remark</span><span></span></div>
+    <div class="field"><span class="fname">created_at</span><span></span></div>
+    <div class="field"><span class="fname">created_by</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">updated_at</span><span></span></div>
+    <div class="field"><span class="fname">updated_by</span><span class="badge fk">FK</span></div>
+  </div>
+
+  <!-- USER_KPIS -->
+  <div class="card user_kpis">
+    <div class="head">◆ user_kpis</div>
+    <div class="field"><span class="fname bold">id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">user_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">kpi_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">target_value</span><span></span></div>
+    <div class="field"><span class="fname">is_sum</span><span class="badge flag">FLAG</span></div>
+    <div class="field"><span class="fname">assigned_at</span><span></span></div>
+    <div class="field"><span class="fname">status</span><span></span></div>
+  </div>
+
+  <!-- REPORTING PERIODS -->
+  <div class="card reporting_periods">
+    <div class="head">◆ reporting_periods</div>
+    <div class="field"><span class="fname bold">id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">name</span><span></span></div>
+    <div class="field"><span class="fname">year</span><span></span></div>
+    <div class="field"><span class="fname">type</span><span></span></div>
+    <div class="field"><span class="fname">start_date</span><span></span></div>
+    <div class="field"><span class="fname">end_date</span><span></span></div>
+    <div class="field"><span class="fname">status</span><span></span></div>
+  </div>
+
+  <!-- PERFORMANCE -->
+  <div class="card performance">
+    <div class="head">◆ performance</div>
+    <div class="field"><span class="fname bold">id</span><span class="badge pk">PK</span></div>
+    <div class="field"><span class="fname">user_kpi_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">period_id</span><span class="badge fk">FK</span></div>
+    <div class="field"><span class="fname">actual_value</span><span></span></div>
+    <div class="field"><span class="fname">achievement</span><span></span></div>
+    <div class="field"><span class="fname">comment</span><span></span></div>
+    <div class="field"><span class="fname">status</span><span></span></div>
+  </div>
+
+</div>
+</div>
+
+<div class="legend">
+  <span><b>1 : 0..1</b> — a person may or may not have a login account</span>
+  <span><b>1 : N</b> — an office holds many users; a user belongs to one office</span>
+  <span><b>N : M</b> — user ↔ role and role ↔ permission, each resolved by a join table</span>
+  <span><b>1 : N self-ref</b> — <code>office.parent_office_id</code> and <code>role.parent_role_id</code> build the trees</span>
+  <span><b>1 : N</b> — one user's KPI assignment can have many performance records, one per reporting period</span>
+</div>
+
+<div class="hierarchy">
+  <h3>Example office hierarchy (via parent_office_id)</h3>
+  <div class="l1">President Office <span style="color:var(--muted);font-weight:400;">(parent_office_id = NULL)</span></div>
+  <div class="l2">↳ Academic Vice President Office</div>
+  <div class="l3">↳ College of Engineering Office</div>
+  <div class="l3">↳ College of Medicine Office</div>
+  <div class="l2">↳ Administration Vice President Office</div>
+  <div class="l3">↳ Human Resources Office</div>
+  <div class="l3">↳ Finance Office</div>
+</div>
+
+<div class="data-section">
+  <h2>Sample Data — KPI Monitoring</h2>
+
+  <!-- KPIS -->
+  <div class="data-block d-kpis">
+    <div class="dhead"><span class="name">kpis</span><span class="desc">— master KPI definitions</span></div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>ID</th><th>Number</th><th>Theme</th><th>Unit</th><th>Weight</th><th>Operational Definition</th><th>Baseline</th><th>Target</th><th>Remark</th><th>Created At</th><th>Created By</th><th>Updated At</th><th>Updated By</th></tr></thead>
+      <tbody>
+        <tr><td>KPI001</td><td>1</td><td>Student Satisfaction</td><td>%</td><td>30%</td><td>Percentage of students rating services satisfactory or above</td><td>75</td><td>90</td><td>—</td><td>2026-01-05</td><td>U010</td><td>2026-02-14</td><td>U010</td></tr>
+        <tr><td>KPI002</td><td>2</td><td>Research Publications</td><td>Publications</td><td>25%</td><td>Number of peer-reviewed publications produced in the period</td><td>6</td><td>10</td><td>—</td><td>2026-01-05</td><td>U010</td><td>—</td><td>—</td></tr>
+        <tr><td>KPI003</td><td>3</td><td>Community Projects</td><td>Projects</td><td>40%</td><td>Number of community engagement projects completed</td><td>8</td><td>12</td><td>Carried over from prior year</td><td>2026-01-06</td><td>U011</td><td>2026-03-02</td><td>U010</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- USER_KPIS -->
+  <div class="data-block d-user_kpis">
+    <div class="dhead"><span class="name">user_kpis</span><span class="desc">— assignments connecting users and KPIs</span></div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>ID</th><th>User ID</th><th>KPI ID</th><th>Target</th><th>Is Sum</th><th>Assigned At</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>UK001</td><td>U001</td><td>KPI001</td><td>90</td><td>false</td><td>2026-01-10</td><td><span class="stat active">ACTIVE</span></td></tr>
+        <tr><td>UK002</td><td>U001</td><td>KPI002</td><td>10</td><td>true</td><td>2026-01-10</td><td><span class="stat active">ACTIVE</span></td></tr>
+        <tr><td>UK003</td><td>U002</td><td>KPI001</td><td>85</td><td>false</td><td>2026-01-11</td><td><span class="stat active">ACTIVE</span></td></tr>
+        <tr><td>UK004</td><td>U003</td><td>KPI003</td><td>12</td><td>true</td><td>2026-01-11</td><td><span class="stat active">ACTIVE</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- REPORTING_PERIODS -->
+  <div class="data-block d-reporting_periods">
+    <div class="dhead"><span class="name">reporting_periods</span><span class="desc">— dynamic reporting periods</span></div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>ID</th><th>Name</th><th>Year</th><th>Type</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>RP001</td><td>Q1 2026</td><td>2026</td><td>QUARTERLY</td><td>2026-01-01</td><td>2026-03-31</td><td><span class="stat closed">CLOSED</span></td></tr>
+        <tr><td>RP002</td><td>Q2 2026</td><td>2026</td><td>QUARTERLY</td><td>2026-04-01</td><td>2026-06-30</td><td><span class="stat closed">CLOSED</span></td></tr>
+        <tr><td>RP003</td><td>Q3 2026</td><td>2026</td><td>QUARTERLY</td><td>2026-07-01</td><td>2026-09-30</td><td><span class="stat open">OPEN</span></td></tr>
+        <tr><td>RP004</td><td>Q4 2026</td><td>2026</td><td>QUARTERLY</td><td>2026-10-01</td><td>2026-12-31</td><td><span class="stat upcoming">UPCOMING</span></td></tr>
+        <tr><td>RP005</td><td>Annual 2026</td><td>2026</td><td>ANNUAL</td><td>2026-01-01</td><td>2026-12-31</td><td><span class="stat upcoming">UPCOMING</span></td></tr>
+        <tr><td>RP006</td><td>Mid-Year Review</td><td>2027</td><td>SPECIAL</td><td>2027-06-01</td><td>2027-06-30</td><td><span class="stat upcoming">UPCOMING</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- PERFORMANCE -->
+  <div class="data-block d-performance">
+    <div class="dhead"><span class="name">performance</span><span class="desc">— performance records per KPI assignment and period</span></div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>ID</th><th>User KPI ID</th><th>Period</th><th>Actual</th><th>Achievement</th><th>Comment</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>P001</td><td>UK001</td><td>Q1 2026</td><td>82</td><td>91.11%</td><td>Good performance</td><td><span class="stat approved">APPROVED</span></td></tr>
+        <tr><td>P002</td><td>UK001</td><td>Q2 2026</td><td>87</td><td>96.67%</td><td>Improved from Q1</td><td><span class="stat approved">APPROVED</span></td></tr>
+        <tr><td>P003</td><td>UK002</td><td>Q1 2026</td><td>7</td><td>70%</td><td>Need improvement</td><td><span class="stat submitted">SUBMITTED</span></td></tr>
+        <tr><td>P004</td><td>UK003</td><td>Q1 2026</td><td>80</td><td>94.12%</td><td>Good progress</td><td><span class="stat pending">PENDING</span></td></tr>
+        <tr><td>P005</td><td>UK001</td><td>Q3 2026</td><td>91</td><td>101.11%</td><td>Target exceeded</td><td><span class="stat submitted">SUBMITTED</span></td></tr>
+        <tr><td>P006</td><td>UK001</td><td>Annual 2026</td><td>88</td><td>97.78%</td><td>Annual performance</td><td><span class="stat pending">PENDING</span></td></tr>
+        <tr><td>P007</td><td>UK004</td><td>Mid-Year Review</td><td>10</td><td>83.33%</td><td>Special review period</td><td><span class="stat submitted">SUBMITTED</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+</div>
+
+</body>
+</html>

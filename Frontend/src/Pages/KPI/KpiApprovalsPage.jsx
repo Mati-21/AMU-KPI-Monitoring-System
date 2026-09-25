@@ -8,11 +8,7 @@ import { Badge } from '../../Components/UI/Badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../../Components/UI/dialog';
 import permissionUtils from '../../lib/permissionUtils';
 import { useNotification } from '../../Context/NotificationContext';
-import { 
-  useKpiApprovalsQuery, 
-  useApproveKpiMutation, 
-  useAdjustKpiMutation 
-} from '../../Hooks/Queries/useKpis';
+import { useKpiApprovalsQuery, useApproveKpiMutation, useAdjustKpiMutation } from '../../Hooks/Queries/useKpis';
 
 const statusMeta = {
   pending: {
@@ -78,7 +74,7 @@ const KpiApprovalsPage = () => {
 
   const handleWatch = (file) => {
     if (file.url) {
-      const fullUrl = file.url.startsWith('http') ? file.url : `http://localhost:5000${file.url}`;
+      const fullUrl = file.url.startsWith('http') ? file.url : `http://localhost:6000${file.url}`;
       window.open(fullUrl, '_blank');
     } else {
       notify(`Previewing ${file.name}...`, 'info');
@@ -138,16 +134,19 @@ const KpiApprovalsPage = () => {
     if (!approval) return;
 
     if (type === 'approve') {
-      approveKpiMutation.mutate({ id: approval.id, remark }, {
-        onSuccess: () => {
-          emitReportDataChanged();
-          notify('KPI submission approved successfully.', 'success');
-          setActionModal(prev => ({ ...prev, open: false }));
-        },
-        onError: () => {
-          notify('Failed to approve KPI submission.', 'error');
+      approveKpiMutation.mutate(
+        { id: approval.id, remark },
+        {
+          onSuccess: () => {
+            emitReportDataChanged();
+            notify('KPI submission approved successfully.', 'success');
+            setActionModal((prev) => ({ ...prev, open: false }));
+          },
+          onError: () => {
+            notify('Failed to approve KPI submission.', 'error');
+          },
         }
-      });
+      );
     } else {
       const parsedValue = Number(adjustedValue);
       if (adjustedValue === '' || !Number.isFinite(parsedValue)) {
@@ -155,16 +154,19 @@ const KpiApprovalsPage = () => {
         return;
       }
 
-      adjustKpiMutation.mutate({ id: approval.id, adjustedValue: parsedValue, remark }, {
-        onSuccess: () => {
-          emitReportDataChanged();
-          notify('KPI submission adjusted and approved.', 'success');
-          setActionModal(prev => ({ ...prev, open: false }));
-        },
-        onError: () => {
-          notify('Failed to adjust KPI submission.', 'error');
+      adjustKpiMutation.mutate(
+        { id: approval.id, adjustedValue: parsedValue, remark },
+        {
+          onSuccess: () => {
+            emitReportDataChanged();
+            notify('KPI submission adjusted and approved.', 'success');
+            setActionModal((prev) => ({ ...prev, open: false }));
+          },
+          onError: () => {
+            notify('Failed to adjust KPI submission.', 'error');
+          },
         }
-      });
+      );
     }
   };
 
@@ -383,7 +385,9 @@ const KpiApprovalsPage = () => {
                             <PencilLine className="h-4 w-4" />
                             Adjust &amp; Approve
                           </Button>
-                          {!canApprove ? <p className="text-xs text-muted-foreground">Approvals require the create permission for KPI Approvals.</p> : null}
+                          {!canApprove ? (
+                            <p className="text-xs text-muted-foreground">Approvals require the create permission for KPI Approvals.</p>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">
@@ -452,7 +456,7 @@ const KpiApprovalsPage = () => {
       </Dialog>
 
       {/* Action Modal (Approve / Adjust) */}
-      <Dialog open={actionModal.open} onOpenChange={(open) => setActionModal(prev => ({ ...prev, open }))}>
+      <Dialog open={actionModal.open} onOpenChange={(open) => setActionModal((prev) => ({ ...prev, open }))}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -469,7 +473,8 @@ const KpiApprovalsPage = () => {
               )}
             </DialogTitle>
             <DialogDescription>
-              Reviewing submission for <span className="font-semibold text-foreground">{actionModal.approval?.title}</span> by {actionModal.approval?.submitter}.
+              Reviewing submission for <span className="font-semibold text-foreground">{actionModal.approval?.title}</span> by{' '}
+              {actionModal.approval?.submitter}.
             </DialogDescription>
           </DialogHeader>
 
@@ -480,7 +485,7 @@ const KpiApprovalsPage = () => {
                 <input
                   type="number"
                   value={actionModal.adjustedValue}
-                  onChange={(e) => setActionModal(prev => ({ ...prev, adjustedValue: e.target.value }))}
+                  onChange={(e) => setActionModal((prev) => ({ ...prev, adjustedValue: e.target.value }))}
                   placeholder="Enter corrected value"
                   className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                   autoFocus
@@ -492,7 +497,7 @@ const KpiApprovalsPage = () => {
               <label className="text-sm font-medium text-foreground">Approver's Remark</label>
               <textarea
                 value={actionModal.remark}
-                onChange={(e) => setActionModal(prev => ({ ...prev, remark: e.target.value }))}
+                onChange={(e) => setActionModal((prev) => ({ ...prev, remark: e.target.value }))}
                 placeholder="Add a note or feedback (optional)"
                 rows={3}
                 className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -501,15 +506,15 @@ const KpiApprovalsPage = () => {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setActionModal(prev => ({ ...prev, open: false }))}>
+            <Button variant="outline" onClick={() => setActionModal((prev) => ({ ...prev, open: false }))}>
               Cancel
             </Button>
-            <Button 
-              onClick={handleConfirmAction} 
+            <Button
+              onClick={handleConfirmAction}
               disabled={approveKpiMutation.isPending || adjustKpiMutation.isPending}
               className={actionModal.type === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-sky-600 hover:bg-sky-700'}
             >
-              {(approveKpiMutation.isPending || adjustKpiMutation.isPending) ? 'Processing...' : 'Confirm Action'}
+              {approveKpiMutation.isPending || adjustKpiMutation.isPending ? 'Processing...' : 'Confirm Action'}
             </Button>
           </DialogFooter>
         </DialogContent>

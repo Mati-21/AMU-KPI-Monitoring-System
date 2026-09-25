@@ -23,14 +23,15 @@ const updateSetting = async (req, res) => {
       const { key, value, type } = s;
       const existing = await prisma.systemSettings.findFirst({ where: { Key: key } });
 
+      const now = new Date();
       if (existing) {
         await prisma.systemSettings.update({
           where: { Id: existing.Id },
-          data: { Value: String(value), Type: type || 'string' }
+          data: { Value: String(value), Type: type || 'string', updatedAt: now }
         });
       } else {
         await prisma.systemSettings.create({
-          data: { Key: key, Value: String(value), Type: type || 'string' }
+          data: { Key: key, Value: String(value), Type: type || 'string', createdAt: now, updatedAt: now }
         });
       }
     }
@@ -87,17 +88,18 @@ const uploadLogo = async (req, res) => {
     }
 
     const logoPath = req.file.path;
+    const now = new Date();
     
     const existing = await prisma.systemSettings.findFirst({ where: { Key: 'system_logo' } });
 
     if (existing) {
       await prisma.systemSettings.update({
         where: { Id: existing.Id },
-        data: { Value: logoPath }
+        data: { Value: logoPath, updatedAt: now }
       });
     } else {
       await prisma.systemSettings.create({
-        data: { Key: 'system_logo', Value: logoPath, Type: 'string' }
+        data: { Key: 'system_logo', Value: logoPath, Type: 'string', createdAt: now, updatedAt: now }
       });
     }
 

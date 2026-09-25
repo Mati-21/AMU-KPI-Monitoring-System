@@ -23,8 +23,12 @@ const loadCycleYearFromDB = async () => {
     if (setting?.Value) {
       _cachedCycleYear = setting.Value;
     } else {
-      // Seed default if not exists
-      await prisma.systemSettings.upsert({ where: { Key: ACTIVE_CYCLE_YEAR_KEY }, update: {}, create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: FALLBACK_CYCLE_YEAR, Type: 'string' } });
+      const now = new Date();
+      await prisma.systemSettings.upsert({
+        where: { Key: ACTIVE_CYCLE_YEAR_KEY },
+        update: { updatedAt: now },
+        create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: FALLBACK_CYCLE_YEAR, Type: 'string', createdAt: now, updatedAt: now }
+      });
       _cachedCycleYear = FALLBACK_CYCLE_YEAR;
     }
   } catch (err) {
@@ -37,12 +41,12 @@ const loadCycleYearFromDB = async () => {
  * Update the active cycle year in both the in-memory cache and the DB.
  */
 const setActiveCycleYear = async (newYear) => {
-
-  const [setting] = await prisma.systemSettings.upsert({ where: { Key: ACTIVE_CYCLE_YEAR_KEY }, update: {}, create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: FALLBACK_CYCLE_YEAR, Type: 'string' } });
-  if (setting.Value !== newYear) {
-    setting.Value = newYear;
-    await prisma.systemSettings.update({ where: { Id: setting.Id }, data: { Value: setting.Value } });
-  }
+  const now = new Date();
+  const setting = await prisma.systemSettings.upsert({
+    where: { Key: ACTIVE_CYCLE_YEAR_KEY },
+    update: { Value: newYear, updatedAt: now },
+    create: { Key: ACTIVE_CYCLE_YEAR_KEY, Value: newYear, Type: 'string', createdAt: now, updatedAt: now }
+  });
   _cachedCycleYear = newYear;
 };
 
