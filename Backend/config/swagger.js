@@ -15,12 +15,14 @@ const swaggerDefinition = {
 ### AMU KPI Monitoring System REST API Documentation
 
 Interactive OpenAPI / Swagger documentation parsed directly from inline JSDoc annotations in every module route file.
+All routes are served under **/api/v1** and follow MODULES_SPECIFICATION.html.
 
 #### Authentication Instructions:
-1. Go to **Auth** -> **POST '/api/auth/login'**.
+1. Go to **Auth** -> **POST /api/v1/auth/login**.
 2. Click **Try it out**, enter credentials, and execute.
-3. The server sets an **HTTP-only session cookie** ('token').
-4. All protected endpoints automatically authenticate via cookie session.
+3. Complete any REQUIRE_PASSWORD_CHANGE / REQUIRE_MFA_* step the response asks for.
+4. The server sets HTTP-only **token** and **refresh_token** cookies; protected endpoints authenticate via the cookie.
+5. Endpoints guarded by a permission code return 403 unless one of your roles grants it.
     `,
     contact: {
       name: 'AMU KPI System Administration',
@@ -47,6 +49,8 @@ Interactive OpenAPI / Swagger documentation parsed directly from inline JSDoc an
       },
     },
   },
+  // Cookie auth applies to every operation unless it declares `security: []`
+  security: [{ CookieAuth: [] }],
 };
 
 const options = {

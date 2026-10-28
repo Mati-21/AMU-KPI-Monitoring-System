@@ -1,30 +1,30 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getPublicSettings = async () => {
-  return {
-    system_name: 'AMU KPI Monitoring System',
-    institution_name: 'Arba Minch University',
-  };
-};
+// ===== Settings =====
 
-export const getAllSettings = async () => {
-  // TODO: Implement getAllSettings
-  return {};
-};
+/**
+ * Public institutional configuration (isPublic settings + active fiscal year label).
+ */
+export const getPublicSettings = async () => notImplemented('getPublicSettings');
 
-export const upsertSetting = async (data) => {
-  // TODO: Implement upsertSetting
-  return null;
-};
+export const getSettingsGrouped = async () => notImplemented('getSettingsGrouped');
 
-export const getAuditLogs = async () => {
-  // TODO: Implement getAuditLogs
-  return { total: 0, data: [] };
-};
+/**
+ * Batch upsert key/value settings within one group.
+ */
+export const updateSettingsGroup = async (groupName, { settings }, actor) => notImplemented('updateSettingsGroup');
+
+// ===== Audit trail =====
+
+export const listAuditLogs = async ({ actorPersonId, action, entityType, from, to, page, limit } = {}) => notImplemented('listAuditLogs');
+
+export const getAuditLogById = async (id) => notImplemented('getAuditLogById');
 
 export default {
   getPublicSettings,
-  getAllSettings,
-  upsertSetting,
-  getAuditLogs,
+  getSettingsGrouped,
+  updateSettingsGroup,
+  listAuditLogs,
+  getAuditLogById,
 };

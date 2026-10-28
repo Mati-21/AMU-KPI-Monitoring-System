@@ -1,34 +1,36 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getEvaluations = async () => {
-  // TODO: Implement getEvaluations
-  return [];
-};
+// ===== KPI evaluations =====
 
-export const getEvaluationById = async (id) => {
-  // TODO: Implement getEvaluationById
-  return null;
-};
+export const listEvaluations = async ({ evalCycleId, kpiTargetId, officeId, status } = {}) => notImplemented('listEvaluations');
 
-export const recordProgress = async (data) => {
-  // TODO: Implement recordProgress
-  return null;
-};
+/**
+ * Enter or update the reported value for a target in an open cycle (upsert on kpiTargetId + evalCycleId).
+ */
+export const recordEvaluation = async ({ kpiTargetId, evalCycleId, reportedValue, comment }, actor) => notImplemented('recordEvaluation');
 
-export const verifyEvaluation = async (id, data) => {
-  // TODO: Implement verifyEvaluation
-  return null;
-};
+/**
+ * Save reported values for many targets of one office scorecard at once.
+ */
+export const bulkRecordEvaluations = async ({ evalCycleId, items }, actor) => notImplemented('bulkRecordEvaluations');
 
-export const getOfficeScorecard = async (officeId, evalCycleId) => {
-  // TODO: Implement getOfficeScorecard
-  return null;
-};
+/**
+ * Evaluator confirms actualValue and finalizes the score (direction-aware).
+ */
+export const verifyEvaluation = async (id, { actualValue, comment }, actor) => notImplemented('verifyEvaluation');
+
+// ===== Performance analytics =====
+
+export const getOfficeScorecard = async (officeId, { evalCycleId, fiscalYearId } = {}) => notImplemented('getOfficeScorecard');
+
+export const getInstitutionDashboard = async ({ fiscalYearId, evalCycleId } = {}) => notImplemented('getInstitutionDashboard');
 
 export default {
-  getEvaluations,
-  getEvaluationById,
-  recordProgress,
+  listEvaluations,
+  recordEvaluation,
+  bulkRecordEvaluations,
   verifyEvaluation,
   getOfficeScorecard,
+  getInstitutionDashboard,
 };

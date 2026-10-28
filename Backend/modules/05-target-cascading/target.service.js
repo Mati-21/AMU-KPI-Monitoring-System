@@ -1,40 +1,36 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getTargets = async () => {
-  // TODO: Implement getTargets
-  return [];
-};
+export const listTargets = async ({ fiscalYearId, officeId, kpiId, status } = {}) => notImplemented('listTargets');
 
-export const getTargetTree = async () => {
-  // TODO: Implement getTargetTree
-  return [];
-};
+export const getTargetTree = async ({ fiscalYearId, kpiId } = {}) => notImplemented('getTargetTree');
 
-export const getTargetById = async (id) => {
-  // TODO: Implement getTargetById
-  return null;
-};
+/**
+ * Targets owned by or assigned to the current user's primary office.
+ */
+export const listMyTargets = async ({ fiscalYearId } = {}, actor) => notImplemented('listMyTargets');
 
-export const createTarget = async (data) => {
-  // TODO: Implement createTarget
-  return null;
-};
+/**
+ * Set a top-level (root) institutional target.
+ */
+export const createTarget = async (data, actor) => notImplemented('createTarget');
 
-export const cascadeTarget = async (id, allocations) => {
-  // TODO: Implement cascadeTarget
-  return null;
-};
+/**
+ * Split a parent target into child targets for sub-offices or people.
+ * Must respect the KPI's cascadeMode and maxOverAllocationPercent cap.
+ */
+export const cascadeTarget = async (parentTargetId, { allocations }, actor) => notImplemented('cascadeTarget');
 
-export const updateTargetStatus = async (id, status) => {
-  // TODO: Implement updateTargetStatus
-  return null;
-};
+export const updateTarget = async (id, data, actor) => notImplemented('updateTarget');
+
+export const updateTargetStatus = async (id, { status }, actor) => notImplemented('updateTargetStatus');
 
 export default {
-  getTargets,
+  listTargets,
   getTargetTree,
-  getTargetById,
+  listMyTargets,
   createTarget,
   cascadeTarget,
+  updateTarget,
   updateTargetStatus,
 };

@@ -1,40 +1,46 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getOffices = async () => {
-  // TODO: Implement getOffices
-  return [];
-};
+// ===== Office types =====
 
-export const getOfficeTree = async () => {
-  // TODO: Implement getOfficeTree
-  return [];
-};
+export const listOfficeTypes = async () => notImplemented('listOfficeTypes');
 
-export const getOfficeById = async (id) => {
-  // TODO: Implement getOfficeById
-  return null;
-};
+export const createOfficeType = async (data, actor) => notImplemented('createOfficeType');
 
-export const createOffice = async (data) => {
-  // TODO: Implement createOffice
-  return null;
-};
+// ===== Offices =====
 
-export const updateOffice = async (id, data) => {
-  // TODO: Implement updateOffice
-  return null;
-};
+export const getOfficeTree = async () => notImplemented('getOfficeTree');
 
-export const deleteOffice = async (id) => {
-  // TODO: Implement deleteOffice
-  return null;
-};
+export const listOffices = async ({ officeTypeId, parentOfficeId, isActive, search } = {}) => notImplemented('listOffices');
+
+export const getOfficeById = async (id) => notImplemented('getOfficeById');
+
+export const createOffice = async (data, actor) => notImplemented('createOffice');
+
+export const updateOffice = async (id, data, actor) => notImplemented('updateOffice');
+
+// ===== Positions =====
+
+export const listPositions = async (officeId) => notImplemented('listPositions');
+
+export const createPosition = async (officeId, data, actor) => notImplemented('createPosition');
+
+// ===== Members (OfficePerson placements) =====
+
+export const listMembers = async (officeId) => notImplemented('listMembers');
+
+export const assignMember = async (officeId, data, actor) => notImplemented('assignMember');
 
 export default {
-  getOffices,
+  listOfficeTypes,
+  createOfficeType,
   getOfficeTree,
+  listOffices,
   getOfficeById,
   createOffice,
   updateOffice,
-  deleteOffice,
+  listPositions,
+  createPosition,
+  listMembers,
+  assignMember,
 };

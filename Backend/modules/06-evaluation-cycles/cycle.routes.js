@@ -1,187 +1,140 @@
 import { Router } from 'express';
 import * as cycleController from './cycle.controller.js';
-import { protect, admin } from '../../middleware/authMiddleware.js';
+import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
 
 /**
  * @swagger
  * tags:
- *   name: Evaluation Cycles & Reports
- *   description: Evaluation Windows & Official Office Submission Dossiers (Module 06 - Cadence)
+ *   name: Evaluation Cycles
+ *   description: Module 06 — Reporting periods and office report dossiers
  */
 
 /**
  * @swagger
- * /api/cycles:
+ * /api/v1/eval-cycles:
  *   get:
- *     summary: List All Evaluation Cycles (Q1, Q2, Mid-Year, Annual)
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ *     summary: List evaluation cycles with status and submission progress
+ *     tags: [Evaluation Cycles]
  *     parameters:
- *       - in: query
- *         name: fiscalYearId
- *         schema:
- *           type: integer
+ *       - { in: query, name: fiscalYearId, schema: { type: integer } }
+ *       - { in: query, name: status, schema: { type: string, enum: [planned, open, in_review, closed] } }
  *     responses:
- *       200:
- *         description: List of evaluation cycles
+ *       200: { description: Cycles }
  *   post:
- *     summary: Schedule a New Evaluation Period with Reporting Deadline
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ *     summary: Schedule an evaluation period
+ *     tags: [Evaluation Cycles]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - fiscalYearId
- *               - name
- *               - periodStart
- *               - periodEnd
+ *             required: [fiscalYearId, name, periodStart, periodEnd]
  *             properties:
- *               fiscalYearId:
- *                 type: integer
- *                 example: 1
- *               name:
- *                 type: string
- *                 example: Q1 2026/2027 Evaluation
- *               periodStart:
- *                 type: string
- *                 format: date
- *                 example: 2026-09-01
- *               periodEnd:
- *                 type: string
- *                 format: date
- *                 example: 2026-11-30
- *               dueDate:
- *                 type: string
- *                 format: date
- *                 example: 2026-12-07
+ *               fiscalYearId: { type: integer, example: 1 }
+ *               name: { type: string, example: Q1 }
+ *               periodStart: { type: string, format: date }
+ *               periodEnd: { type: string, format: date }
+ *               dueDate: { type: string, format: date }
  *     responses:
- *       201:
- *         description: Cycle scheduled
+ *       201: { description: Created }
  */
-router.get('/', protect, cycleController.getCycles);
-router.post('/', protect, admin, cycleController.createCycle);
+router.get('/eval-cycles', protect, cycleController.listCycles);
+router.post('/eval-cycles', protect, requirePermission(PERMISSIONS.CYCLE_MANAGE), cycleController.createCycle);
 
 /**
  * @swagger
- * /api/cycles/{id}/status:
+ * /api/v1/eval-cycles/{id}/status:
  *   patch:
- *     summary: Transition Cycle Status (planned, open, in_review, closed)
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ *     summary: Transition cycle status
+ *     tags: [Evaluation Cycles]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - status
+ *             required: [status]
  *             properties:
- *               status:
- *                 type: string
- *                 enum: [planned, open, in_review, closed]
+ *               status: { type: string, enum: [planned, open, in_review, closed] }
  *     responses:
- *       200:
- *         description: Status updated
+ *       200: { description: Updated }
  */
-router.patch('/:id/status', protect, admin, cycleController.updateCycleStatus);
+router.patch('/eval-cycles/:id/status', protect, requirePermission(PERMISSIONS.CYCLE_MANAGE), cycleController.updateCycleStatus);
 
 /**
  * @swagger
- * /api/cycles/reports/initiate:
+ * /api/v1/cycle-reports/initiate:
  *   post:
- *     summary: Initialize or Fetch Draft Submission Dossier for an Office in an Active Cycle
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ *     summary: Create (or return) the draft report dossier for an office in an open cycle
+ *     tags: [Evaluation Cycles]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - evalCycleId
- *               - officeId
+ *             required: [evalCycleId, officeId]
  *             properties:
- *               evalCycleId:
- *                 type: string
- *               officeId:
- *                 type: string
+ *               evalCycleId: { type: string, format: uuid }
+ *               officeId: { type: string, format: uuid }
  *     responses:
- *       200:
- *         description: Dossier record
+ *       201: { description: Draft report }
  */
-router.post('/reports/initiate', protect, cycleController.getOrInitiateReport);
+router.post('/cycle-reports/initiate', protect, requirePermission(PERMISSIONS.REPORT_CREATE), cycleController.initiateReport);
 
 /**
  * @swagger
- * /api/cycles/reports/{id}/submit:
- *   post:
- *     summary: Formally Submit Office Report Dossier for Evaluator Review
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ * /api/v1/cycle-reports/{id}:
+ *   get:
+ *     summary: Full report dossier with evaluations and review history
+ *     tags: [Evaluation Cycles]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200:
- *         description: Dossier submitted
+ *       200: { description: Report }
  */
-router.post('/reports/:id/submit', protect, cycleController.submitReport);
+router.get('/cycle-reports/:id', protect, requirePermission(PERMISSIONS.REPORT_READ), cycleController.getReportById);
 
 /**
  * @swagger
- * /api/cycles/reports/{id}/review:
+ * /api/v1/cycle-reports/{id}/submit:
  *   post:
- *     summary: Review Office Report Dossier (approved, rejected, reopened) with Feedback Notes
- *     tags: [Evaluation Cycles & Reports]
- *     security:
- *       - CookieAuth: []
+ *     summary: Lock draft evaluations and submit the dossier for review
+ *     tags: [Evaluation Cycles]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Submitted }
+ */
+router.post('/cycle-reports/:id/submit', protect, requirePermission(PERMISSIONS.REPORT_SUBMIT), cycleController.submitReport);
+
+/**
+ * @swagger
+ * /api/v1/cycle-reports/{id}/review:
+ *   post:
+ *     summary: Approve, reject or request changes on a submitted report
+ *     tags: [Evaluation Cycles]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - decision
+ *             required: [decision]
  *             properties:
- *               decision:
- *                 type: string
- *                 enum: [approved, rejected, reopened]
- *               reviewNote:
- *                 type: string
- *                 example: Verified research publications and patents.
+ *               decision: { type: string, enum: [approved, rejected, changes_requested] }
+ *               reviewNote: { type: string }
  *     responses:
- *       200:
- *         description: Review result recorded
+ *       200: { description: Reviewed }
  */
-router.post('/reports/:id/review', protect, cycleController.reviewReport);
+router.post('/cycle-reports/:id/review', protect, requirePermission(PERMISSIONS.REPORT_REVIEW), cycleController.reviewReport);
 
 export default router;

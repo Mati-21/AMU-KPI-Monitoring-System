@@ -1,354 +1,185 @@
 import * as authService from './auth.service.js';
+import * as sessionService from './session.service.js';
+import { ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL, STAGE_TOKEN_TTL, ttlToMs } from '../../../config/jwt.js';
+import { badRequest, unauthorized } from '../../../utils/httpError.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-// HTTP-Only Cookie Configuration Options
-const SESSION_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: 'lax',
-  path: '/',
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days active session
+const BASE_COOKIE = { httpOnly: true, secure: isProduction, sameSite: 'lax' };
+const SESSION_COOKIE = { ...BASE_COOKIE, path: '/', maxAge: ttlToMs(ACCESS_TOKEN_TTL) };
+const STAGE_COOKIE = { ...BASE_COOKIE, path: '/', maxAge: ttlToMs(STAGE_TOKEN_TTL) };
+// The refresh token is only ever sent to the auth endpoints
+const REFRESH_COOKIE = { ...BASE_COOKIE, path: '/api/v1/auth', maxAge: ttlToMs(REFRESH_TOKEN_TTL) };
+
+const clearAuthCookies = (res) => {
+  res.clearCookie('token', { path: SESSION_COOKIE.path });
+  res.clearCookie('auth_stage', { path: STAGE_COOKIE.path });
+  res.clearCookie('refresh_token', { path: REFRESH_COOKIE.path });
 };
 
-const STAGE_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: isProduction,
-  sameSite: 'lax',
-  path: '/',
-  maxAge: 15 * 60 * 1000, // 15 minutes for intermediate first-login/MFA steps
+const setSessionCookies = (res, { token, refreshToken }) => {
+  res.cookie('token', token, SESSION_COOKIE);
+  res.cookie('refresh_token', refreshToken, REFRESH_COOKIE);
+  res.clearCookie('auth_stage', { path: STAGE_COOKIE.path });
 };
 
-export const login = async (req, res, next) => {
+/**
+ * Move tokens from a service result into HTTP-only cookies; never expose them in the body.
+ */
+const sendAuthResult = (res, result) => {
+  const { stageToken, token, refreshToken, ...body } = result;
+  if (stageToken) {
+    res.clearCookie('token', { path: SESSION_COOKIE.path });
+    res.cookie('auth_stage', stageToken, STAGE_COOKIE);
+  } else if (token) {
+    setSessionCookies(res, { token, refreshToken });
+  }
+  res.json(body);
+};
+
+/**
+ * MFA setup steps accept either an active session or an `auth_stage` cookie at the MFA_SETUP step.
+ */
+const resolveMfaSetupAccountId = (req) => {
+  if (req.user) return req.user.id;
+  if (!req.cookies?.auth_stage) throw unauthorized('Session cookie or MFA setup step cookie required');
+  return authService.verifyStageToken(req.cookies.auth_stage, authService.STAGES.MFA_SETUP).id;
+};
+
+// Client details recorded on the session (shown in "active sessions")
+const clientContext = (req) => ({ ipAddress: req.ip, userAgent: req.get('user-agent') || null });
+
+export const login = async (req, res) => {
+  const result = await authService.authenticate(
+    { identifier: req.body?.username || req.body?.email, password: req.body?.password },
+    clientContext(req)
+  );
+  sendAuthResult(res, result);
+};
+
+export const changePasswordFirstLogin = async (req, res) => {
+  const result = await authService.changePasswordFirstLogin(
+    { stageToken: req.cookies?.auth_stage, newPassword: req.body?.newPassword },
+    clientContext(req)
+  );
+  sendAuthResult(res, result);
+};
+
+export const changePassword = async (req, res) => {
+  const { currentPassword, newPassword, code } = req.body || {};
+  const result = await authService.changePassword({
+    accountId: req.user.id,
+    sessionId: req.user.sessionId,
+    currentPassword,
+    newPassword,
+    code,
+  });
+  res.json(result);
+};
+
+export const setupMfa = async (req, res) => {
+  const data = await authService.generateMfaSetup({ accountId: resolveMfaSetupAccountId(req) });
+  res.json({ status: 'success', data });
+};
+
+export const verifyMfaSetup = async (req, res) => {
+  if (!req.body?.code) throw badRequest('6-digit verification code is required');
+  const result = await authService.verifyAndEnableMfa(
+    // Only the login flow (no session yet) opens a new session
+    { accountId: resolveMfaSetupAccountId(req), code: req.body.code, startSession: !req.user },
+    clientContext(req)
+  );
+  sendAuthResult(res, result);
+};
+
+export const verifyMfa = async (req, res) => {
+  if (!req.body?.code) throw badRequest('6-digit verification code is required');
+  const result = await authService.verifyMfaLogin({ stageToken: req.cookies?.auth_stage, code: req.body.code }, clientContext(req));
+  sendAuthResult(res, result);
+};
+
+export const disableMfa = async (req, res) => {
+  if (!req.body?.code) throw badRequest('Verification code required to disable MFA');
+  const result = await authService.disableMfa({ accountId: req.user.id, code: req.body.code });
+  res.json({ status: 'success', ...result });
+};
+
+export const refreshToken = async (req, res) => {
   try {
-    const identifier = req.body.username || req.body.email;
-    const { password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ message: 'All inputs are required' });
-    }
-
-    const result = await authService.authenticate({
-      username: req.body.username,
-      email: req.body.email,
-      password,
-    });
-
-    // Handle intermediate state: First-login password change or MFA
-    if (result.tempToken) {
-      res.cookie('auth_stage', result.tempToken, STAGE_COOKIE_OPTIONS);
-      res.clearCookie('token');
-      const { tempToken, ...response } = result;
-      return res.json(response);
-    }
-
-    // Normal successful login: Set final session cookie
-    if (result.token) {
-      res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-      res.clearCookie('auth_stage');
-      const { token, ...response } = result;
-      return res.json(response);
-    }
-
-    res.json(result);
+    const tokens = await sessionService.refreshSession(req.cookies?.refresh_token, clientContext(req));
+    setSessionCookies(res, tokens);
+    res.json({ status: 'success', message: 'Session refreshed' });
   } catch (error) {
-    res.status(401).json({ message: error.message });
+    clearAuthCookies(res);
+    throw error;
   }
 };
 
-export const changePassword = async (req, res, next) => {
-  try {
-    const { currentPassword, newPassword, code, mfaCode } = req.body;
-    const stageCookie = req.cookies?.auth_stage;
-    const sessionToken = req.cookies?.token;
-
-    if (!newPassword) {
-      return res.status(400).json({ message: 'newPassword is required' });
-    }
-
-    // Case 1: First-time password change (auth_stage cookie present)
-    if (stageCookie) {
-      try {
-        const decoded = (await import('jsonwebtoken')).default.verify(stageCookie, process.env.JWT_SECRET || 'amu_kpi_jwt_secret');
-        if (decoded.scope === 'MFA_SETUP') {
-          return res.json({
-            status: 'REQUIRE_MFA_SETUP',
-            mfa_required: true,
-            message: 'Password was already updated. Please proceed to MFA Setup (POST /api/auth/mfa/setup).',
-          });
-        }
-      } catch (e) {
-        // Fall through if token expired
-      }
-
-      const result = await authService.changePasswordFirstLogin({ tempToken: stageCookie, newPassword });
-
-      if (result.tempToken) {
-        res.cookie('auth_stage', result.tempToken, STAGE_COOKIE_OPTIONS);
-        const { tempToken, ...response } = result;
-        return res.json(response);
-      }
-
-      if (result.token) {
-        res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-        res.clearCookie('auth_stage');
-        const { token, ...response } = result;
-        return res.json(response);
-      }
-
-      return res.json(result);
-    }
-
-    // Case 2: Regular password change (active session cookie or req.user present)
-    let userId = req.user?.id;
-    if (!userId && sessionToken) {
-      try {
-        const decoded = (await import('jsonwebtoken')).default.verify(sessionToken, process.env.JWT_SECRET || 'amu_kpi_jwt_secret');
-        userId = decoded.id;
-      } catch (e) {
-        return res.status(401).json({ message: 'Invalid or expired session cookie. Please login again.' });
-      }
-    }
-
-    if (userId) {
-      const result = await authService.changePasswordRegular({
-        userId,
-        currentPassword,
-        newPassword,
-        code: code || mfaCode,
-      });
-
-      if (result.token) {
-        res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-        const { token, ...response } = result;
-        return res.json(response);
-      }
-
-      return res.json(result);
-    }
-
-    // Case 3: Direct password change with username & currentPassword (if cookie is missing/expired)
-    const username = req.body?.username || (currentPassword && 'mati.admin');
-    if (username && currentPassword) {
-      const user = await authService.findUserByUsername(username);
-      if (user) {
-        const bcrypt = (await import('bcryptjs')).default;
-        const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-        if (isMatch) {
-          if (user.mustChangePassword) {
-            const tempToken = authService.generateTempToken(user.id, 'FIRST_LOGIN_PASSWORD_CHANGE');
-            const result = await authService.changePasswordFirstLogin({ tempToken, newPassword });
-
-            if (result.tempToken) {
-              res.cookie('auth_stage', result.tempToken, STAGE_COOKIE_OPTIONS);
-              const { tempToken, ...response } = result;
-              return res.json(response);
-            }
-            if (result.token) {
-              res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-              res.clearCookie('auth_stage');
-              const { token, ...response } = result;
-              return res.json(response);
-            }
-            return res.json(result);
-          } else {
-            const result = await authService.changePasswordRegular({
-              userId: user.id,
-              currentPassword,
-              newPassword,
-              code: code || mfaCode,
-            });
-
-            if (result.token) {
-              res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-              const { token, ...response } = result;
-              return res.json(response);
-            }
-            return res.json(result);
-          }
-        }
-      }
-    }
-
-    return res.status(401).json({
-      message: 'Missing session or stage cookie. Please execute POST /api/auth/login first, or provide currentPassword.',
-    });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
+/**
+ * Ends the current session server-side (works even if the access token has expired) and clears cookies.
+ */
+export const logout = async (req, res) => {
+  const sessionId = sessionService.sessionIdFromTokens({ accessToken: req.cookies?.token, refreshToken: req.cookies?.refresh_token });
+  if (sessionId) await sessionService.revokeSession(sessionId, sessionService.REVOKE_REASONS.LOGOUT);
+  clearAuthCookies(res);
+  res.json({ status: 'success', message: 'Logged out successfully' });
 };
 
-export const changePasswordFirstLogin = async (req, res, next) => {
-  return changePassword(req, res, next);
+export const getMe = async (req, res) => {
+  const profile = await authService.getProfile(req.user.id);
+  res.json({ status: 'success', data: { ...profile, sessionId: req.user.sessionId } });
 };
 
-export const setupMfa = async (req, res, next) => {
-  try {
-    let userId = req.user?.id;
-    const stageCookie = req.cookies?.auth_stage;
+// ===== Own sessions =====
 
-    if (!userId && stageCookie) {
-      const decoded = authService.verifyTempToken(stageCookie, 'MFA_SETUP');
-      userId = decoded.id;
-    }
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Authentication session cookie or MFA stage cookie required' });
-    }
-
-    const mfaData = await authService.generateMfaSetup({ userId });
-    res.json({
-      status: 'success',
-      data: mfaData,
-    });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
+export const listMySessions = async (req, res) => {
+  const sessions = await sessionService.listSessions(req.user.id, { currentSessionId: req.user.sessionId });
+  res.json({ status: 'success', data: sessions });
 };
 
-export const verifyMfaSetup = async (req, res, next) => {
-  try {
-    const stageCookie = req.cookies?.auth_stage;
-    let userId = req.user?.id;
-
-    if (!userId && stageCookie) {
-      const decoded = authService.verifyTempToken(stageCookie, 'MFA_SETUP');
-      userId = decoded.id;
-    }
-
-    const { secret, code } = req.body;
-    if (!userId) {
-      return res.status(401).json({ message: 'Missing MFA setup session cookie. Please complete previous step.' });
-    }
-    if (!code) {
-      return res.status(400).json({ message: '6-digit verification code is required' });
-    }
-
-    const result = await authService.verifyAndEnableMfa({ userId, code, secret });
-
-    if (result.token) {
-      res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-      res.clearCookie('auth_stage');
-      const { token, ...response } = result;
-      return res.json(response);
-    }
-
-    res.json(result);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
+export const revokeMySession = async (req, res) => {
+  await sessionService.revokeOwnSession(req.user.id, req.params.id);
+  if (req.params.id === req.user.sessionId) clearAuthCookies(res);
+  res.json({ status: 'success', message: 'Session revoked' });
 };
 
-export const verifyMfa = async (req, res, next) => {
-  try {
-    const stageCookie = req.cookies?.auth_stage;
-    const { code } = req.body;
-
-    if (!stageCookie) {
-      return res.status(401).json({ message: 'Missing MFA verification session cookie. Please login again.' });
-    }
-    if (!code) {
-      return res.status(400).json({ message: '6-digit verification code is required' });
-    }
-
-    const result = await authService.verifyMfaLogin({ tempToken: stageCookie, code });
-
-    if (result.token) {
-      res.cookie('token', result.token, SESSION_COOKIE_OPTIONS);
-      res.clearCookie('auth_stage');
-      const { token, ...response } = result;
-      return res.json(response);
-    }
-
-    res.json(result);
-  } catch (error) {
-    res.status(401).json({ message: error.message });
-  }
+export const revokeMyOtherSessions = async (req, res) => {
+  const result = await sessionService.revokeAllSessions(req.user.id, sessionService.REVOKE_REASONS.SIGN_OUT_OTHERS, {
+    exceptSessionId: req.user.sessionId,
+  });
+  res.json({ status: 'success', message: `Signed out of ${result.revokedCount} other session(s)`, data: result });
 };
 
-export const disableMfa = async (req, res, next) => {
-  try {
-    const { code } = req.body;
-    if (!code) {
-      return res.status(400).json({ message: 'Verification code required to disable MFA' });
-    }
-
-    const result = await authService.disableMfa({ userId: req.user.id, code });
-    res.json({ status: 'success', ...result });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
+export const enforceUserMfa = async (req, res) => {
+  const enforced = req.body?.enforced ?? true;
+  const updated = await authService.setMfaEnforced({ accountId: req.params.id, enforced });
+  res.json({ status: 'success', message: `MFA enforcement for user set to ${updated.mfaEnforced}`, data: updated });
 };
 
-export const enforceUserMfa = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { enforced } = req.body;
-    const updated = await authService.setMfaEnforced({ userId: id, enforced });
-    res.json({
-      status: 'success',
-      message: `MFA enforcement for user set to ${Boolean(enforced)}`,
-      data: { id: updated.id, mfaEnforced: updated.mfaEnforced },
-    });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
-export const enforceRoleMfa = async (req, res, next) => {
-  try {
-    const { roleName, roleId, enforced = true } = req.body;
-    const result = await authService.setMfaEnforcedForRole({ roleName, roleId, enforced });
-    res.json({
-      status: 'success',
-      message: `2FA enforcement for role "${result.roleName}" set to ${result.mfaEnforced} (${result.affectedUsersCount} users updated)`,
-      data: result,
-    });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
-export const logout = async (req, res, next) => {
-  try {
-    res.clearCookie('token', { path: '/' });
-    res.clearCookie('auth_stage', { path: '/' });
-    res.json({ status: 'success', message: 'Logged out successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getMe = async (req, res, next) => {
-  try {
-    const user = await authService.findUserById(req.user.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json({
-      status: 'success',
-      data: {
-        id: user.id,
-        username: user.username,
-        isActive: user.isActive,
-        mfaEnabled: user.mfaEnabled,
-        mfaEnforced: user.mfaEnforced,
-        person: user.person,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+export const enforceRoleMfa = async (req, res) => {
+  const { roleName, roleId, enforced = true } = req.body || {};
+  const result = await authService.setMfaEnforcedForRole({ roleName, roleId, enforced });
+  res.json({
+    status: 'success',
+    message: `2FA enforcement for role "${result.roleName}" set to ${result.mfaEnforced} (${result.affectedUsersCount} users updated)`,
+    data: result,
+  });
 };
 
 export default {
   login,
-  changePassword,
   changePasswordFirstLogin,
+  changePassword,
   setupMfa,
   verifyMfaSetup,
   verifyMfa,
   disableMfa,
-  enforceUserMfa,
-  enforceRoleMfa,
+  refreshToken,
   logout,
   getMe,
+  listMySessions,
+  revokeMySession,
+  revokeMyOtherSessions,
+  enforceUserMfa,
+  enforceRoleMfa,
 };
-

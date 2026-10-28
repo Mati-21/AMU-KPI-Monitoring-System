@@ -1,23 +1,29 @@
 import 'dotenv/config';
 import { generate } from 'otplib';
 
-const BASE_URL = 'http://localhost:8058/api/auth';
+/**
+ * End-to-end check of the cookie auth flow against a running server.
+ * WARNING: resets the Super Admin account's password and MFA in the configured database.
+ */
+const API_URL = `http://localhost:${process.env.PORT || 8058}/api/v1`;
+const BASE_URL = `${API_URL}/auth`;
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || ADMIN_USERNAME).trim().toLowerCase();
 
 const extractCookies = (res) => {
-  const raw = res.headers.get('set-cookie');
-  if (!raw) return {};
   const cookies = {};
-  raw.split(',').forEach((c) => {
-    const parts = c.split(';')[0].trim().split('=');
-    if (parts.length === 2) {
-      cookies[parts[0]] = parts[1];
-    }
-  });
+  for (const header of res.headers.getSetCookie()) {
+    const [pair] = header.split(';');
+    const index = pair.indexOf('=');
+    const name = pair.slice(0, index).trim();
+    const value = pair.slice(index + 1).trim();
+    cookies[name] = value; // empty value = cookie cleared by the server
+  }
   return cookies;
 };
 
 const buildCookieHeader = (cookieJar) => {
   return Object.entries(cookieJar)
+    .filter(([, v]) => v)
     .map(([k, v]) => `${k}=${v}`)
     .join('; ');
 };
@@ -30,7 +36,7 @@ const runTest = async () => {
 
   const testTempPass = 'AMU@TempCookie9999!';
   await prisma.userAccount.update({
-    where: { username: 'mati.admin' },
+    where: { username: ADMIN_USERNAME },
     data: {
       passwordHash: await bcrypt.hash(testTempPass, 10),
       mustChangePassword: true,
@@ -47,7 +53,7 @@ const runTest = async () => {
   let res = await fetch(`${BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'mati.admin', password: testTempPass }),
+    body: JSON.stringify({ username: ADMIN_USERNAME, password: testTempPass }),
   });
   let data = await res.json();
   Object.assign(cookieJar, extractCookies(res));
@@ -108,7 +114,7 @@ const runTest = async () => {
       'Content-Type': 'application/json',
       Cookie: buildCookieHeader(cookieJar),
     },
-    body: JSON.stringify({ secret, code: initialCode }),
+    body: JSON.stringify({ code: initialCode }),
   });
   data = await res.json();
   Object.assign(cookieJar, extractCookies(res));
@@ -134,7 +140,7 @@ const runTest = async () => {
   console.log('   MFA Enabled in DB:', data.data?.mfaEnabled);
   console.log('   MFA Enforced in DB:', data.data?.mfaEnforced);
 
-  if (res.status !== 200 || data.data?.username !== 'mati.admin') {
+  if (res.status !== 200 || data.data?.username !== ADMIN_USERNAME) {
     throw new Error('Failed Step 5: Unable to authenticate via session cookie');
   }
 
@@ -144,13 +150,20 @@ const runTest = async () => {
   res = await fetch(`${BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'mati.admin', password: newPermanentPassword }),
+    body: JSON.stringify({ username: ADMIN_USERNAME, password: newPermanentPassword }),
   });
   data = await res.json();
   Object.assign(cookieJar, extractCookies(res));
 
   console.log('   Response Status:', data.status);
   console.log('   Stage Cookie Set for 2FA:', cookieJar['auth_stage'] ? 'auth_stage=PRESENT' : 'MISSING');
+
+  // Security check: a pre-MFA stage token must never be accepted as a session token
+  res = await fetch(`${BASE_URL}/me`, { headers: { Cookie: `token=${cookieJar['auth_stage']}` } });
+  console.log('   Stage token replayed as session -> HTTP', res.status);
+  if (res.status !== 401) {
+    throw new Error('Security check failed: auth_stage token was accepted as a session token');
+  }
 
   // STEP 7: Submit 2FA Code with auth_stage cookie
   console.log('\n7️⃣ Step 7: Submitting Authenticator 6-digit code with auth_stage cookie...');
@@ -168,6 +181,22 @@ const runTest = async () => {
 
   console.log('   Response Status:', data.status);
   console.log('   Final Session Cookie Established:', cookieJar['token'] ? 'token=PRESENT' : 'MISSING');
+
+  // Refresh: exchange refresh_token for a new session, then confirm permissions are reported
+  console.log('\n🔄 Refreshing session with refresh_token cookie...');
+  res = await fetch(`${BASE_URL}/refresh-token`, { method: 'POST', headers: { Cookie: buildCookieHeader(cookieJar) } });
+  Object.assign(cookieJar, extractCookies(res));
+  console.log('   Refresh -> HTTP', res.status);
+  if (res.status !== 200 || !cookieJar['token']) {
+    throw new Error('Failed refresh: no new session cookie');
+  }
+
+  res = await fetch(`${BASE_URL}/me`, { headers: { Cookie: buildCookieHeader(cookieJar) } });
+  data = await res.json();
+  console.log('   Permissions reported by /me:', data.data?.permissions?.length ?? 0);
+  if (!data.data?.permissions?.includes('*')) {
+    throw new Error('Failed: Super Admin wildcard permission missing from /me');
+  }
 
   // STEP 8: Logout (Clears Cookies)
   console.log('\n8️⃣ Step 8: Calling /logout to clear all cookies...');

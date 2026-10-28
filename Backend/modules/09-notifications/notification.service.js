@@ -1,33 +1,29 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getMyInbox = async (personId) => {
-  // TODO: Implement getMyInbox
-  return { total: 0, unreadCount: 0, data: [] };
-};
+export const listMyNotifications = async (personId, { unreadOnly, page, limit } = {}) => notImplemented('listMyNotifications');
 
-export const getUnreadCount = async (personId) => {
-  // TODO: Implement getUnreadCount
-  return 0;
-};
+export const countUnread = async (personId) => notImplemented('countUnread');
 
-export const markAsRead = async (id, personId) => {
-  // TODO: Implement markAsRead
-  return null;
-};
+/**
+ * Mark one of the caller's notifications (by notification id) as read.
+ */
+export const markAsRead = async (notificationId, personId) => notImplemented('markAsRead');
 
-export const markAllAsRead = async (personId) => {
-  // TODO: Implement markAllAsRead
-  return null;
-};
+export const markAllAsRead = async (personId) => notImplemented('markAllAsRead');
 
-export const dispatchNotification = async (data) => {
-  // TODO: Implement dispatchNotification
-  return null;
-};
+/**
+ * Create a notification and resolve its recipients from the target office (optionally including
+ * sub-offices) and/or a required permission, then push it over Socket.io.
+ */
+export const dispatchNotification = async (
+  { title, message, targetOfficeId, includeSubOffices, requiredPermissionCode, entityType, entityId, channel },
+  actor
+) => notImplemented('dispatchNotification');
 
 export default {
-  getMyInbox,
-  getUnreadCount,
+  listMyNotifications,
+  countUnread,
   markAsRead,
   markAllAsRead,
   dispatchNotification,

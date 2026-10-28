@@ -1,8 +1,7 @@
 import { Router } from 'express';
 
-// Import Module Routes from Numbered Modules 01 to 10
 import authRoutes from './01-identity-access/auth/auth.routes.js';
-import userRoutes from './01-identity-access/user/user.routes.js';
+import personRoutes from './01-identity-access/person/person.routes.js';
 import officeRoutes from './02-office-hierarchy/office.routes.js';
 import roleRoutes from './03-access-control/role.routes.js';
 import kpiRoutes from './04-kpi-catalog/kpi.routes.js';
@@ -13,37 +12,22 @@ import evidenceRoutes from './08-evidence-documents/evidence.routes.js';
 import notificationRoutes from './09-notifications/notification.routes.js';
 import systemRoutes from './10-system-governance/system.routes.js';
 
+/**
+ * API v1 router. Each module router declares its own resource paths exactly as listed in
+ * MODULES_SPECIFICATION.html (e.g. /persons, /kpi-targets, /cycle-reports), so they are all mounted at the root.
+ */
 const router = Router();
 
-// Module 01: Identity & Access (Auth & User Directory)
-router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-
-// Module 02: Office & Hierarchy
-router.use('/offices', officeRoutes);
-
-// Module 03: Scoped Access Control (Roles & Permissions)
-router.use('/roles', roleRoutes);
-
-// Module 04: Strategic KPI Catalog
-router.use('/kpis', kpiRoutes);
-
-// Module 05: Target Cascading & Allocation
-router.use('/targets', targetRoutes);
-
-// Module 06: Evaluation Cycles & Reports
-router.use('/cycles', cycleRoutes);
-
-// Module 07: Performance Scoring & Scorecards
-router.use('/evaluations', evaluationRoutes);
-
-// Module 08: Evidence Documents & Proof
-router.use('/evidence', evidenceRoutes);
-
-// Module 09: Targeted Notifications & Alerts
-router.use('/notifications', notificationRoutes);
-
-// Module 10: System Governance & Audit Trail
-router.use('/system', systemRoutes);
+router.use(authRoutes); // 01 /auth/*
+router.use(personRoutes); // 01 /persons, /users/:id/*
+router.use(officeRoutes); // 02 /office-types, /offices
+router.use(roleRoutes); // 03 /roles, /permissions, /office-persons, /office-person-roles, /auth/check-permission
+router.use(kpiRoutes); // 04 /fiscal-years, /kpi-themes, /kpis
+router.use(targetRoutes); // 05 /kpi-targets
+router.use(cycleRoutes); // 06 /eval-cycles, /cycle-reports
+router.use(evaluationRoutes); // 07 /kpi-evaluations, /performance
+router.use(evidenceRoutes); // 08 /files, /document-types, /documents, /evidence, /document-links
+router.use(notificationRoutes); // 09 /notifications
+router.use(systemRoutes); // 10 /settings, /audit-logs
 
 export default router;

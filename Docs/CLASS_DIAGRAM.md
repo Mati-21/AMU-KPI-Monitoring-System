@@ -2,800 +2,435 @@
 
 ## Overview
 
-This document provides the formal, fully synchronized Class Diagram for the **Arba Minch University (AMU) KPI Monitoring System**, mapped directly to the active PostgreSQL database schema managed via Prisma ORM.
+Class diagram of the **Arba Minch University (AMU) KPI Monitoring System**, mapped one-to-one to
+[Backend/prisma/schema.prisma](../Backend/prisma/schema.prisma) (26 models, PostgreSQL) and to the ten modules in
+[MODULES_SPECIFICATION.html](../MODULES_SPECIFICATION.html). Table names (snake_case) are shown in brackets.
 
-The architecture is structured into four cohesive clusters:
-1. **Access Control & Organizational Cluster** (`Person`, `User`, `Office`, `Role`, `Permission`, `RolePermission`, `UserRole`)
-2. **KPI Monitoring & Performance Cluster** (`KPIs`, `UserKPIs`, `ReportingPeriods`, `Performance`)
-3. **Evidence & Verification Cluster** (`DocumentType`, `Documents`)
-4. **Auxiliary & Communication Cluster** (`Notifications`, `Messages`, `ContactMessages`, `AuditLogs`, `UserActivityLogs`, `SystemSettings`)
-
----
-
-## 1. Class Structure Description
-
-### Cluster 1: Access Control & Organizational Domain
-- **Person**: Physical person demographic identity record, separating biological/human traits from login credentials.
-- **User**: System credential account containing username, password hash, and active/archiving timestamps. Directly linked 1:1 with Person.
-- **Office**: Recursive organizational tree structure representing University President, Vice Presidents, Directorates, Colleges, and Departments.
-- **Role**: Recursive hierarchy of system and institutional roles (e.g. System Administrator, President, Dean, Head, Instructor).
-- **Permission**: Atomic action-resource permission pairs (e.g., `CREATE_KPI`, `APPROVE_PERFORMANCE`).
-- **RolePermission**: Join table assigning sets of permissions to specific roles (M:N).
-- **UserRole**: Time-bounded role assignments connecting a User to one or more Roles with validity dates.
-
-### Cluster 2: KPI Monitoring & Performance Tracking
-- **KPIs**: Master institutional catalog of strategic indicators with weights, target baselines, measurement units, and operational definitions.
-- **UserKPIs**: Individual target allocations assigning a master KPI to a specific User for an academic cycle, including summation or averaging flags.
-- **ReportingPeriods**: Standard reporting cycles (e.g., `Q1 2026`, `Q2 2026`, `Annual 2026`) with status controls (`UPCOMING`, `OPEN`, `CLOSED`).
-- **Performance**: Quarterly actual performance submissions entered against an assigned `UserKPI` for a specific `ReportingPeriod`, including evaluation review workflows (`PENDING`, `SUBMITTED`, `APPROVED`).
-
-### Cluster 3: Evidence & Verification
-- **DocumentType**: Standard taxonomy of acceptable verification evidence (e.g., `Report`, `Publication`, `Certificate`, `Photo`).
-- **Documents**: Supporting proof files directly attached to a specific **`Performance`** quarterly submission record to prove reported achievement figures.
-
-### Cluster 4: Auxiliary & Communication
-- **Notifications**: System and user-triggered in-app alerts with priority levels (`low`, `medium`, `high`) and read tracking.
-- **Messages**: Direct peer-to-peer communication between faculty and management, supporting attachments.
-- **ContactMessages**: Public guest, faculty, or student inquiries submitted through the contact portal.
-- **AuditLogs**: Comprehensive audit trail capturing user IP, resource touched, action taken, and execution status for security compliance.
-- **UserActivityLogs**: Daily user attendance, last active timestamps, and engagement records.
-- **SystemSettings**: Centralized key-value system parameters (e.g., `active_cycle_year`, `maintenance_mode`).
+| Module | Models |
+|---|---|
+| 01 Identity & Authentication | `Person`, `UserAccount`, `UserSession` |
+| 02 Organizational Hierarchy | `OfficeType`, `Office`, `Position`, `OfficePerson` |
+| 03 Scoped Access Control | `Role`, `Permission`, `RolePermission`, `OfficePersonRole` |
+| 04 Strategic KPI Catalog | `FiscalYear`, `KpiTheme`, `Kpi` |
+| 05 Target Cascading | `KpiTarget` |
+| 06 Evaluation Cycles | `EvalCycle`, `CycleReport` |
+| 07 Performance Scoring | `KpiEvaluation` |
+| 08 Evidence & Documents | `File`, `DocumentType`, `Document`, `DocumentLink` |
+| 09 Notifications | `Notification`, `NotificationRecipient` |
+| 10 System Governance | `SystemSetting`, `AuditLog` |
 
 ---
 
-## 2. Detailed Attributes by Class
+## 1. Domain Description
 
-### Person
-- `id: UUID` (PK)
-- `firstName: String`
-- `middleName: String`
-- `lastName: String`
-- `phoneNumber: String`
-- `nationalId: String`
-- `email: String` (Nullable)
-- `dateOfBirth: Date` (Nullable)
-- `gender: String` (Nullable)
-- `address: String` (Nullable)
-- `emergencyContact: String` (Nullable)
-- `photoUrl: String` (Nullable)
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `archivedAt: DateTime` (Nullable)
-- `archivedBy: UUID` (FK -> User, Nullable)
+### Identity (Module 01)
+- **Person** `[person]` — the human being (faculty, staff, management) with demographic and contact data. Every other
+  module references a `Person`, never a login account.
+- **UserAccount** `[user_account]` — optional 1:1 login credentials for a Person: username, bcrypt hash, first-login
+  password change flag and TOTP MFA settings (`mfaEnabled`, `mfaEnforced`, `mfaSecret`). Deleting a Person cascades to it.
+- **UserSession** `[user_session]` — one row per logged-in device/browser, so an account can have many concurrent
+  sessions. Access tokens carry the session id (`sid`) and stop working as soon as the session is revoked or expires.
+  Only SHA-256 hashes of the rotating refresh token are stored; replaying an already-rotated token revokes the session.
+  Tracks IP, user agent, created / last used / expiry times and why it was revoked.
 
-### User
-- `id: UUID` (PK)
-- `personId: UUID` (Unique, FK -> Person)
-- `officeId: UUID` (FK -> Office, Nullable)
-- `username: String` (Unique)
-- `passwordHash: String`
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `archivedAt: DateTime` (Nullable)
-- `archivedBy: UUID` (FK -> User, Nullable)
+### Organization (Module 02)
+- **OfficeType** `[office_type]` — tier of the hierarchy (University = 1, College = 2, Department = 3 …) via `levelOrder`.
+- **Office** `[office]` — node of the university tree; `parentOfficeId` self-reference forms the `OfficeTree`.
+- **Position** `[position]` — job title defined inside an office (e.g. Dean, Lecturer); `isHead` marks the office head.
+- **OfficePerson** `[office_person]` — placement of a Person in an Office + Position with tenure (`startDate`/`endDate`)
+  and an `isPrimary` flag. A person may hold several placements.
 
-### Office
-- `id: UUID` (PK)
-- `parentOfficeId: UUID` (Self-referencing FK -> Office, Nullable)
-- `name: String`
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `archivedAt: DateTime` (Nullable)
-- `archivedBy: UUID` (FK -> User, Nullable)
+### Access control (Module 03)
+- **Role** `[role]` — named bundle of permissions (Super Admin, Dean, Strategy Officer …).
+- **Permission** `[permission]` — atomic code such as `kpi:create`, `target:cascade`; `*` is the Super Admin wildcard.
+  The catalog lives in `Backend/config/permissions.js`.
+- **RolePermission** `[role_permission]` — M:N join between Role and Permission.
+- **OfficePersonRole** `[office_person_role]` — grants a Role to a placement, optionally limited to `scopeOfficeId`
+  (that office and its descendants; `null` = university-wide) and a validity window (`validFrom`/`validTo`).
 
-### Role
-- `id: UUID` (PK)
-- `parentRoleId: UUID` (Self-referencing FK -> Role, Nullable)
-- `name: String` (Unique)
-- `description: String` (Nullable)
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `archivedAt: DateTime` (Nullable)
-- `archivedBy: UUID` (FK -> User, Nullable)
+### KPI planning (Modules 04–05)
+- **FiscalYear** `[fiscal_year]` — planning year (e.g. "2018 E.C.") with status `planned | active | closed`.
+- **KpiTheme** `[kpi_theme]` — strategic pillar; `parentThemeId` self-reference forms the `ThemeTree`.
+- **Kpi** `[kpi]` — master indicator: unit, `direction` (`higher_is_better | lower_is_better`), `cascadeMode`
+  (`split | replicate | aggregate`) and `maxOverAllocationPercent` for cascading.
+- **KpiTarget** `[kpi_target]` — target value for a KPI, office (and optionally a person) in a fiscal year.
+  `parentTargetId` self-reference forms the `TargetTree`: a university target is cascaded into college, department
+  and individual targets. Two Person relations: owner (`TargetOwner`) and assigner (`TargetAssigner`).
 
-### Permission
-- `id: UUID` (PK)
-- `action: String`
-- `resource: String`
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `archivedAt: DateTime` (Nullable)
-- `archivedBy: UUID` (FK -> User, Nullable)
+### Evaluation (Modules 06–07)
+- **EvalCycle** `[eval_cycle]` — reporting window inside a fiscal year (Q1, Mid-Year, Annual) with status
+  `planned | open | in_review | closed`.
+- **CycleReport** `[cycle_report]` — one report dossier per office per cycle (`@@unique([evalCycleId, officeId])`);
+  submitted and reviewed by Persons.
+- **KpiEvaluation** `[kpi_evaluation]` — achievement for one target in one cycle (`@@unique([kpiTargetId, evalCycleId])`):
+  `reportedValue`, verified `actualValue`, computed `score`, optional link to the CycleReport and evaluator.
 
-### RolePermission
-- `roleId: UUID` (PK, FK -> Role)
-- `permissionId: UUID` (PK, FK -> Permission)
+### Evidence (Module 08)
+- **File** `[file]` — stored binary: path, MIME type, size, checksum, uploader.
+- **DocumentType** `[document_type]` — evidence category with allowed extensions and max size.
+- **Document** `[document]` — business document wrapping a File (title, owner office, confidentiality).
+- **DocumentLink** `[document_link]` — polymorphic attachment of a Document to any entity by
+  (`entityType`, `entityId`), e.g. `kpi_evaluation`, `cycle_report`, `kpi_target`.
 
-### UserRole
-- `id: UUID` (PK)
-- `userId: UUID` (FK -> User)
-- `roleId: UUID` (FK -> Role)
-- `fromDate: DateTime`
-- `toDate: DateTime` (Nullable)
-- `createdAt: DateTime`
-- `isArchived: Boolean`
-
-### KPIs
-- `id: UUID` (PK)
-- `number: Int`
-- `theme: String`
-- `unit: String`
-- `weight: Decimal(5,2)`
-- `operationalDefinition: String` (Nullable)
-- `baseline: Decimal(10,2)` (Nullable)
-- `target: Decimal(10,2)`
-- `remark: String` (Nullable)
-- `requiresEvidence: Boolean`
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `updatedAt: DateTime` (Nullable)
-- `updatedBy: UUID` (FK -> User, Nullable)
-
-### UserKPIs
-- `id: UUID` (PK)
-- `userId: UUID` (FK -> User)
-- `kpiId: UUID` (FK -> KPIs)
-- `targetValue: Decimal(10,2)`
-- `isSum: Boolean`
-- `assignedAt: DateTime`
-- `status: String` (Default: "ACTIVE")
-
-### ReportingPeriods
-- `id: UUID` (PK)
-- `name: String` (e.g., "Q1 2026")
-- `year: String` (e.g., "2026")
-- `type: String` ("QUARTERLY", "ANNUAL", "SPECIAL")
-- `startDate: Date`
-- `endDate: Date`
-- `status: String` ("UPCOMING", "OPEN", "CLOSED")
-
-### Performance
-- `id: UUID` (PK)
-- `userKpiId: UUID` (FK -> UserKPIs)
-- `periodId: UUID` (FK -> ReportingPeriods)
-- `actualValue: Decimal(10,2)`
-- `achievement: Decimal(6,2)` (Nullable)
-- `comment: String` (Nullable)
-- `status: String` ("PENDING", "SUBMITTED", "APPROVED")
-
-### DocumentType
-- `id: UUID` (PK)
-- `name: String` (Unique, e.g. "Report", "Publication")
-- `description: String` (Nullable)
-- `createdAt: DateTime`
-- `createdBy: UUID` (FK -> User, Nullable)
-- `updatedAt: DateTime` (Nullable)
-- `updatedBy: UUID` (FK -> User, Nullable)
-
-### Documents
-- `id: UUID` (PK)
-- `performanceId: UUID` (FK -> Performance)
-- `documentTypeId: UUID` (FK -> DocumentType)
-- `fileName: String`
-- `fileUrl: String`
-- `uploadedAt: DateTime`
-- `uploadedBy: UUID` (FK -> User, Nullable)
-- `remark: String` (Nullable)
-
-### AuditLogs
-- `id: UUID` (PK)
-- `userId: UUID` (FK -> User, Nullable)
-- `action: String`
-- `resource: String` (Nullable)
-- `description: String` (Nullable)
-- `status: String` (Default: "Success")
-- `ipAddress: String` (Nullable)
-- `createdAt: DateTime`
-
-### ContactMessages
-- `id: UUID` (PK)
-- `username: String`
-- `email: String`
-- `subject: String` (Nullable)
-- `message: String`
-- `status: String` (Default: "Unread")
-- `createdAt: DateTime`
-- `updatedAt: DateTime`
-
-### Messages
-- `id: UUID` (PK)
-- `senderId: UUID` (FK -> User)
-- `receiverId: UUID` (FK -> User)
-- `content: String` (Nullable)
-- `isRead: Boolean` (Default: false)
-- `fileUrl: String` (Nullable)
-- `fileName: String` (Nullable)
-- `fileType: String` (Nullable)
-- `attachments: Json` (Nullable)
-- `createdAt: DateTime`
-- `updatedAt: DateTime`
-
-### Notifications
-- `id: UUID` (PK)
-- `recipientUserId: UUID` (FK -> User)
-- `actorUserId: UUID` (FK -> User, Nullable)
-- `type: String` (Nullable)
-- `title: String` (Nullable)
-- `message: String` (Nullable)
-- `priority: String` ("low", "medium", "high")
-- `data: Json` (Nullable)
-- `isRead: Boolean` (Default: false)
-- `readAt: DateTime` (Nullable)
-- `createdAt: DateTime`
-- `isArchived: Boolean` (Default: false)
-
-### SystemSettings
-- `id: UUID` (PK)
-- `key: String` (Unique)
-- `value: String` (Nullable)
-- `type: String` (Default: "string")
-- `createdAt: DateTime`
-- `updatedAt: DateTime`
-
-### UserActivityLogs
-- `id: UUID` (PK)
-- `userId: UUID` (FK -> User)
-- `activityDate: Date`
-- `lastActiveAt: DateTime` (Nullable)
+### Notifications & governance (Modules 09–10)
+- **Notification** `[notification]` — broadcast to a target office (optionally `includeSubOffices`) and/or the holders
+  of a `requiredPermission`; may reference an entity.
+- **NotificationRecipient** `[notification_recipient]` — per-person delivery and read receipt.
+- **SystemSetting** `[system_setting]` — key/value configuration grouped by `groupName` (`@@unique([groupName, key])`),
+  optional File (e.g. logo), `isPublic` flag.
+- **AuditLog** `[audit_log]` — immutable record of who changed what (`oldValues`/`newValues` JSON), from which IP/agent.
 
 ---
 
-## 3. PlantUML Class Diagram Code
+## 2. PlantUML Class Diagram
 
 ```plantuml
-@startuml AMU-KPI-Monitoring-System-ClassDiagram
+@startuml AMU_KPI_Class_Diagram
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide methods
 
-skinparam classBackgroundColor #F8FAFC
-skinparam classBorderColor #334155
-skinparam classArrowColor #2563EB
-skinparam packageBackgroundColor #FFFFFF
-skinparam packageBorderColor #94A3B8
-
-' ============================================================
-' ACCESS CONTROL & ORGANIZATIONAL CLUSTER
-' ============================================================
-package "Access Control & Organizational Cluster" {
+package "01 Identity" {
   class Person {
-    + id: UUID <<PK>>
-    + firstName: String
-    + middleName: String
-    + lastName: String
-    + phoneNumber: String
-    + nationalId: String
-    + email: String
-    + dateOfBirth: Date
-    + gender: String
-    + address: String
-    + emergencyContact: String
-    + photoUrl: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
-    + archivedAt: DateTime
-    + archivedBy: UUID <<FK>>
+    id : Uuid
+    firstName : String
+    middleName : String?
+    lastName : String
+    gender : String?
+    birthDate : Date?
+    email : String? <<unique>>
+    phone : String?
+    status : String = "active"
   }
-
-  class User {
-    + id: UUID <<PK>>
-    + personId: UUID <<FK, Unique>>
-    + officeId: UUID <<FK>>
-    + username: String <<Unique>>
-    + passwordHash: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
-    + archivedAt: DateTime
-    + archivedBy: UUID <<FK>>
+  class UserAccount {
+    id : Uuid
+    personId : Uuid <<unique>>
+    username : String <<unique>>
+    passwordHash : String
+    isActive : Boolean = true
+    mustChangePassword : Boolean = false
+    mfaEnabled : Boolean = false
+    mfaEnforced : Boolean = false
+    mfaSecret : String?
+    mfaType : String = "totp"
+    lastLoginAt : Timestamptz?
   }
+  class UserSession {
+    id : Uuid
+    userAccountId : Uuid
+    refreshTokenHash : String <<unique>>
+    previousRefreshTokenHash : String?
+    rotatedAt : Timestamptz?
+    ipAddress : String?
+    userAgent : String?
+    createdAt : Timestamptz
+    lastUsedAt : Timestamptz
+    expiresAt : Timestamptz
+    revokedAt : Timestamptz?
+    revokedReason : String?
+  }
+}
 
+package "02 Organization" {
+  class OfficeType {
+    id : Int
+    name : String <<unique>>
+    levelOrder : Int?
+  }
   class Office {
-    + id: UUID <<PK>>
-    + parentOfficeId: UUID <<FK>>
-    + name: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
-    + archivedAt: DateTime
-    + archivedBy: UUID <<FK>>
+    id : Uuid
+    parentOfficeId : Uuid?
+    officeTypeId : Int
+    name : String
+    code : String? <<unique>>
+    isActive : Boolean = true
   }
+  class Position {
+    id : Uuid
+    officeId : Uuid
+    title : String
+    isHead : Boolean = false
+  }
+  class OfficePerson {
+    id : Uuid
+    personId : Uuid
+    officeId : Uuid
+    positionId : Uuid
+    startDate : Date
+    endDate : Date?
+    isPrimary : Boolean = false
+  }
+}
 
+package "03 Access Control" {
   class Role {
-    + id: UUID <<PK>>
-    + parentRoleId: UUID <<FK>>
-    + name: String <<Unique>>
-    + description: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
-    + archivedAt: DateTime
-    + archivedBy: UUID <<FK>>
+    id : Int
+    name : String <<unique>>
+    description : String?
   }
-
   class Permission {
-    + id: UUID <<PK>>
-    + action: String
-    + resource: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
+    id : Int
+    code : String <<unique>>
   }
-
   class RolePermission {
-    + roleId: UUID <<PK, FK>>
-    + permissionId: UUID <<PK, FK>>
+    id : Int
+    roleId : Int
+    permissionId : Int
   }
-
-  class UserRole {
-    + id: UUID <<PK>>
-    + userId: UUID <<FK>>
-    + roleId: UUID <<FK>>
-    + fromDate: DateTime
-    + toDate: DateTime
-    + createdAt: DateTime
-    + isArchived: Boolean
-  }
-}
-
-' ============================================================
-' KPI MONITORING CLUSTER
-' ============================================================
-package "KPI Monitoring & Performance Cluster" {
-  class KPIs {
-    + id: UUID <<PK>>
-    + number: Int
-    + theme: String
-    + unit: String
-    + weight: Decimal
-    + operationalDefinition: String
-    + baseline: Decimal
-    + target: Decimal
-    + remark: String
-    + requiresEvidence: Boolean
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
-  }
-
-  class UserKPIs {
-    + id: UUID <<PK>>
-    + userId: UUID <<FK>>
-    + kpiId: UUID <<FK>>
-    + targetValue: Decimal
-    + isSum: Boolean
-    + assignedAt: DateTime
-    + status: String
-  }
-
-  class ReportingPeriods {
-    + id: UUID <<PK>>
-    + name: String
-    + year: String
-    + type: String
-    + startDate: Date
-    + endDate: Date
-    + status: String
-  }
-
-  class Performance {
-    + id: UUID <<PK>>
-    + userKpiId: UUID <<FK>>
-    + periodId: UUID <<FK>>
-    + actualValue: Decimal
-    + achievement: Decimal
-    + comment: String
-    + status: String
+  class OfficePersonRole {
+    id : Uuid
+    officePersonId : Uuid
+    roleId : Int
+    scopeOfficeId : Uuid?
+    validFrom : Date
+    validTo : Date?
   }
 }
 
-' ============================================================
-' EVIDENCE & VERIFICATION CLUSTER
-' ============================================================
-package "Evidence & Verification Cluster" {
+package "04-05 KPI Planning" {
+  class FiscalYear {
+    id : Int
+    label : String <<unique>>
+    startDate : Date
+    endDate : Date
+    status : String = "planned"
+  }
+  class KpiTheme {
+    id : Uuid
+    parentThemeId : Uuid?
+    name : String
+    code : String?
+    sortOrder : Int = 0
+    isActive : Boolean = true
+  }
+  class Kpi {
+    id : Uuid
+    kpiThemeId : Uuid
+    code : String <<unique>>
+    name : String
+    unitOfMeasure : String
+    direction : String = "higher_is_better"
+    cascadeMode : String = "split"
+    maxOverAllocationPercent : Decimal(6,2)?
+    sortOrder : Int = 0
+    isActive : Boolean = true
+  }
+  class KpiTarget {
+    id : Uuid
+    fiscalYearId : Int
+    kpiId : Uuid
+    officeId : Uuid
+    personId : Uuid?
+    assignedByPersonId : Uuid?
+    assignedAt : Date?
+    parentTargetId : Uuid?
+    baselineValue : Decimal(18,4)?
+    targetValue : Decimal(18,4)
+    weight : Decimal(7,4) = 1
+    status : String = "draft"
+  }
+}
+
+package "06-07 Evaluation" {
+  class EvalCycle {
+    id : Uuid
+    fiscalYearId : Int
+    name : String
+    periodStart : Date
+    periodEnd : Date
+    dueDate : Date?
+    status : String = "planned"
+  }
+  class CycleReport {
+    id : Uuid
+    evalCycleId : Uuid
+    officeId : Uuid
+    submittedByPersonId : Uuid?
+    reviewedByPersonId : Uuid?
+    status : String = "draft"
+    submissionType : String? = "normal"
+    autoFilledCount : Int = 0
+    reviewNote : String?
+    submittedAt : Timestamptz?
+    reviewedAt : Timestamptz?
+    createdAt : Timestamptz
+  }
+  class KpiEvaluation {
+    id : Uuid
+    kpiTargetId : Uuid
+    evalCycleId : Uuid
+    cycleReportId : Uuid?
+    evaluatorPersonId : Uuid?
+    reportedValue : Decimal(18,4)?
+    actualValue : Decimal(18,4)?
+    valueSource : String?
+    score : Decimal(7,2)?
+    comment : String?
+    status : String = "pending"
+  }
+}
+
+package "08 Evidence" {
+  class File {
+    id : Uuid
+    originalName : String
+    storagePath : String
+    mimeType : String
+    sizeBytes : BigInt
+    checksum : String?
+    uploadedByPersonId : Uuid?
+    uploadedAt : Timestamptz
+  }
   class DocumentType {
-    + id: UUID <<PK>>
-    + name: String <<Unique>>
-    + description: String
-    + createdAt: DateTime
-    + createdBy: UUID <<FK>>
+    id : Int
+    name : String
+    code : String <<unique>>
+    allowedExtensions : String?
+    maxSizeMb : Int?
+    isActive : Boolean = true
   }
-
-  class Documents {
-    + id: UUID <<PK>>
-    + performanceId: UUID <<FK>>
-    + documentTypeId: UUID <<FK>>
-    + fileName: String
-    + fileUrl: String
-    + uploadedAt: DateTime
-    + uploadedBy: UUID <<FK>>
-    + remark: String
+  class Document {
+    id : Uuid
+    documentTypeId : Int
+    fileId : Uuid
+    ownerOfficeId : Uuid?
+    uploadedByPersonId : Uuid?
+    title : String
+    description : String?
+    isConfidential : Boolean = false
+    createdAt : Timestamptz
   }
-}
-
-' ============================================================
-' AUXILIARY & COMMUNICATION CLUSTER
-' ============================================================
-package "Auxiliary & Communication Cluster" {
-  class Notifications {
-    + id: UUID <<PK>>
-    + recipientUserId: UUID <<FK>>
-    + actorUserId: UUID <<FK>>
-    + type: String
-    + title: String
-    + message: String
-    + priority: String
-    + data: Json
-    + isRead: Boolean
-    + readAt: DateTime
-    + createdAt: DateTime
-  }
-
-  class Messages {
-    + id: UUID <<PK>>
-    + senderId: UUID <<FK>>
-    + receiverId: UUID <<FK>>
-    + content: String
-    + isRead: Boolean
-    + fileUrl: String
-    + fileName: String
-    + attachments: Json
-    + createdAt: DateTime
-  }
-
-  class ContactMessages {
-    + id: UUID <<PK>>
-    + username: String
-    + email: String
-    + subject: String
-    + message: String
-    + status: String
-    + createdAt: DateTime
-  }
-
-  class AuditLogs {
-    + id: UUID <<PK>>
-    + userId: UUID <<FK>>
-    + action: String
-    + resource: String
-    + description: String
-    + status: String
-    + ipAddress: String
-    + createdAt: DateTime
-  }
-
-  class UserActivityLogs {
-    + id: UUID <<PK>>
-    + userId: UUID <<FK>>
-    + activityDate: Date
-    + lastActiveAt: DateTime
-  }
-
-  class SystemSettings {
-    + id: UUID <<PK>>
-    + key: String <<Unique>>
-    + value: String
-    + type: String
-    + createdAt: DateTime
-    + updatedAt: DateTime
+  class DocumentLink {
+    id : Uuid
+    documentId : Uuid
+    entityType : String
+    entityId : Uuid
   }
 }
 
-' ============================================================
-' RELATIONSHIPS & CARDINALITIES
-' ============================================================
-Person "1" -- "0..1" User : identifies >
-Office "0..1" -- "0..*" Office : parent/child >
-Office "1" -- "0..*" User : employs >
-Role "0..1" -- "0..*" Role : parent/child >
+package "09-10 Notifications & Governance" {
+  class Notification {
+    id : Uuid
+    createdByPersonId : Uuid?
+    targetOfficeId : Uuid?
+    includeSubOffices : Boolean = false
+    requiredPermissionId : Int?
+    title : String
+    message : String
+    channel : String = "in_app"
+    entityType : String?
+    entityId : Uuid?
+    createdAt : Timestamptz
+  }
+  class NotificationRecipient {
+    id : Uuid
+    notificationId : Uuid
+    personId : Uuid
+    isRead : Boolean = false
+    readAt : Timestamptz?
+    deliveredAt : Timestamptz?
+  }
+  class SystemSetting {
+    id : Uuid
+    groupName : String
+    key : String
+    value : String?
+    valueType : String = "text"
+    fileId : Uuid?
+    description : String?
+    isPublic : Boolean = false
+    updatedByPersonId : Uuid?
+    updatedAt : Timestamptz
+  }
+  class AuditLog {
+    id : Uuid
+    actorPersonId : Uuid?
+    action : String
+    entityType : String
+    entityId : String?
+    oldValues : Json?
+    newValues : Json?
+    ipAddress : String?
+    userAgent : String?
+    createdAt : Timestamptz
+  }
+}
+
+' Identity
+Person "1" -- "0..1" UserAccount : login >
+UserAccount "1" -- "0..*" UserSession : signed in on >
+
+' Organization
+OfficeType "1" -- "0..*" Office : classifies >
+Office "0..1" -- "0..*" Office : parent / children
+Office "1" -- "0..*" Position : defines >
+Person "1" -- "0..*" OfficePerson : placed as >
+Office "1" -- "0..*" OfficePerson : employs >
+Position "1" -- "0..*" OfficePerson : held in >
+
+' Access control
 Role "1" -- "0..*" RolePermission
 Permission "1" -- "0..*" RolePermission
-User "1" -- "0..*" UserRole
-Role "1" -- "0..*" UserRole
+OfficePerson "1" -- "0..*" OfficePersonRole : granted >
+Role "1" -- "0..*" OfficePersonRole
+Office "0..1" -- "0..*" OfficePersonRole : scope >
 
-User "1" -- "0..*" UserKPIs : assigned >
-KPIs "1" -- "0..*" UserKPIs : instantiated >
-UserKPIs "1" -- "0..*" Performance : reports >
-ReportingPeriods "1" -- "0..*" Performance : evaluates >
+' KPI planning
+KpiTheme "0..1" -- "0..*" KpiTheme : parent / children
+KpiTheme "1" -- "0..*" Kpi : groups >
+FiscalYear "1" -- "0..*" KpiTarget
+Kpi "1" -- "0..*" KpiTarget : measured by >
+Office "1" -- "0..*" KpiTarget : owns >
+Person "0..1" -- "0..*" KpiTarget : owner
+Person "0..1" -- "0..*" KpiTarget : assigned by
+KpiTarget "0..1" -- "0..*" KpiTarget : cascades into >
 
-Performance "1" -- "0..*" Documents : evidenced_by >
-DocumentType "1" -- "0..*" Documents : categorized_by >
-User "1" -- "0..*" Documents : uploads >
+' Evaluation
+FiscalYear "1" -- "0..*" EvalCycle
+EvalCycle "1" -- "0..*" CycleReport
+Office "1" -- "0..*" CycleReport : submits >
+Person "0..1" -- "0..*" CycleReport : submitter / reviewer
+KpiTarget "1" -- "0..*" KpiEvaluation : achieved in >
+EvalCycle "1" -- "0..*" KpiEvaluation
+CycleReport "0..1" -- "0..*" KpiEvaluation : contains >
+Person "0..1" -- "0..*" KpiEvaluation : evaluator
 
-User "1" -- "0..*" Messages : sends >
-User "1" -- "0..*" Messages : receives >
-User "1" -- "0..*" Notifications : receives >
-User "0..1" -- "0..*" Notifications : triggers >
-User "1" -- "0..*" AuditLogs : logs >
-User "1" -- "0..*" UserActivityLogs : tracks >
+' Evidence
+Person "0..1" -- "0..*" File : uploads >
+DocumentType "1" -- "0..*" Document
+File "1" -- "0..*" Document : stored as >
+Office "0..1" -- "0..*" Document : owner
+Person "0..1" -- "0..*" Document : uploader
+Document "1" -- "0..*" DocumentLink : attached via >
+DocumentLink ..> KpiEvaluation : entityType/entityId
+DocumentLink ..> CycleReport : entityType/entityId
+DocumentLink ..> KpiTarget : entityType/entityId
+
+' Notifications & governance
+Person "0..1" -- "0..*" Notification : creator
+Office "0..1" -- "0..*" Notification : target >
+Permission "0..1" -- "0..*" Notification : required >
+Notification "1" -- "0..*" NotificationRecipient : delivered to >
+Person "1" -- "0..*" NotificationRecipient
+File "0..1" -- "0..*" SystemSetting : asset
+Person "0..1" -- "0..*" SystemSetting : updated by
+Person "0..1" -- "0..*" AuditLog : actor
 
 @enduml
 ```
 
 ---
 
-## 4. Mermaid Class Diagram Code
+## 3. Key Constraints
 
-```mermaid
-classDiagram
-    %% ==========================================
-    %% 1. ACCESS CONTROL & ORGANIZATIONAL CLUSTER
-    %% ==========================================
-    class Person {
-        +UUID id
-        +String firstName
-        +String middleName
-        +String lastName
-        +String phoneNumber
-        +String nationalId
-        +String email
-        +Date dateOfBirth
-        +String gender
-        +String address
-        +String emergencyContact
-        +String photoUrl
-        +DateTime createdAt
-        +UUID createdBy
-        +DateTime archivedAt
-        +UUID archivedBy
-    }
-
-    class User {
-        +UUID id
-        +UUID personId
-        +UUID officeId
-        +String username
-        +String passwordHash
-        +DateTime createdAt
-        +UUID createdBy
-        +DateTime archivedAt
-        +UUID archivedBy
-    }
-
-    class Office {
-        +UUID id
-        +UUID parentOfficeId
-        +String name
-        +DateTime createdAt
-        +UUID createdBy
-        +DateTime archivedAt
-        +UUID archivedBy
-    }
-
-    class Role {
-        +UUID id
-        +UUID parentRoleId
-        +String name
-        +String description
-        +DateTime createdAt
-        +UUID createdBy
-        +DateTime archivedAt
-        +UUID archivedBy
-    }
-
-    class Permission {
-        +UUID id
-        +String action
-        +String resource
-        +DateTime createdAt
-        +UUID createdBy
-    }
-
-    class RolePermission {
-        +UUID roleId
-        +UUID permissionId
-    }
-
-    class UserRole {
-        +UUID id
-        +UUID userId
-        +UUID roleId
-        +DateTime fromDate
-        +DateTime toDate
-        +DateTime createdAt
-        +Boolean isArchived
-    }
-
-    %% ==========================================
-    %% 2. KPI MONITORING CLUSTER
-    %% ==========================================
-    class KPIs {
-        +UUID id
-        +Int number
-        +String theme
-        +String unit
-        +Decimal weight
-        +String operationalDefinition
-        +Decimal baseline
-        +Decimal target
-        +String remark
-        +Boolean requiresEvidence
-        +DateTime createdAt
-        +UUID createdBy
-    }
-
-    class UserKPIs {
-        +UUID id
-        +UUID userId
-        +UUID kpiId
-        +Decimal targetValue
-        +Boolean isSum
-        +DateTime assignedAt
-        +String status
-    }
-
-    class ReportingPeriods {
-        +UUID id
-        +String name
-        +String year
-        +String type
-        +Date startDate
-        +Date endDate
-        +String status
-    }
-
-    class Performance {
-        +UUID id
-        +UUID userKpiId
-        +UUID periodId
-        +Decimal actualValue
-        +Decimal achievement
-        +String comment
-        +String status
-    }
-
-    %% ==========================================
-    %% 3. EVIDENCE & VERIFICATION CLUSTER
-    %% ==========================================
-    class DocumentType {
-        +UUID id
-        +String name
-        +String description
-        +DateTime createdAt
-        +UUID createdBy
-    }
-
-    class Documents {
-        +UUID id
-        +UUID performanceId
-        +UUID documentTypeId
-        +String fileName
-        +String fileUrl
-        +DateTime uploadedAt
-        +UUID uploadedBy
-        +String remark
-    }
-
-    %% ==========================================
-    %% 4. AUXILIARY & COMMUNICATION CLUSTER
-    %% ==========================================
-    class Notifications {
-        +UUID id
-        +UUID recipientUserId
-        +UUID actorUserId
-        +String type
-        +String title
-        +String message
-        +String priority
-        +Json data
-        +Boolean isRead
-        +DateTime readAt
-        +DateTime createdAt
-    }
-
-    class Messages {
-        +UUID id
-        +UUID senderId
-        +UUID receiverId
-        +String content
-        +Boolean isRead
-        +String fileUrl
-        +String fileName
-        +Json attachments
-        +DateTime createdAt
-    }
-
-    class ContactMessages {
-        +UUID id
-        +String username
-        +String email
-        +String subject
-        +String message
-        +String status
-        +DateTime createdAt
-    }
-
-    class AuditLogs {
-        +UUID id
-        +UUID userId
-        +String action
-        +String resource
-        +String description
-        +String status
-        +String ipAddress
-        +DateTime createdAt
-    }
-
-    class UserActivityLogs {
-        +UUID id
-        +UUID userId
-        +Date activityDate
-        +DateTime lastActiveAt
-    }
-
-    class SystemSettings {
-        +UUID id
-        +String key
-        +String value
-        +String type
-        +DateTime createdAt
-        +DateTime updatedAt
-    }
-
-    %% ==========================================
-    %% RELATIONSHIPS
-    %% ==========================================
-    Person "1" -- "1" User : identifies
-    Office "0..1" --> "0..*" Office : subOffices
-    Office "1" --> "0..*" User : employs
-    Role "0..1" --> "0..*" Role : subRoles
-    Role "1" --> "0..*" RolePermission : grants
-    Permission "1" --> "0..*" RolePermission : bound_to
-    User "1" --> "0..*" UserRole : holds
-    Role "1" --> "0..*" UserRole : assigned_in
-
-    User "1" --> "0..*" UserKPIs : receives
-    KPIs "1" --> "0..*" UserKPIs : allocated_as
-    UserKPIs "1" --> "0..*" Performance : tracks
-    ReportingPeriods "1" --> "0..*" Performance : reporting_cycle
-
-    Performance "1" --> "0..*" Documents : backed_by
-    DocumentType "1" --> "0..*" Documents : categorized_as
-    User "1" --> "0..*" Documents : uploads
-
-    User "1" --> "0..*" Messages : sends
-    User "1" --> "0..*" Messages : receives
-    User "1" --> "0..*" Notifications : receives
-    User "1" --> "0..*" AuditLogs : generates
-    User "1" --> "0..*" UserActivityLogs : logs_activity
-```
-
----
-
-## 5. Relationship Summary
-
-| Source Entity | Target Entity | Multiplicity | Foreign Key | Cascade Rule | Description |
-| :--- | :--- | :---: | :--- | :--- | :--- |
-| **Person** | **User** | 1 : 1 | `user.person_id` | CASCADE on delete | A Person identity links to exactly one system login User. |
-| **Office** | **Office** | 1 : M | `office.parent_office_id` | SET NULL | Recursive university organizational tree. |
-| **Office** | **User** | 1 : M | `user.office_id` | SET NULL | An Office has multiple assigned member Users. |
-| **Role** | **Role** | 1 : M | `role.parent_role_id` | SET NULL | Hierarchical role inheritance tree. |
-| **Role** | **RolePermission** | 1 : M | `role_permission.role_id` | CASCADE | Maps roles to granular permission items. |
-| **Permission**| **RolePermission** | 1 : M | `role_permission.permission_id` | CASCADE | Maps permissions to roles. |
-| **User** | **UserRole** | 1 : M | `user_role.user_id` | CASCADE | A user can hold multiple roles across time. |
-| **Role** | **UserRole** | 1 : M | `user_role.role_id` | CASCADE | A role can be assigned to multiple users. |
-| **User** | **UserKPIs** | 1 : M | `user_kpis.user_id` | CASCADE | Individual KPI allocation to a responsible user. |
-| **KPIs** | **UserKPIs** | 1 : M | `user_kpis.kpi_id` | CASCADE | Master KPI instantiated for a user target. |
-| **UserKPIs** | **Performance** | 1 : M | `performance.user_kpi_id` | CASCADE | Multiple quarterly submissions for an assigned target. |
-| **ReportingPeriods** | **Performance** | 1 : M | `performance.period_id` | CASCADE | Connects actual result to a quarterly reporting cycle. |
-| **Performance** | **Documents** | 1 : M | `documents.performance_id` | CASCADE | **Direct link**: Proof documents substantiate quarterly results. |
-| **DocumentType** | **Documents** | 1 : M | `documents.document_type_id` | CASCADE | Categorizes evidence (Publication, Report, Certificate). |
-| **User** | **Documents** | 1 : M | `documents.uploaded_by` | SET NULL | Tracks the user account who uploaded the file. |
-| **User** | **Messages** | 1 : M | `messages.sender_id` | CASCADE | Outbox messages sent by user. |
-| **User** | **Messages** | 1 : M | `messages.receiver_id` | CASCADE | Inbox messages received by user. |
-| **User** | **Notifications** | 1 : M | `notifications.recipient_user_id` | CASCADE | In-app alerts delivered to recipient user. |
-| **User** | **AuditLogs** | 1 : M | `audit_logs.user_id` | SET NULL | Audit trail of administrative and data operations. |
-| **User** | **UserActivityLogs** | 1 : M | `user_activity_logs.user_id` | CASCADE | Daily activity tracker per user account. |
-
----
-
-## 6. Key Architecture & Design Decisions
-
-### 1. Document Proof Direct Binding to Performance
-- In the original design, documents were attached to `KPI` or `UserKPI` generically.
-- In this **current schema**, `Documents` are linked directly to `Performance` (`documents.performance_id`).
-- **Rationale:** Evidence is uploaded to prove a *specific quarter's actual submission* (e.g. Q1 publications, Q2 workshop reports), ensuring rigorous verification for evaluators and audit teams.
-
-### 2. Physical Identity vs. System Account Separation
-- `Person` contains physical and demographic identity (`firstName`, `middleName`, `lastName`, `nationalId`, `phoneNumber`, `email`, `gender`, `address`, `emergencyContact`, `photoUrl`).
-- `User` contains credentials and authentication status (`username`, `passwordHash`, `officeId`, `personId`).
-- **Benefit:** Allows institutional identity to remain intact even if user credentials, roles, or offices are reassigned or rotated.
-
-### 3. Native P2P Communication & Notifications
-- Replaced non-existent chat room entities with clean **`Messages`** (sender/receiver model with attachments) and **`Notifications`** (priority alerts with JSON metadata).
-- Directly integrated with Socket.io in `Backend/realtime/socket.js`.
-
-### 4. Dynamic Reporting Cycles
-- Evaluators can open, close, and create dynamic reporting periods (`ReportingPeriods`) with dates and statuses (`UPCOMING`, `OPEN`, `CLOSED`), removing hardcoded quarter limits.
+| Model | Constraint | Meaning |
+|---|---|---|
+| UserAccount | `personId` unique, `onDelete: Cascade` | At most one login per person; removed with the person |
+| UserSession | `refreshTokenHash` unique, `onDelete: Cascade` | Each refresh token maps to one session; sessions are removed with the account |
+| RolePermission | `@@unique([roleId, permissionId])` | A permission is granted to a role once |
+| OfficePersonRole | `@@unique([officePersonId, roleId, scopeOfficeId, validFrom])` | No duplicate scoped grants |
+| CycleReport | `@@unique([evalCycleId, officeId])` | One report dossier per office per cycle |
+| KpiEvaluation | `@@unique([kpiTargetId, evalCycleId])` | One achievement entry per target per cycle |
+| DocumentLink | `@@unique([documentId, entityType, entityId])` | A document is linked to an entity once |
+| SystemSetting | `@@unique([groupName, key])` | Keys are unique within a group |
+| NotificationRecipient | `@@unique([notificationId, personId])` | One receipt per person per notification |

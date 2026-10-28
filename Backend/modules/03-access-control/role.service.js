@@ -1,58 +1,41 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getRoles = async () => {
-  // TODO: Implement getRoles
-  return [];
-};
+// ===== Roles =====
 
-export const getRoleById = async (id) => {
-  // TODO: Implement getRoleById
-  return null;
-};
+export const listRoles = async () => notImplemented('listRoles');
 
-export const createRole = async (data) => {
-  // TODO: Implement createRole
-  return null;
-};
+export const getRoleById = async (id) => notImplemented('getRoleById');
 
-export const updateRole = async (id, data) => {
-  // TODO: Implement updateRole
-  return null;
-};
+export const createRole = async (data, actor) => notImplemented('createRole');
 
-export const deleteRole = async (id) => {
-  // TODO: Implement deleteRole
-  return null;
-};
+export const updateRole = async (id, data, actor) => notImplemented('updateRole');
 
-export const getPermissions = async () => {
-  // TODO: Implement getPermissions
-  return [];
-};
+export const deleteRole = async (id, actor) => notImplemented('deleteRole');
 
-export const assignPermissions = async (roleId, permissionIds) => {
-  // TODO: Implement assignPermissions
-  return null;
-};
+/**
+ * Replace a role's permission set with the given codes.
+ */
+export const syncRolePermissions = async (roleId, permissionCodes, actor) => notImplemented('syncRolePermissions');
 
-export const assignScopedRole = async (data) => {
-  // TODO: Implement assignScopedRole
-  return null;
-};
+// ===== Permissions =====
 
-export const revokeScopedRole = async (id) => {
-  // TODO: Implement revokeScopedRole
-  return null;
-};
+export const listPermissions = async () => notImplemented('listPermissions');
+
+// ===== Scoped role assignments (OfficePersonRole) =====
+
+export const assignRole = async (officePersonId, { roleId, scopeOfficeId, validFrom, validTo }, actor) => notImplemented('assignRole');
+
+export const revokeRoleAssignment = async (id, actor) => notImplemented('revokeRoleAssignment');
 
 export default {
-  getRoles,
+  listRoles,
   getRoleById,
   createRole,
   updateRole,
   deleteRole,
-  getPermissions,
-  assignPermissions,
-  assignScopedRole,
-  revokeScopedRole,
+  syncRolePermissions,
+  listPermissions,
+  assignRole,
+  revokeRoleAssignment,
 };

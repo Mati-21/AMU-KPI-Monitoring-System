@@ -49,9 +49,33 @@ model UserAccount {
   mfaType            String    @default("totp") @map("mfa_type")
   lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(6)
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person   Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  sessions UserSession[]
 
   @@map("user_account")
+}
+
+// One row per logged-in device/browser. Only a hash of the current refresh token is stored;
+// the previous hash is kept briefly so concurrent refreshes (multiple tabs) are not treated as token reuse.
+model UserSession {
+  id                       String    @id @default(uuid()) @db.Uuid
+  userAccountId            String    @map("user_account_id") @db.Uuid
+  refreshTokenHash         String    @unique @map("refresh_token_hash")
+  previousRefreshTokenHash String?   @map("previous_refresh_token_hash")
+  rotatedAt                DateTime? @map("rotated_at") @db.Timestamptz(6)
+  ipAddress                String?   @map("ip_address")
+  userAgent                String?   @map("user_agent")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt               DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  expiresAt                DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason            String?   @map("revoked_reason")
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@index([userAccountId, revokedAt])
+  @@index([expiresAt])
+  @@map("user_session")
 }
 
 // ===== Office hierarchy =====

@@ -6,12 +6,16 @@
     "start": "node server.js",
     "dev": "powershell -Command \"$ErrorActionPreference='SilentlyContinue'; $conn = Get-NetTCPConnection -LocalPort 8058; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }; nodemon server.js\"",
     "dev:backend": "npm run dev",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:reset": "prisma migrate reset",
+    "db:generate": "prisma generate",
     "seed": "node scripts/seedAdmin.js",
     "seed:admin": "node scripts/seedAdmin.js",
-    "db:seed": "node scripts/seedAdmin.js",
+    "seed:admin:reset": "node scripts/seedAdmin.js --reset-admin",
     "seed:kpis": "node scripts/seedKpis.js",
-    "db:reset": "prisma db push --force-reset",
-    "db:reset:seed": "prisma db push --force-reset && node scripts/seedAdmin.js"
+    "test:auth": "node scripts/testAuthFlow.js"
   },
   "keywords": [],
   "author": "",
@@ -36,7 +40,6 @@
     "pg": "^8.20.0",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
-    "stripe": "^20.4.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
   },

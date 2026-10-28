@@ -1,46 +1,42 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getCycles = async () => {
-  // TODO: Implement getCycles
-  return [];
-};
+// ===== Evaluation cycles =====
 
-export const getCycleById = async (id) => {
-  // TODO: Implement getCycleById
-  return null;
-};
+export const listCycles = async ({ fiscalYearId, status } = {}) => notImplemented('listCycles');
 
-export const createCycle = async (data) => {
-  // TODO: Implement createCycle
-  return null;
-};
+export const createCycle = async ({ fiscalYearId, name, periodStart, periodEnd, dueDate }, actor) => notImplemented('createCycle');
 
-export const updateCycleStatus = async (id, status) => {
-  // TODO: Implement updateCycleStatus
-  return null;
-};
+/**
+ * Transition planned -> open -> in_review -> closed.
+ */
+export const updateCycleStatus = async (id, { status }, actor) => notImplemented('updateCycleStatus');
 
-export const getOrInitiateReport = async (data) => {
-  // TODO: Implement getOrInitiateReport
-  return null;
-};
+// ===== Cycle reports (one dossier per office per cycle) =====
 
-export const submitReport = async (id, personId) => {
-  // TODO: Implement submitReport
-  return null;
-};
+/**
+ * Create (or return the existing) draft report for an office in an open cycle.
+ */
+export const initiateReport = async ({ evalCycleId, officeId }, actor) => notImplemented('initiateReport');
 
-export const reviewReport = async (id, data) => {
-  // TODO: Implement reviewReport
-  return null;
-};
+export const getReportById = async (id, actor) => notImplemented('getReportById');
+
+/**
+ * Lock the report's draft evaluations and submit the dossier for review.
+ */
+export const submitReport = async (id, actor) => notImplemented('submitReport');
+
+/**
+ * Approve, reject or request changes, with a review note.
+ */
+export const reviewReport = async (id, { decision, reviewNote }, actor) => notImplemented('reviewReport');
 
 export default {
-  getCycles,
-  getCycleById,
+  listCycles,
   createCycle,
   updateCycleStatus,
-  getOrInitiateReport,
+  initiateReport,
+  getReportById,
   submitReport,
   reviewReport,
 };

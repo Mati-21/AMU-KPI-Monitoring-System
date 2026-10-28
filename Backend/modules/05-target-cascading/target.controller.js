@@ -1,51 +1,49 @@
 import * as targetService from './target.service.js';
+import { actorOf } from '../../utils/requestContext.js';
 
-export const getTargets = async (req, res, next) => {
-  try {
-    const targets = await targetService.getTargets();
-    res.json({ status: 'success', data: targets });
-  } catch (error) {
-    next(error);
-  }
+export const listTargets = async (req, res) => {
+  const { fiscalYearId, officeId, kpiId, status } = req.query;
+  const targets = await targetService.listTargets({ fiscalYearId, officeId, kpiId, status });
+  res.json({ status: 'success', data: targets });
 };
 
-export const getTargetTree = async (req, res, next) => {
-  try {
-    const tree = await targetService.getTargetTree();
-    res.json({ status: 'success', data: tree });
-  } catch (error) {
-    next(error);
-  }
+export const getTargetTree = async (req, res) => {
+  const { fiscalYearId, kpiId } = req.query;
+  const tree = await targetService.getTargetTree({ fiscalYearId, kpiId });
+  res.json({ status: 'success', data: tree });
 };
 
-export const createTarget = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Target creation ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const listMyTargets = async (req, res) => {
+  const targets = await targetService.listMyTargets({ fiscalYearId: req.query.fiscalYearId }, actorOf(req));
+  res.json({ status: 'success', data: targets });
 };
 
-export const cascadeTarget = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Cascade target ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const createTarget = async (req, res) => {
+  const target = await targetService.createTarget(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: target });
 };
 
-export const updateStatus = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Update target status ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const cascadeTarget = async (req, res) => {
+  const children = await targetService.cascadeTarget(req.params.parentTargetId, req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: children });
+};
+
+export const updateTarget = async (req, res) => {
+  const target = await targetService.updateTarget(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: target });
+};
+
+export const updateTargetStatus = async (req, res) => {
+  const target = await targetService.updateTargetStatus(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: target });
 };
 
 export default {
-  getTargets,
+  listTargets,
   getTargetTree,
+  listMyTargets,
   createTarget,
   cascadeTarget,
-  updateStatus,
+  updateTarget,
+  updateTargetStatus,
 };

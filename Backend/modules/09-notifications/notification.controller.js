@@ -1,50 +1,35 @@
 import * as notificationService from './notification.service.js';
+import { actorOf } from '../../utils/requestContext.js';
 
-export const getMyInbox = async (req, res, next) => {
-  try {
-    const result = await notificationService.getMyInbox(req.user?.personId);
-    res.json({ status: 'success', ...result });
-  } catch (error) {
-    next(error);
-  }
+export const listMyNotifications = async (req, res) => {
+  const { unreadOnly, page, limit } = req.query;
+  const result = await notificationService.listMyNotifications(req.user.personId, { unreadOnly, page, limit });
+  res.json({ status: 'success', ...result });
 };
 
-export const getUnreadCount = async (req, res, next) => {
-  try {
-    const count = await notificationService.getUnreadCount(req.user?.personId);
-    res.json({ status: 'success', unreadCount: count });
-  } catch (error) {
-    next(error);
-  }
+export const countUnread = async (req, res) => {
+  const count = await notificationService.countUnread(req.user.personId);
+  res.json({ status: 'success', data: { count } });
 };
 
-export const markAsRead = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Mark as read ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const markAsRead = async (req, res) => {
+  const receipt = await notificationService.markAsRead(req.params.id, req.user.personId);
+  res.json({ status: 'success', data: receipt });
 };
 
-export const markAllAsRead = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Mark all read ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const markAllAsRead = async (req, res) => {
+  const result = await notificationService.markAllAsRead(req.user.personId);
+  res.json({ status: 'success', data: result });
 };
 
-export const dispatchNotification = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Notification dispatch ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const dispatchNotification = async (req, res) => {
+  const notification = await notificationService.dispatchNotification(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: notification });
 };
 
 export default {
-  getMyInbox,
-  getUnreadCount,
+  listMyNotifications,
+  countUnread,
   markAsRead,
   markAllAsRead,
   dispatchNotification,

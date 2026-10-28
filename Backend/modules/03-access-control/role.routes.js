@@ -1,251 +1,164 @@
 import { Router } from 'express';
 import * as roleController from './role.controller.js';
-import { protect, admin } from '../../middleware/authMiddleware.js';
+import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
 
 /**
  * @swagger
  * tags:
- *   name: Roles & Permissions
- *   description: RBAC Roles, Scoped ABAC Delegations & Atomic Permissions (Module 03 - Governance)
+ *   name: Access Control
+ *   description: Module 03 — Roles, atomic permissions and office-scoped role assignments
  */
 
 /**
  * @swagger
- * /api/roles/permissions:
+ * /api/v1/roles:
  *   get:
- *     summary: List All Atomic Permissions Registered in the System
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ *     summary: List roles with permission and member counts
+ *     tags: [Access Control]
  *     responses:
- *       200:
- *         description: List of permission codes
+ *       200: { description: Roles }
  *   post:
- *     summary: Register a New Atomic Permission Code
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ *     summary: Create a role
+ *     tags: [Access Control]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - code
+ *             required: [name]
  *             properties:
- *               code:
- *                 type: string
- *                 example: kpi:cascade
+ *               name: { type: string, example: Dean }
+ *               description: { type: string }
  *     responses:
- *       201:
- *         description: Permission registered successfully
+ *       201: { description: Created }
  */
-router.get('/permissions', protect, roleController.getPermissions);
-router.post('/permissions', protect, admin, roleController.createPermission);
+router.get('/roles', protect, requirePermission(PERMISSIONS.ROLE_READ), roleController.listRoles);
+router.post('/roles', protect, requirePermission(PERMISSIONS.ROLE_CREATE), roleController.createRole);
 
 /**
  * @swagger
- * /api/roles/scoped-assign:
- *   post:
- *     summary: Assign a Scoped Role to an Employee Office Placement (OfficePersonRole)
- *     description: Empowers location-scoped authority (e.g. Dean within College of Computing between specified dates)
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - officePersonId
- *               - roleId
- *             properties:
- *               officePersonId:
- *                 type: string
- *                 description: UUID of OfficePerson placement record
- *               roleId:
- *                 type: integer
- *                 example: 2
- *               scopeOfficeId:
- *                 type: string
- *                 description: Optional UUID of Office where role is restricted
- *               validFrom:
- *                 type: string
- *                 format: date
- *                 example: 2026-09-01
- *               validTo:
- *                 type: string
- *                 format: date
- *                 example: 2027-08-31
- *     responses:
- *       201:
- *         description: Scoped role successfully assigned
- */
-router.post('/scoped-assign', protect, admin, roleController.assignScopedRole);
-
-/**
- * @swagger
- * /api/roles/scoped-assign/{id}:
- *   delete:
- *     summary: Revoke an Active Scoped Role Assignment
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ * /api/v1/roles/{id}:
+ *   get:
+ *     summary: Role details with granted permission codes
+ *     tags: [Access Control]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         description: UUID of OfficePersonRole record
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: integer } }
  *     responses:
- *       200:
- *         description: Scoped role assignment revoked
- */
-router.delete('/scoped-assign/:id', protect, admin, roleController.revokeScopedRole);
-
-/**
- * @swagger
- * /api/roles:
- *   get:
- *     summary: List All Roles with Permission and Member Counts
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
- *     responses:
- *       200:
- *         description: Array of roles with assigned permissions
- *   post:
- *     summary: Create a New System Role
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *                 example: Quality Assurance Officer
- *               description:
- *                 type: string
- *                 example: Reviews academic and research KPI achievement reports
- *               permissionIds:
- *                 type: array
- *                 items:
- *                   type: integer
- *                 example: [1, 5, 8]
- *     responses:
- *       201:
- *         description: Role created successfully
- */
-router.get('/', protect, roleController.getRoles);
-router.post('/', protect, admin, roleController.createRole);
-
-/**
- * @swagger
- * /api/roles/{id}:
- *   get:
- *     summary: Get Role Details, Granted Permissions & Assigned Members
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Role profile with full permission list
- *       404:
- *         description: Role not found
+ *       200: { description: Role }
  *   put:
- *     summary: Update Role Details
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ *     summary: Rename or re-describe a role
+ *     tags: [Access Control]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
+ *       - { in: path, name: id, required: true, schema: { type: integer } }
  *     requestBody:
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               name:
- *                 type: string
- *               description:
- *                 type: string
+ *               name: { type: string }
+ *               description: { type: string }
  *     responses:
- *       200:
- *         description: Role updated successfully
+ *       200: { description: Updated }
  *   delete:
- *     summary: Delete a Custom Role
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ *     summary: Delete a role that has no active assignments
+ *     tags: [Access Control]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
+ *       - { in: path, name: id, required: true, schema: { type: integer } }
  *     responses:
- *       200:
- *         description: Role deleted successfully
+ *       200: { description: Deleted }
  */
-router.get('/:id', protect, roleController.getRoleById);
-router.put('/:id', protect, admin, roleController.updateRole);
-router.delete('/:id', protect, admin, roleController.deleteRole);
+router.get('/roles/:id', protect, requirePermission(PERMISSIONS.ROLE_READ), roleController.getRoleById);
+router.put('/roles/:id', protect, requirePermission(PERMISSIONS.ROLE_UPDATE), roleController.updateRole);
+router.delete('/roles/:id', protect, requirePermission(PERMISSIONS.ROLE_DELETE), roleController.deleteRole);
 
 /**
  * @swagger
- * /api/roles/{id}/permissions:
+ * /api/v1/roles/{id}/permissions:
  *   post:
- *     summary: Synchronize Atomic Permissions Assigned to a Role
- *     tags: [Roles & Permissions]
- *     security:
- *       - CookieAuth: []
+ *     summary: Replace the role's permission set
+ *     tags: [Access Control]
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
+ *       - { in: path, name: id, required: true, schema: { type: integer } }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - permissionIds
+ *             required: [permissionCodes]
  *             properties:
- *               permissionIds:
- *                 type: array
- *                 items:
- *                   type: integer
- *                 example: [1, 2, 3, 5, 10, 15]
+ *               permissionCodes: { type: array, items: { type: string }, example: ["kpi:create", "target:cascade"] }
  *     responses:
- *       200:
- *         description: Permissions updated for role
+ *       200: { description: Permissions synced }
  */
-router.post('/:id/permissions', protect, admin, roleController.assignPermissions);
+router.post('/roles/:id/permissions', protect, requirePermission(PERMISSIONS.ROLE_UPDATE), roleController.syncRolePermissions);
+
+/**
+ * @swagger
+ * /api/v1/permissions:
+ *   get:
+ *     summary: All registered atomic permission codes
+ *     tags: [Access Control]
+ *     responses:
+ *       200: { description: Permissions }
+ */
+router.get('/permissions', protect, requirePermission(PERMISSIONS.ROLE_READ), roleController.listPermissions);
+
+/**
+ * @swagger
+ * /api/v1/office-persons/{officePersonId}/roles:
+ *   post:
+ *     summary: Assign a role to an office placement, optionally limited to an office scope and date window
+ *     tags: [Access Control]
+ *     parameters:
+ *       - { in: path, name: officePersonId, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [roleId, validFrom]
+ *             properties:
+ *               roleId: { type: integer }
+ *               scopeOfficeId: { type: string, format: uuid, description: Omit for university-wide scope }
+ *               validFrom: { type: string, format: date }
+ *               validTo: { type: string, format: date }
+ *     responses:
+ *       201: { description: Assigned }
+ */
+router.post('/office-persons/:officePersonId/roles', protect, requirePermission(PERMISSIONS.ROLE_ASSIGN), roleController.assignRole);
+
+/**
+ * @swagger
+ * /api/v1/office-person-roles/{id}:
+ *   delete:
+ *     summary: Revoke a scoped role assignment
+ *     tags: [Access Control]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Revoked }
+ */
+router.delete('/office-person-roles/:id', protect, requirePermission(PERMISSIONS.ROLE_ASSIGN), roleController.revokeRoleAssignment);
+
+/**
+ * @swagger
+ * /api/v1/auth/check-permission:
+ *   get:
+ *     summary: Does the current user hold a permission (optionally within an office's scope)?
+ *     tags: [Access Control]
+ *     parameters:
+ *       - { in: query, name: permission, required: true, schema: { type: string, example: "target:cascade" } }
+ *       - { in: query, name: officeId, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: "{ allowed, heldPermissions }" }
+ */
+router.get('/auth/check-permission', protect, roleController.checkPermission);
 
 export default router;

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as targetController from './target.controller.js';
-import { protect, admin } from '../../middleware/authMiddleware.js';
+import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
 
@@ -8,178 +9,146 @@ const router = Router();
  * @swagger
  * tags:
  *   name: Target Cascading
- *   description: Institutional Goal Allocation, Splitting & Cascading (Module 05 - Operations)
+ *   description: Module 05 — Top-down KPI target decomposition across the office tree
  */
 
 /**
  * @swagger
- * /api/targets:
+ * /api/v1/kpi-targets:
  *   get:
- *     summary: List KPI Targets Filtered by Fiscal Year, Office, and KPI
+ *     summary: List targets with filters
  *     tags: [Target Cascading]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: query
- *         name: fiscalYearId
- *         schema:
- *           type: integer
- *       - in: query
- *         name: officeId
- *         schema:
- *           type: string
- *       - in: query
- *         name: kpiId
- *         schema:
- *           type: string
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [draft, assigned, accepted, revised]
+ *       - { in: query, name: fiscalYearId, schema: { type: integer } }
+ *       - { in: query, name: officeId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: kpiId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: status, schema: { type: string, enum: [draft, assigned, accepted, revised] } }
  *     responses:
- *       200:
- *         description: List of targets
+ *       200: { description: Targets }
  *   post:
- *     summary: Create Top-Level Institutional KPI Target
+ *     summary: Set a top-level institutional target
  *     tags: [Target Cascading]
- *     security:
- *       - CookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - fiscalYearId
- *               - kpiId
- *               - officeId
- *               - targetValue
+ *             required: [fiscalYearId, kpiId, officeId, targetValue]
  *             properties:
- *               fiscalYearId:
- *                 type: integer
- *                 example: 1
- *               kpiId:
- *                 type: string
- *                 example: kpi-uuid
- *               officeId:
- *                 type: string
- *                 example: amu-root-office-uuid
- *               baselineValue:
- *                 type: number
- *                 example: 120.0
- *               targetValue:
- *                 type: number
- *                 example: 250.0
- *               weight:
- *                 type: number
- *                 example: 1.0
+ *               fiscalYearId: { type: integer, example: 1 }
+ *               kpiId: { type: string, format: uuid }
+ *               officeId: { type: string, format: uuid }
+ *               baselineValue: { type: number, example: 120 }
+ *               targetValue: { type: number, example: 250 }
+ *               weight: { type: number, example: 1 }
  *     responses:
- *       201:
- *         description: Target created
+ *       201: { description: Created }
  */
-router.get('/', protect, targetController.getTargets);
-router.post('/', protect, admin, targetController.createTarget);
+router.get('/kpi-targets', protect, requirePermission(PERMISSIONS.TARGET_READ), targetController.listTargets);
+router.post('/kpi-targets', protect, requirePermission(PERMISSIONS.TARGET_CREATE), targetController.createTarget);
 
 /**
  * @swagger
- * /api/targets/tree:
+ * /api/v1/kpi-targets/tree:
  *   get:
- *     summary: Retrieve Hierarchical Target Decomposition Tree
+ *     summary: Target decomposition tree from institutional roots down to offices and people
  *     tags: [Target Cascading]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: query
- *         name: fiscalYearId
- *         schema:
- *           type: integer
- *       - in: query
- *         name: kpiId
- *         schema:
- *           type: string
+ *       - { in: query, name: fiscalYearId, schema: { type: integer } }
+ *       - { in: query, name: kpiId, schema: { type: string, format: uuid } }
  *     responses:
- *       200:
- *         description: Target tree structure
+ *       200: { description: Target tree }
  */
-router.get('/tree', protect, targetController.getTargetTree);
+router.get('/kpi-targets/tree', protect, requirePermission(PERMISSIONS.TARGET_READ), targetController.getTargetTree);
 
 /**
  * @swagger
- * /api/targets/{id}/cascade:
- *   post:
- *     summary: Cascade a Parent Target to Child Sub-Offices
- *     description: Decomposes target into child targets, validating split math against maxOverAllocationPercent cap
+ * /api/v1/kpi-targets/my-targets:
+ *   get:
+ *     summary: Targets owned by or assigned to the current user's primary office
  *     tags: [Target Cascading]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         description: UUID of parent target to cascade
- *         schema:
- *           type: string
+ *       - { in: query, name: fiscalYearId, schema: { type: integer } }
+ *     responses:
+ *       200: { description: Targets }
+ */
+router.get('/kpi-targets/my-targets', protect, targetController.listMyTargets);
+
+/**
+ * @swagger
+ * /api/v1/kpi-targets/{parentTargetId}/cascade:
+ *   post:
+ *     summary: Split a parent target into child targets (enforces maxOverAllocationPercent)
+ *     tags: [Target Cascading]
+ *     parameters:
+ *       - { in: path, name: parentTargetId, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - allocations
+ *             required: [allocations]
  *             properties:
  *               allocations:
  *                 type: array
  *                 items:
  *                   type: object
- *                   required:
- *                     - officeId
- *                     - targetValue
+ *                   required: [officeId, targetValue]
  *                   properties:
- *                     officeId:
- *                       type: string
- *                     targetValue:
- *                       type: number
- *                     weight:
- *                       type: number
+ *                     officeId: { type: string, format: uuid }
+ *                     personId: { type: string, format: uuid }
+ *                     targetValue: { type: number }
+ *                     baselineValue: { type: number }
+ *                     weight: { type: number }
  *     responses:
- *       201:
- *         description: Successfully cascaded
+ *       201: { description: Child targets created }
  */
-router.post('/:id/cascade', protect, admin, targetController.cascadeTarget);
+router.post('/kpi-targets/:parentTargetId/cascade', protect, requirePermission(PERMISSIONS.TARGET_CASCADE), targetController.cascadeTarget);
 
 /**
  * @swagger
- * /api/targets/{id}/status:
- *   patch:
- *     summary: Transition Target Status (draft, assigned, accepted, revised)
+ * /api/v1/kpi-targets/{id}:
+ *   put:
+ *     summary: Update draft target values, baseline or weight
  *     tags: [Target Cascading]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               baselineValue: { type: number }
+ *               targetValue: { type: number }
+ *               weight: { type: number }
+ *     responses:
+ *       200: { description: Updated }
+ */
+router.put('/kpi-targets/:id', protect, requirePermission(PERMISSIONS.TARGET_UPDATE), targetController.updateTarget);
+
+/**
+ * @swagger
+ * /api/v1/kpi-targets/{id}/status:
+ *   patch:
+ *     summary: Transition target status
+ *     tags: [Target Cascading]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - status
+ *             required: [status]
  *             properties:
- *               status:
- *                 type: string
- *                 enum: [draft, assigned, accepted, revised]
+ *               status: { type: string, enum: [draft, assigned, accepted, revised] }
  *     responses:
- *       200:
- *         description: Target status updated
+ *       200: { description: Status updated }
  */
-router.patch('/:id/status', protect, admin, targetController.updateStatus);
+router.patch('/kpi-targets/:id/status', protect, requirePermission(PERMISSIONS.TARGET_ASSIGN), targetController.updateTargetStatus);
 
 export default router;

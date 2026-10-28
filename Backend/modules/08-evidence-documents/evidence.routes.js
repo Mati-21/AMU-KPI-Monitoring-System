@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as evidenceController from './evidence.controller.js';
-import { protect, admin } from '../../middleware/authMiddleware.js';
+import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
 
@@ -8,138 +9,126 @@ const router = Router();
  * @swagger
  * tags:
  *   name: Evidence & Documents
- *   description: Document Registry & Polymorphic Evidence Proof Linking (Module 08 - Platform)
+ *   description: Module 08 — File storage, document metadata and polymorphic evidence links
  */
 
 /**
  * @swagger
- * /api/evidence/types:
- *   get:
- *     summary: List Approved Evidence Document Types
- *     tags: [Evidence & Documents]
- *     security:
- *       - CookieAuth: []
- *     responses:
- *       200:
- *         description: List of document taxonomy types
- */
-router.get('/types', protect, evidenceController.getDocumentTypes);
-
-/**
- * @swagger
- * /api/evidence:
+ * /api/v1/files/upload:
  *   post:
- *     summary: Register Document Metadata Wrapping a Stored File
+ *     summary: Upload a binary file (multipart field `file`)
  *     tags: [Evidence & Documents]
- *     security:
- *       - CookieAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
- *             required:
- *               - documentTypeId
- *               - fileId
- *               - title
+ *             required: [file]
  *             properties:
- *               documentTypeId:
- *                 type: integer
- *               fileId:
- *                 type: string
- *               title:
- *                 type: string
- *                 example: IEEE Publication Acceptance Certificate
- *               description:
- *                 type: string
- *               ownerOfficeId:
- *                 type: string
- *               isConfidential:
- *                 type: boolean
- *                 default: false
+ *               file: { type: string, format: binary }
  *     responses:
- *       201:
- *         description: Document metadata registered
+ *       201: { description: File registered }
  */
-router.post('/', protect, evidenceController.createDocument);
+router.post('/files/upload', protect, requirePermission(PERMISSIONS.FILE_UPLOAD), evidenceController.uploadFile);
 
 /**
  * @swagger
- * /api/evidence/link:
- *   post:
- *     summary: Polymorphically Attach a Document as Proof to a KPI Evaluation or Cycle Report
- *     tags: [Evidence & Documents]
- *     security:
- *       - CookieAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - documentId
- *               - entityType
- *               - entityId
- *             properties:
- *               documentId:
- *                 type: string
- *               entityType:
- *                 type: string
- *                 example: kpi_evaluation
- *               entityId:
- *                 type: string
- *     responses:
- *       201:
- *         description: Evidence linked
- */
-router.post('/link', protect, evidenceController.linkEvidence);
-
-/**
- * @swagger
- * /api/evidence/{entityType}/{entityId}:
+ * /api/v1/files/{id}/download:
  *   get:
- *     summary: Retrieve All Evidence Documents Attached to an Entity
+ *     summary: Stream a file after permission and confidentiality checks
  *     tags: [Evidence & Documents]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: path
- *         name: entityType
- *         required: true
- *         schema:
- *           type: string
- *           example: kpi_evaluation
- *       - in: path
- *         name: entityId
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200:
- *         description: Array of attached documents
+ *       200: { description: Binary stream }
  */
-router.get('/:entityType/:entityId', protect, evidenceController.getLinkedEvidence);
+router.get('/files/:id/download', protect, requirePermission(PERMISSIONS.FILE_READ), evidenceController.downloadFile);
 
 /**
  * @swagger
- * /api/evidence/links/{id}:
+ * /api/v1/document-types:
+ *   get:
+ *     summary: Accepted evidence document types and upload constraints
+ *     tags: [Evidence & Documents]
+ *     responses:
+ *       200: { description: Document types }
+ */
+router.get('/document-types', protect, evidenceController.listDocumentTypes);
+
+/**
+ * @swagger
+ * /api/v1/documents:
+ *   post:
+ *     summary: Register document metadata for an uploaded file
+ *     tags: [Evidence & Documents]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [documentTypeId, fileId, title]
+ *             properties:
+ *               documentTypeId: { type: integer }
+ *               fileId: { type: string, format: uuid }
+ *               ownerOfficeId: { type: string, format: uuid }
+ *               title: { type: string, example: Q1 graduation list }
+ *               description: { type: string }
+ *               isConfidential: { type: boolean, default: false }
+ *     responses:
+ *       201: { description: Document created }
+ */
+router.post('/documents', protect, requirePermission(PERMISSIONS.DOCUMENT_CREATE), evidenceController.createDocument);
+
+/**
+ * @swagger
+ * /api/v1/documents/{id}/link:
+ *   post:
+ *     summary: Attach a document as evidence to an entity (kpi_evaluation, cycle_report, kpi_target)
+ *     tags: [Evidence & Documents]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [entityType, entityId]
+ *             properties:
+ *               entityType: { type: string, enum: [kpi_evaluation, cycle_report, kpi_target] }
+ *               entityId: { type: string, format: uuid }
+ *     responses:
+ *       201: { description: Linked }
+ */
+router.post('/documents/:id/link', protect, requirePermission(PERMISSIONS.EVIDENCE_LINK), evidenceController.linkDocument);
+
+/**
+ * @swagger
+ * /api/v1/evidence/{entityType}/{entityId}:
+ *   get:
+ *     summary: Evidence documents attached to an entity
+ *     tags: [Evidence & Documents]
+ *     parameters:
+ *       - { in: path, name: entityType, required: true, schema: { type: string, enum: [kpi_evaluation, cycle_report, kpi_target] } }
+ *       - { in: path, name: entityId, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Evidence }
+ */
+router.get('/evidence/:entityType/:entityId', protect, requirePermission(PERMISSIONS.EVIDENCE_READ), evidenceController.listEvidence);
+
+/**
+ * @swagger
+ * /api/v1/document-links/{id}:
  *   delete:
- *     summary: Remove an Evidence Link
+ *     summary: Remove an evidence link
  *     tags: [Evidence & Documents]
- *     security:
- *       - CookieAuth: []
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200:
- *         description: Link removed
+ *       200: { description: Removed }
  */
-router.delete('/links/:id', protect, evidenceController.unlinkEvidence);
+router.delete('/document-links/:id', protect, requirePermission(PERMISSIONS.EVIDENCE_LINK), evidenceController.unlinkDocument);
 
 export default router;

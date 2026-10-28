@@ -1,41 +1,44 @@
 import * as evaluationService from './evaluation.service.js';
+import { actorOf } from '../../utils/requestContext.js';
 
-export const getEvaluations = async (req, res, next) => {
-  try {
-    const data = await evaluationService.getEvaluations();
-    res.json({ status: 'success', data });
-  } catch (error) {
-    next(error);
-  }
+export const listEvaluations = async (req, res) => {
+  const { evalCycleId, kpiTargetId, officeId, status } = req.query;
+  const evaluations = await evaluationService.listEvaluations({ evalCycleId, kpiTargetId, officeId, status });
+  res.json({ status: 'success', data: evaluations });
 };
 
-export const recordProgress = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Record progress ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const recordEvaluation = async (req, res) => {
+  const evaluation = await evaluationService.recordEvaluation(req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: evaluation });
 };
 
-export const verifyEvaluation = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Verify evaluation ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const bulkRecordEvaluations = async (req, res) => {
+  const evaluations = await evaluationService.bulkRecordEvaluations(req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: evaluations });
 };
 
-export const getOfficeScorecard = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Scorecard ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const verifyEvaluation = async (req, res) => {
+  const evaluation = await evaluationService.verifyEvaluation(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: evaluation });
+};
+
+export const getOfficeScorecard = async (req, res) => {
+  const { evalCycleId, fiscalYearId } = req.query;
+  const scorecard = await evaluationService.getOfficeScorecard(req.params.officeId, { evalCycleId, fiscalYearId });
+  res.json({ status: 'success', data: scorecard });
+};
+
+export const getInstitutionDashboard = async (req, res) => {
+  const { fiscalYearId, evalCycleId } = req.query;
+  const dashboard = await evaluationService.getInstitutionDashboard({ fiscalYearId, evalCycleId });
+  res.json({ status: 'success', data: dashboard });
 };
 
 export default {
-  getEvaluations,
-  recordProgress,
+  listEvaluations,
+  recordEvaluation,
+  bulkRecordEvaluations,
   verifyEvaluation,
   getOfficeScorecard,
+  getInstitutionDashboard,
 };

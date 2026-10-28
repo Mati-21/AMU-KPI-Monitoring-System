@@ -1,61 +1,72 @@
 import * as officeService from './office.service.js';
+import { actorOf } from '../../utils/requestContext.js';
 
-export const getOffices = async (req, res, next) => {
-  try {
-    const offices = await officeService.getOffices();
-    res.json({ status: 'success', data: offices });
-  } catch (error) {
-    next(error);
-  }
+export const listOfficeTypes = async (req, res) => {
+  const officeTypes = await officeService.listOfficeTypes();
+  res.json({ status: 'success', data: officeTypes });
 };
 
-export const getOfficeTree = async (req, res, next) => {
-  try {
-    const tree = await officeService.getOfficeTree();
-    res.json({ status: 'success', data: tree });
-  } catch (error) {
-    next(error);
-  }
+export const createOfficeType = async (req, res) => {
+  const officeType = await officeService.createOfficeType(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: officeType });
 };
 
-export const getOfficeById = async (req, res, next) => {
-  try {
-    const office = await officeService.getOfficeById(req.params.id);
-    res.json({ status: 'success', data: office });
-  } catch (error) {
-    next(error);
-  }
+export const getOfficeTree = async (req, res) => {
+  const tree = await officeService.getOfficeTree();
+  res.json({ status: 'success', data: tree });
 };
 
-export const createOffice = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Office creation ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const listOffices = async (req, res) => {
+  const { officeTypeId, parentOfficeId, isActive, search } = req.query;
+  const offices = await officeService.listOffices({ officeTypeId, parentOfficeId, isActive, search });
+  res.json({ status: 'success', data: offices });
 };
 
-export const updateOffice = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Office update ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const getOfficeById = async (req, res) => {
+  const office = await officeService.getOfficeById(req.params.id);
+  res.json({ status: 'success', data: office });
 };
 
-export const deleteOffice = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Office delete ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const createOffice = async (req, res) => {
+  const office = await officeService.createOffice(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: office });
+};
+
+export const updateOffice = async (req, res) => {
+  const office = await officeService.updateOffice(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: office });
+};
+
+export const listPositions = async (req, res) => {
+  const positions = await officeService.listPositions(req.params.id);
+  res.json({ status: 'success', data: positions });
+};
+
+export const createPosition = async (req, res) => {
+  const position = await officeService.createPosition(req.params.id, req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: position });
+};
+
+export const listMembers = async (req, res) => {
+  const members = await officeService.listMembers(req.params.id);
+  res.json({ status: 'success', data: members });
+};
+
+export const assignMember = async (req, res) => {
+  const placement = await officeService.assignMember(req.params.id, req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: placement });
 };
 
 export default {
-  getOffices,
+  listOfficeTypes,
+  createOfficeType,
   getOfficeTree,
+  listOffices,
   getOfficeById,
   createOffice,
   updateOffice,
-  deleteOffice,
+  listPositions,
+  createPosition,
+  listMembers,
+  assignMember,
 };

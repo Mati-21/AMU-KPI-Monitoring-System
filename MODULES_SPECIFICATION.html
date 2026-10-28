@@ -913,11 +913,11 @@
             <span class="stat-label">Architectural Modules</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #38bdf8;">25</span>
+            <span class="stat-val" style="color: #38bdf8;">26</span>
             <span class="stat-label">Prisma Database Models</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #34d399;">92+</span>
+            <span class="stat-val" style="color: #34d399;">92</span>
             <span class="stat-label">REST API Routes to Build</span>
           </div>
           <div class="stat-card">
@@ -978,7 +978,7 @@
         tagline: "User Accounts, Person Master Registry & JWT Auth",
         accent: "var(--acc-blue)",
         icon: "🔐",
-        overview: "Provides a clean architectural separation between physical biological humans (Person) and credentials / login access (UserAccount). Manages secure credential verification, JWT token lifecycle (access & refresh tokens), demographic profiles, and user status toggling.",
+        overview: "Provides a clean architectural separation between physical biological humans (Person) and credentials / login access (UserAccount). Manages secure credential verification, server-tracked multi-device sessions (UserSession) with rotating refresh tokens, JWT access tokens in HTTP-only cookies, demographic profiles, and user status toggling.",
         tables: [
           {
             name: "Person",
@@ -1014,7 +1014,27 @@
               { name: "mfaType", type: "String", map: "mfa_type", constraints: "@default('totp')", desc: "MFA mechanism (totp / email)" },
               { name: "lastLoginAt", type: "DateTime?", map: "last_login_at", constraints: "@db.Timestamptz(6), Optional", desc: "Last successful login timestamp" }
             ],
-            relations: "1:1 relation to Person."
+            relations: "1:1 relation to Person. 1:N relation to UserSession."
+          },
+          {
+            name: "UserSession",
+            map: "user_session",
+            description: "One row per logged-in device/browser. Access tokens carry its id (sid) and are rejected once the session is revoked or expired. Refresh tokens rotate on every use; only SHA-256 hashes are stored, and replaying an already-rotated token revokes the session.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Session ID (sid claim in tokens)" },
+              { name: "userAccountId", type: "Uuid", map: "user_account_id", constraints: "FK -> UserAccount (onDelete: Cascade)", desc: "Owning login account" },
+              { name: "refreshTokenHash", type: "String", map: "refresh_token_hash", constraints: "@unique", desc: "SHA-256 of the current refresh token" },
+              { name: "previousRefreshTokenHash", type: "String?", map: "previous_refresh_token_hash", constraints: "Optional", desc: "Hash of the just-rotated token (30s grace for concurrent tabs)" },
+              { name: "rotatedAt", type: "DateTime?", map: "rotated_at", constraints: "@db.Timestamptz(6), Optional", desc: "Last rotation time" },
+              { name: "ipAddress", type: "String?", map: "ip_address", constraints: "Optional", desc: "Client IP" },
+              { name: "userAgent", type: "String?", map: "user_agent", constraints: "Optional", desc: "Client device / browser" },
+              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Login time" },
+              { name: "lastUsedAt", type: "DateTime", map: "last_used_at", constraints: "@default(now())", desc: "Last activity (updated at most every 5 min)" },
+              { name: "expiresAt", type: "DateTime", map: "expires_at", constraints: "@db.Timestamptz(6)", desc: "Sliding expiry, extended on each refresh" },
+              { name: "revokedAt", type: "DateTime?", map: "revoked_at", constraints: "@db.Timestamptz(6), Optional", desc: "When the session was ended" },
+              { name: "revokedReason", type: "String?", map: "revoked_reason", constraints: "Optional", desc: "logout, revoked_by_user, password_changed, refresh_token_reuse_detected, ..." }
+            ],
+            relations: "N:1 relation to UserAccount."
           }
         ],
         routes: [
@@ -1083,12 +1103,21 @@
           },
           {
             method: "POST",
+            path: "/api/v1/auth/roles/enforce-mfa",
+            ctrl: "AuthController.enforceRoleMfa",
+            perm: "Super Admin (Cookie)",
+            desc: "Administrator endpoint to enforce or remove mandatory MFA for every account holding a role.",
+            reqBody: '{\n  "roleName": "Dean",\n  "enforced": true\n}',
+            resBody: '{\n  "status": "success",\n  "data": { "roleName": "Dean", "mfaEnforced": true, "affectedUsersCount": 4 }\n}'
+          },
+          {
+            method: "POST",
             path: "/api/v1/auth/refresh-token",
             ctrl: "AuthController.refreshToken",
             perm: "Public (Cookie)",
-            desc: "Validates refreshToken cookie and issues a fresh short-lived JWT access token.",
+            desc: "Rotates the HTTP-only 'refresh_token' cookie and issues a new 'token' for the same session. Replaying an already-rotated refresh token revokes the session. No tokens are exposed in the body.",
             reqBody: "{}",
-            resBody: '{\n  "token": "eyJhbGciOiJSUzI1Ni..."\n}'
+            resBody: '{\n  "status": "success",\n  "message": "Session refreshed"\n  // Cookies set: token=..., refresh_token=... (HttpOnly)\n}'
           },
           {
             method: "POST",
@@ -1107,6 +1136,33 @@
             desc: "Returns authenticated person profile, active office positions, and authorized permission codes.",
             reqBody: "-",
             resBody: '{\n  "user": { "id": "...", "username": "admin" },\n  "person": { "firstName": "Abebe", "lastName": "Kebede" },\n  "roles": [{ "name": "Super Admin" }],\n  "permissions": ["kpi:create", "office:manage"]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/auth/sessions",
+            ctrl: "AuthController.listMySessions",
+            perm: "Authenticated",
+            desc: "Lists the caller's active sessions (device, IP, last activity) and flags the current one.",
+            reqBody: "{}",
+            resBody: '[{ "id": "sid-uuid", "userAgent": "Chrome on Windows", "ipAddress": "10.0.0.5", "lastUsedAt": "2026-10-28T09:12:00Z", "isCurrent": true }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/sessions/revoke-others",
+            ctrl: "AuthController.revokeMyOtherSessions",
+            perm: "Authenticated",
+            desc: "Signs the caller out of every session except the current one.",
+            reqBody: "{}",
+            resBody: '{\n  "message": "Signed out of 2 other session(s)",\n  "data": { "revokedCount": 2 }\n}'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/auth/sessions/:id",
+            ctrl: "AuthController.revokeMySession",
+            perm: "Authenticated",
+            desc: "Revokes one of the caller's own sessions (revoking the current one also clears cookies).",
+            reqBody: "Param: id (Uuid)",
+            resBody: '{\n  "message": "Session revoked"\n}'
           },
           {
             method: "POST",
@@ -1154,6 +1210,15 @@
             resBody: '{\n  "message": "Person updated"\n}'
           },
           {
+            method: "DELETE",
+            path: "/api/v1/persons/:id",
+            ctrl: "PersonController.deletePerson",
+            perm: "user:delete",
+            desc: "Deletes a person. If the person is referenced by institutional records, they are archived and their login disabled instead.",
+            reqBody: "Param: id (Uuid)",
+            resBody: '{\n  "archived": true,\n  "message": "Person is referenced by institutional records and was archived instead"\n}'
+          },
+          {
             method: "POST",
             path: "/api/v1/persons/:id/account",
             ctrl: "AuthController.provisionAccount",
@@ -1170,6 +1235,33 @@
             desc: "Enables or disables login capabilities for a UserAccount.",
             reqBody: '{\n  "isActive": false\n}',
             resBody: '{\n  "message": "Account deactivated"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/users/:id/reset-password",
+            ctrl: "PersonController.resetPassword",
+            perm: "user:manage",
+            desc: "Administrator sets a temporary password; the user must change it on next login.",
+            reqBody: '{\n  "temporaryPassword": "AMU@Reset5678!"\n}',
+            resBody: '{\n  "message": "Password reset. The user must change it on next login.",\n  "sessionsRevoked": 2\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/users/:id/sessions",
+            ctrl: "PersonController.listAccountSessions",
+            perm: "user:manage",
+            desc: "Administrator view of an account's sessions; includeRevoked=true adds recent revoked sessions with their reason.",
+            reqBody: "Query: includeRevoked (Boolean)",
+            resBody: '[{ "id": "sid-uuid", "userAgent": "Firefox", "isActive": false, "revokedReason": "password_changed" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/users/:id/sessions/revoke-all",
+            ctrl: "PersonController.revokeAccountSessions",
+            perm: "user:manage",
+            desc: "Forces sign-out of every session of an account.",
+            reqBody: "{}",
+            resBody: '{\n  "message": "Revoked 3 session(s)",\n  "data": { "revokedCount": 3 }\n}'
           }
         ]
       },
@@ -1423,7 +1515,25 @@
             perm: "role:read",
             desc: "Get role details and full array of granted atomic permissions.",
             reqBody: "Param: id (Int)",
-            resBody: '{\n  "id": 1,\n  "name": "Dean",\n  "permissions": [{ "id": 10, "code": "kpi:assign" }]\n}'
+            resBody: '{\n  "id": 1,\n  "name": "Dean",\n  "permissions": [{ "id": 10, "code": "target:cascade" }]\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/roles/:id",
+            ctrl: "RoleController.updateRole",
+            perm: "role:update",
+            desc: "Renames or re-describes a role.",
+            reqBody: '{\n  "name": "College Dean",\n  "description": "Head of a college"\n}',
+            resBody: '{\n  "id": 1,\n  "name": "College Dean"\n}'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/roles/:id",
+            ctrl: "RoleController.deleteRole",
+            perm: "role:delete",
+            desc: "Deletes a role that has no active office-person assignments.",
+            reqBody: "Param: id (Int)",
+            resBody: '{\n  "message": "Role deleted"\n}'
           },
           {
             method: "GET",
@@ -1592,6 +1702,15 @@
             desc: "Registers a new master KPI indicator in the catalog.",
             reqBody: '{\n  "kpiThemeId": "t1",\n  "code": "KPI-GRAD-01",\n  "name": "On-Time Student Graduation Rate",\n  "unitOfMeasure": "Percentage",\n  "direction": "higher_is_better",\n  "cascadeMode": "split",\n  "maxOverAllocationPercent": 5.0\n}',
             resBody: '{\n  "id": "kpi-uuid",\n  "code": "KPI-GRAD-01"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/kpis/:id",
+            ctrl: "KpiController.getKpiById",
+            perm: "Authenticated",
+            desc: "Fetches a master KPI with its theme and calculation metadata.",
+            reqBody: "Param: id (Uuid)",
+            resBody: '{\n  "id": "kpi-uuid",\n  "code": "KPI-GRAD-01",\n  "theme": { "name": "Academic Excellence" }\n}'
           },
           {
             method: "PUT",

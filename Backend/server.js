@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
@@ -9,16 +10,13 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import compression from 'compression';
-import dotenv from 'dotenv';
 import path from 'path';
 import http from 'http';
 import { connectDB } from './config/database.js';
 import errorHandler from './middleware/errorMiddleware.js';
 import { initSocket } from './realtime/socket.js';
 import { swaggerSpec, swaggerUi, swaggerUiOptions } from './config/swagger.js';
-import routes from './routes/index.route.js';
-
-dotenv.config();
+import apiV1Routes from './modules/index.js';
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'dev').toLowerCase();
@@ -90,14 +88,14 @@ app.get('/api-docs.json', (req, res) => {
 });
 app.get('/docs', (req, res) => res.redirect('/api-docs'));
 
-// Main API Routes
-app.use('/api', routes);
+// API v1 (all modules)
+app.use('/api/v1', apiV1Routes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
-    message: 'AMU KPI Monitoring System API (Clean Slate)',
+    message: 'AMU KPI Monitoring System API',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
@@ -105,7 +103,7 @@ app.get('/health', (req, res) => {
 
 // 404 Handler
 app.use((req, res) => {
-  res.status(404).json({ message: `Route ${req.originalUrl} not found` });
+  res.status(404).json({ status: 'error', message: `Route ${req.method} ${req.originalUrl} not found` });
 });
 
 // Global Error Handler

@@ -1,34 +1,39 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getDocumentTypes = async () => {
-  // TODO: Implement getDocumentTypes
-  return [];
-};
+// ===== Files =====
 
-export const createDocument = async (data) => {
-  // TODO: Implement createDocument
-  return null;
-};
+/**
+ * Persist an uploaded binary (multipart `file`), compute its checksum and register a File record.
+ */
+export const uploadFile = async (file, actor) => notImplemented('uploadFile');
 
-export const linkEvidence = async (data) => {
-  // TODO: Implement linkEvidence
-  return null;
-};
+/**
+ * Resolve a File for streaming after permission and confidentiality checks.
+ */
+export const getFileForDownload = async (id, actor) => notImplemented('getFileForDownload');
 
-export const getLinkedEvidence = async (entityType, entityId) => {
-  // TODO: Implement getLinkedEvidence
-  return [];
-};
+// ===== Document types & documents =====
 
-export const unlinkEvidence = async (id) => {
-  // TODO: Implement unlinkEvidence
-  return null;
-};
+export const listDocumentTypes = async () => notImplemented('listDocumentTypes');
+
+export const createDocument = async ({ documentTypeId, fileId, ownerOfficeId, title, description, isConfidential }, actor) =>
+  notImplemented('createDocument');
+
+// ===== Evidence links (polymorphic) =====
+
+export const linkDocument = async (documentId, { entityType, entityId }, actor) => notImplemented('linkDocument');
+
+export const listEvidence = async (entityType, entityId, actor) => notImplemented('listEvidence');
+
+export const unlinkDocument = async (linkId, actor) => notImplemented('unlinkDocument');
 
 export default {
-  getDocumentTypes,
+  uploadFile,
+  getFileForDownload,
+  listDocumentTypes,
   createDocument,
-  linkEvidence,
-  getLinkedEvidence,
-  unlinkEvidence,
+  linkDocument,
+  listEvidence,
+  unlinkDocument,
 };

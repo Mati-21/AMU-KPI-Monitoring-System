@@ -1,14 +1,16 @@
 import 'dotenv/config';
 import { prisma } from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { PERMISSION_CODES } from '../config/permissions.js';
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'Mati@gmail.com').trim();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Mati@8196';
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'mati@gmail.com').trim().toLowerCase();
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'mati.admin').trim().toLowerCase();
 const ADMIN_FIRST_NAME = (process.env.ADMIN_FIRST_NAME || 'Mati').trim();
 const ADMIN_FATHER_NAME = (process.env.ADMIN_FATHER_NAME || 'Admin').trim();
 const ADMIN_GRANDFATHER_NAME = (process.env.ADMIN_GRANDFATHER_NAME || 'User').trim();
 const ADMIN_PHONE = (process.env.ADMIN_PHONE || '0911000000').trim();
+const RESET_ADMIN = process.argv.includes('--reset-admin');
 
 export const seedAdmin = async () => {
   console.log('🚀 Seeding Super Admin and Institutional Foundation into New Schema...\n');
@@ -76,95 +78,25 @@ export const seedAdmin = async () => {
       });
     }
 
-    // 5. Atomic Permissions Catalog
-    console.log('🔑 Seeding Core Permissions Catalog...');
-    const permissionCodes = [
-      '*', // Super admin wildcard
-      // Identity & User Management
-      'user:create',
-      'user:read',
-      'user:update',
-      'user:delete',
-      'user:manage',
-      // Dynamic Roles & Permissions
-      'role:create',
-      'role:read',
-      'role:update',
-      'role:delete',
-      'role:assign',
-      // Office Hierarchy
-      'office:create',
-      'office:read',
-      'office:update',
-      'office:delete',
-      'office:assign',
-      // Strategic KPI & Planning
-      'kpi:create',
-      'kpi:read',
-      'kpi:update',
-      'kpi:delete',
-      'kpi:manage',
-      // Target Cascading
-      'target:create',
-      'target:read',
-      'target:update',
-      'target:assign',
-      'target:cascade',
-      // Evaluation Cycles & Reports
-      'cycle:manage',
-      'report:create',
-      'report:read',
-      'report:submit',
-      'report:review',
-      // Scoring & Evaluations
-      'evaluation:read',
-      'evaluation:write',
-      'evaluation:verify',
-      'scorecard:read',
-      // Files & Documents
-      'file:upload',
-      'file:read',
-      'document:create',
-      'document:read',
-      'evidence:link',
-      'evidence:read',
-      // System & Notifications
-      'notification:send',
-      'settings:manage',
-      'audit:read',
-      'dashboard:read',
-    ];
-
-    for (const code of permissionCodes) {
-      let perm = await prisma.permission.findUnique({
-        where: { code },
-      });
-      if (!perm) {
-        perm = await prisma.permission.create({
-          data: { code },
-        });
-      }
-
-      // Link to Super Admin role
+    // 5. Atomic Permissions Catalog (single source: config/permissions.js)
+    console.log(`🔑 Syncing ${PERMISSION_CODES.length} permission codes...`);
+    for (const code of PERMISSION_CODES) {
+      const perm = await prisma.permission.upsert({ where: { code }, update: {}, create: { code } });
       await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: superAdminRole.id,
-            permissionId: perm.id,
-          },
-        },
+        where: { roleId_permissionId: { roleId: superAdminRole.id, permissionId: perm.id } },
         update: {},
-        create: {
-          roleId: superAdminRole.id,
-          permissionId: perm.id,
-        },
+        create: { roleId: superAdminRole.id, permissionId: perm.id },
       });
     }
+
+    // Remove codes that are no longer part of the catalog (role links cascade)
+    const stale = await prisma.permission.deleteMany({ where: { code: { notIn: [...PERMISSION_CODES] } } });
+    if (stale.count > 0) console.log(`🧹 Removed ${stale.count} stale permission code(s)`);
 
     // 6. Super Admin Person Record
     console.log(`👤 Creating/Upserting Super Admin Person (${ADMIN_EMAIL})...`);
     let adminPerson = await prisma.person.findFirst({
-      where: { email: ADMIN_EMAIL },
+      where: { email: { equals: ADMIN_EMAIL, mode: 'insensitive' } },
     });
 
     if (!adminPerson) {
@@ -181,44 +113,28 @@ export const seedAdmin = async () => {
       });
     }
 
-    // 7. Super Admin UserAccount (Temporary Credentials & Mandatory MFA)
-    console.log(`🔐 Creating/Upserting Super Admin UserAccount (${ADMIN_USERNAME})...`);
-    
-    // Generate secure temporary password
-    const temporaryPassword = process.env.ADMIN_TEMP_PASSWORD || `AMU@Temp${Math.floor(1000 + Math.random() * 9000)}!`;
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    // 7. Super Admin UserAccount (temporary password + mandatory MFA)
+    // An existing account is left untouched unless the seed is run with --reset-admin.
+    console.log(`🔐 Ensuring Super Admin UserAccount (${ADMIN_USERNAME})...`);
+    let userAccount = await prisma.userAccount.findUnique({ where: { username: ADMIN_USERNAME } });
+    let temporaryPassword = null;
 
-    let userAccount = await prisma.userAccount.findUnique({
-      where: { username: ADMIN_USERNAME },
-    });
-
-    if (!userAccount) {
-      userAccount = await prisma.userAccount.create({
-        data: {
-          personId: adminPerson.id,
-          username: ADMIN_USERNAME,
-          passwordHash: hashedPassword,
-          isActive: true,
-          mustChangePassword: true,  // Forces password change on first login
-          mfaEnforced: true,         // Super admin must have MFA enforced
-          mfaEnabled: false,         // Not yet active until setup completed
-          mfaSecret: null,
-          mfaType: 'totp',
-        },
-      });
+    if (!userAccount || RESET_ADMIN) {
+      temporaryPassword = process.env.ADMIN_TEMP_PASSWORD || `AMU@${crypto.randomBytes(6).toString('base64url')}!`;
+      const credentials = {
+        passwordHash: await bcrypt.hash(temporaryPassword, 10),
+        isActive: true,
+        mustChangePassword: true, // forces password change on first login
+        mfaEnforced: true, // Super Admin must use MFA
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaType: 'totp',
+      };
+      userAccount = userAccount
+        ? await prisma.userAccount.update({ where: { id: userAccount.id }, data: credentials })
+        : await prisma.userAccount.create({ data: { personId: adminPerson.id, username: ADMIN_USERNAME, ...credentials } });
     } else {
-      userAccount = await prisma.userAccount.update({
-        where: { username: ADMIN_USERNAME },
-        data: {
-          passwordHash: hashedPassword,
-          isActive: true,
-          mustChangePassword: true,
-          mfaEnforced: true,
-          mfaEnabled: false,
-          mfaSecret: null,
-          mfaType: 'totp',
-        },
-      });
+      console.log('   Account already exists; credentials unchanged (use --reset-admin to reset).');
     }
 
     // 8. Place Super Admin Person in Root Office
@@ -263,12 +179,12 @@ export const seedAdmin = async () => {
     }
 
     console.log('\n======================================================');
-    console.log('✅ SUPER ADMIN SEEDING COMPLETE WITH TEMPORARY PASSWORD!');
+    console.log('✅ SUPER ADMIN SEEDING COMPLETE');
     console.log('======================================================');
     console.log(`👤 Name:               ${adminPerson.firstName} ${adminPerson.middleName} ${adminPerson.lastName}`);
     console.log(`📧 Email:              ${adminPerson.email}`);
     console.log(`🔑 Username:           ${userAccount.username}`);
-    console.log(`🔒 Temporary Password: ${temporaryPassword}`);
+    console.log(`🔒 Temporary Password: ${temporaryPassword ?? '(unchanged)'}`);
     console.log(`⚠️  Must Change Pass:   YES (Enforced on First Login)`);
     console.log(`🛡️  MFA Enforced:       YES (Mandatory TOTP Setup on First Login)`);
     console.log(`🏛️ Role:               Super Admin (Global Scope)`);

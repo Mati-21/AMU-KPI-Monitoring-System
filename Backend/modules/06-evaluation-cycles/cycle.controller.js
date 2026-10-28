@@ -1,59 +1,48 @@
 import * as cycleService from './cycle.service.js';
+import { actorOf } from '../../utils/requestContext.js';
 
-export const getCycles = async (req, res, next) => {
-  try {
-    const cycles = await cycleService.getCycles();
-    res.json({ status: 'success', data: cycles });
-  } catch (error) {
-    next(error);
-  }
+export const listCycles = async (req, res) => {
+  const { fiscalYearId, status } = req.query;
+  const cycles = await cycleService.listCycles({ fiscalYearId, status });
+  res.json({ status: 'success', data: cycles });
 };
 
-export const createCycle = async (req, res, next) => {
-  try {
-    res.status(201).json({ status: 'success', message: 'Cycle creation ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const createCycle = async (req, res) => {
+  const cycle = await cycleService.createCycle(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: cycle });
 };
 
-export const updateCycleStatus = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Update cycle status ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const updateCycleStatus = async (req, res) => {
+  const cycle = await cycleService.updateCycleStatus(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: cycle });
 };
 
-export const getOrInitiateReport = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Initiate report ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const initiateReport = async (req, res) => {
+  const report = await cycleService.initiateReport(req.body || {}, actorOf(req));
+  res.status(201).json({ status: 'success', data: report });
 };
 
-export const submitReport = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Submit report ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const getReportById = async (req, res) => {
+  const report = await cycleService.getReportById(req.params.id, actorOf(req));
+  res.json({ status: 'success', data: report });
 };
 
-export const reviewReport = async (req, res, next) => {
-  try {
-    res.json({ status: 'success', message: 'Review report ready to implement' });
-  } catch (error) {
-    next(error);
-  }
+export const submitReport = async (req, res) => {
+  const report = await cycleService.submitReport(req.params.id, actorOf(req));
+  res.json({ status: 'success', data: report });
+};
+
+export const reviewReport = async (req, res) => {
+  const report = await cycleService.reviewReport(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: report });
 };
 
 export default {
-  getCycles,
+  listCycles,
   createCycle,
   updateCycleStatus,
-  getOrInitiateReport,
+  initiateReport,
+  getReportById,
   submitReport,
   reviewReport,
 };

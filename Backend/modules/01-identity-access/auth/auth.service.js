@@ -1,548 +1,351 @@
 import { prisma } from '../../../config/database.js';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { generateSecret, generateURI, verify } from 'otplib';
 import QRCode from 'qrcode';
+import { STAGE_TOKEN_TTL, TOKEN_TYPES, signToken, verifyToken } from '../../../config/jwt.js';
+import { getActiveGrants, getPermissionCodes } from '../../03-access-control/access.service.js';
+import { REVOKE_REASONS, createSession, revokeAllSessions } from './session.service.js';
+import { badRequest, forbidden, notFound, unauthorized } from '../../../utils/httpError.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'amu_kpi_jwt_secret';
-const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
+export const MIN_PASSWORD_LENGTH = 8;
 
-/**
- * Generate standard access token
- */
-export const generateAccessToken = (user) => {
-  return jwt.sign(
-    {
-      id: user.id,
-      personId: user.personId,
-      username: user.username,
-      email: user.person?.email,
-      roles: user.person?.officePersons?.flatMap((op) => op.roles.map((r) => r.role?.name)) || [],
+// Intermediate login stages carried in the `auth_stage` cookie
+export const STAGES = Object.freeze({
+  PASSWORD_CHANGE: 'FIRST_LOGIN_PASSWORD_CHANGE',
+  MFA_SETUP: 'MFA_SETUP',
+  MFA_VERIFY: 'MFA_VERIFY',
+});
+
+const ACCOUNT_INCLUDE = {
+  person: {
+    include: {
+      officePersons: {
+        include: {
+          office: { select: { id: true, name: true, code: true } },
+          position: { select: { id: true, title: true, isHead: true } },
+          roles: { include: { role: { select: { id: true, name: true } } } },
+        },
+      },
     },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRE }
-  );
+  },
 };
 
-/**
- * Generate temporary token for intermediate auth steps (password change / MFA)
- */
-export const generateTempToken = (userId, scope) => {
-  return jwt.sign({ id: userId, scope }, JWT_SECRET, { expiresIn: '15m' });
+export const assertPasswordStrength = (password) => {
+  if (!password || String(password).length < MIN_PASSWORD_LENGTH) {
+    throw badRequest(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long`);
+  }
 };
 
+const isValidTotp = async (code, secret) => {
+  if (!code || !secret) return false;
+  const result = await verify({ token: String(code).trim(), secret });
+  return Boolean(result?.valid);
+};
+
+// ===== Tokens =====
+
+const issueStage = (accountId, stage) => signToken(TOKEN_TYPES.STAGE, { id: accountId, stage }, STAGE_TOKEN_TTL);
+
 /**
- * Verify a temporary token and return decoded payload
+ * Verify an `auth_stage` token and assert it is at the expected step.
  */
-export const verifyTempToken = (token, expectedScope) => {
-  const decoded = jwt.verify(token, JWT_SECRET);
-  if (expectedScope && decoded.scope !== expectedScope) {
-    if (decoded.scope === 'MFA_SETUP') {
-      throw new Error('Password was already updated. Your account is on the MFA setup step. Please proceed to POST /api/auth/mfa/setup.');
-    }
-    if (decoded.scope === 'FIRST_LOGIN_PASSWORD_CHANGE') {
-      throw new Error('You must change your temporary password first (POST /api/auth/change-password) before proceeding.');
-    }
-    throw new Error(`Invalid token scope: expected ${expectedScope}, but received ${decoded.scope}`);
+export const verifyStageToken = (token, expectedStage) => {
+  if (!token) throw unauthorized('Login step cookie missing. Please login again.');
+  let decoded;
+  try {
+    decoded = verifyToken(token, TOKEN_TYPES.STAGE);
+  } catch {
+    throw unauthorized('Login step expired or invalid. Please login again.');
+  }
+  if (decoded.stage !== expectedStage) {
+    const hints = {
+      [STAGES.PASSWORD_CHANGE]: 'You must change your temporary password first (POST /api/v1/auth/change-password-first-login).',
+      [STAGES.MFA_SETUP]: 'Your account is on the MFA setup step (POST /api/v1/auth/mfa/setup).',
+      [STAGES.MFA_VERIFY]: 'Your account is on the MFA verification step (POST /api/v1/auth/mfa/verify).',
+    };
+    throw badRequest(hints[decoded.stage] || 'Invalid login step');
   }
   return decoded;
 };
 
-/**
- * Find user by username or email with related person, office, and roles
- */
-export const findUserByUsernameOrEmail = async (identifier) => {
-  if (!identifier) return null;
-  return prisma.userAccount.findFirst({
+// ===== Lookups =====
+
+export const findAccountByIdentifier = (identifier) =>
+  prisma.userAccount.findFirst({
     where: {
-      OR: [
-        { username: identifier },
-        { person: { email: { equals: identifier, mode: 'insensitive' } } },
-      ],
+      OR: [{ username: identifier }, { person: { email: { equals: identifier, mode: 'insensitive' } } }],
     },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: {
-              office: true,
-              position: true,
-              roles: {
-                include: { role: true },
-              },
-            },
-          },
-        },
-      },
-    },
+    include: ACCOUNT_INCLUDE,
   });
+
+export const findAccountById = (id) => prisma.userAccount.findUnique({ where: { id }, include: ACCOUNT_INCLUDE });
+
+const getAccountOrThrow = async (id) => {
+  const account = await findAccountById(id);
+  if (!account) throw notFound('User account not found');
+  return account;
 };
 
-export const findUserByUsername = findUserByUsernameOrEmail;
+const sanitizeAccount = (account) => ({
+  id: account.id,
+  personId: account.personId,
+  username: account.username,
+  isActive: account.isActive,
+  mustChangePassword: Boolean(account.mustChangePassword),
+  mfaEnabled: account.mfaEnabled,
+  mfaEnforced: account.mfaEnforced,
+  person: account.person
+    ? {
+        firstName: account.person.firstName,
+        middleName: account.person.middleName,
+        lastName: account.person.lastName,
+        email: account.person.email,
+        phone: account.person.phone,
+      }
+    : null,
+});
 
 /**
- * Find user by ID
+ * Decide the next login step for an account whose password has been verified.
+ * `context` ({ ipAddress, userAgent }) is recorded on the session once login completes.
  */
-export const findUserById = async (id) => {
-  return prisma.userAccount.findUnique({
-    where: { id },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: {
-              office: true,
-              position: true,
-              roles: {
-                include: { role: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-};
-
-/**
- * Login verification with first-login & MFA gate checks
- */
-export const authenticate = async ({ username, email, password }) => {
-  const identifier = username || email;
-  const user = await findUserByUsernameOrEmail(identifier);
-  if (!user) {
-    throw new Error('Invalid Credentials');
-  }
-
-  if (!user.isActive) {
-    throw new Error('User account is deactivated. Contact system administrator.');
-  }
-
-  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-  if (!isPasswordValid) {
-    throw new Error('Invalid Credentials');
-  }
-
-  // Check 1: user_account.mustChangePassword
-  if (user.mustChangePassword) {
-    const tempToken = generateTempToken(user.id, 'FIRST_LOGIN_PASSWORD_CHANGE');
+const nextLoginStep = async (account, context) => {
+  if (account.mustChangePassword) {
     return {
       status: 'REQUIRE_PASSWORD_CHANGE',
-      mustChangePassword: true,
-      tempToken,
+      message: 'Temporary password detected. You must change your password before continuing.',
+      stageToken: issueStage(account.id, STAGES.PASSWORD_CHANGE),
     };
   }
-
-  // Check 2: If MFA is enforced by admin/role but not yet configured by user
-  if (user.mfaEnforced && !user.mfaEnabled) {
-    const tempToken = generateTempToken(user.id, 'MFA_SETUP');
+  if (account.mfaEnforced && !account.mfaEnabled) {
     return {
       status: 'REQUIRE_MFA_SETUP',
-      mfa_required: true,
-      tempToken,
+      message: 'Two-Factor Authentication is mandatory for your account. Please set it up.',
+      stageToken: issueStage(account.id, STAGES.MFA_SETUP),
     };
   }
-
-  // Check 3: user_account.mfaEnabled is true -> require 2FA challenge
-  if (user.mfaEnabled && user.mfaSecret) {
-    const tempToken = generateTempToken(user.id, 'MFA_VERIFY');
+  if (account.mfaEnabled && account.mfaSecret) {
     return {
       status: 'REQUIRE_MFA_VERIFY',
       message: 'Enter the 6-digit verification code from your authenticator app.',
-      tempToken,
+      stageToken: issueStage(account.id, STAGES.MFA_VERIFY),
     };
   }
+  return completeLogin(account, context);
+};
 
-  // 4. Normal Successful Login
+/**
+ * All login steps passed: open a tracked session.
+ */
+const completeLogin = async (account, context) => {
+  await prisma.userAccount.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });
+  const { token, refreshToken } = await createSession(account, context);
+  return { status: 'SUCCESS', user: sanitizeAccount(account), token, refreshToken };
+};
+
+// ===== Flows =====
+
+export const authenticate = async ({ identifier, password }, context) => {
+  if (!identifier || !password) throw badRequest('Username (or email) and password are required');
+
+  const account = await findAccountByIdentifier(identifier);
+  // Same message for unknown user and wrong password to avoid account enumeration
+  if (!account || !(await bcrypt.compare(password, account.passwordHash))) {
+    throw unauthorized('Invalid credentials');
+  }
+  if (!account.isActive) throw forbidden('User account is deactivated. Contact system administrator.');
+
+  return nextLoginStep(account, context);
+};
+
+export const changePasswordFirstLogin = async ({ stageToken, newPassword }, context) => {
+  const { id } = verifyStageToken(stageToken, STAGES.PASSWORD_CHANGE);
+  assertPasswordStrength(newPassword);
+
+  const account = await getAccountOrThrow(id);
+  if (await bcrypt.compare(newPassword, account.passwordHash)) {
+    throw badRequest('New password must be different from the temporary password');
+  }
+
+  const updated = await prisma.userAccount.update({
+    where: { id },
+    data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePassword: false },
+    include: ACCOUNT_INCLUDE,
+  });
+  return nextLoginStep(updated, context);
+};
+
+/**
+ * Change own password. Every other session of the account is signed out; the current one stays.
+ */
+export const changePassword = async ({ accountId, sessionId, currentPassword, newPassword, code }) => {
+  if (!currentPassword) throw badRequest('currentPassword is required');
+  assertPasswordStrength(newPassword);
+
+  const account = await getAccountOrThrow(accountId);
+  if (!(await bcrypt.compare(currentPassword, account.passwordHash))) {
+    throw badRequest('Current password does not match');
+  }
+  if (account.mfaEnabled && !(await isValidTotp(code, account.mfaSecret))) {
+    throw badRequest('A valid Two-Factor Authentication code is required to change your password');
+  }
+
   await prisma.userAccount.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
+    where: { id: accountId },
+    data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePassword: false },
   });
-
-  const token = generateAccessToken(user);
-  return {
-    status: 'SUCCESS',
-    token,
-    user: sanitizeUser(user),
-  };
+  const { revokedCount } = await revokeAllSessions(accountId, REVOKE_REASONS.PASSWORD_CHANGED, { exceptSessionId: sessionId });
+  return { status: 'SUCCESS', message: 'Password changed successfully.', otherSessionsSignedOut: revokedCount };
 };
 
 /**
- * First-login password change
+ * Generate a pending TOTP secret + QR code. MFA stays disabled until verified.
  */
-export const changePasswordFirstLogin = async ({ tempToken, newPassword }) => {
-  const decoded = verifyTempToken(tempToken, 'FIRST_LOGIN_PASSWORD_CHANGE');
-  const user = await findUserById(decoded.id);
-
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  if (!newPassword || newPassword.length < 8) {
-    throw new Error('New password must be at least 8 characters long');
-  }
-
-  const newHash = await bcrypt.hash(newPassword, 10);
-  const updatedUser = await prisma.userAccount.update({
-    where: { id: user.id },
-    data: {
-      passwordHash: newHash,
-      mustChangePassword: false,
-    },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: { roles: { include: { role: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  // After password change, if MFA is enforced, automatically proceed to MFA setup
-  if (updatedUser.mfaEnforced && !updatedUser.mfaEnabled) {
-    const mfaTempToken = generateTempToken(updatedUser.id, 'MFA_SETUP');
-    return {
-      status: 'REQUIRE_MFA_SETUP',
-      mfa_required: true,
-      tempToken: mfaTempToken,
-    };
-  }
-
-  const token = generateAccessToken(updatedUser);
-  return {
-    status: 'SUCCESS',
-    message: 'Password changed successfully.',
-    token,
-    user: sanitizeUser(updatedUser),
-  };
-};
-
-/**
- * Regular password change for authenticated users
- */
-export const changePasswordRegular = async ({ userId, currentPassword, newPassword, code, mfaCode }) => {
-  const user = await prisma.userAccount.findUnique({
-    where: { id: userId },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: { roles: { include: { role: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  if (!currentPassword) {
-    throw new Error('Current password is required for regular password change');
-  }
-
-  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!isMatch) {
-    throw new Error('Current password does not match');
-  }
-
-  // If user has MFA enabled, verify 2FA TOTP code
-  if (user.mfaEnabled && user.mfaSecret) {
-    const totpCode = code || mfaCode;
-    if (!totpCode) {
-      throw new Error('Two-Factor Authentication (2FA) 6-digit code is required to change password');
-    }
-    const isValid = verify({ token: String(totpCode).trim(), secret: user.mfaSecret });
-    if (!isValid) {
-      throw new Error('Invalid Two-Factor Authentication (2FA) code');
-    }
-  }
-
-  if (!newPassword || newPassword.length < 8) {
-    throw new Error('New password must be at least 8 characters long');
-  }
-
-  const newHash = await bcrypt.hash(newPassword, 10);
-  const updatedUser = await prisma.userAccount.update({
-    where: { id: user.id },
-    data: {
-      passwordHash: newHash,
-      mustChangePassword: false,
-    },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: { roles: { include: { role: true } } },
-          },
-        },
-      },
-    },
-  });
-
-  const token = generateAccessToken(updatedUser);
-  return {
-    status: 'SUCCESS',
-    message: 'Password changed successfully.',
-    token,
-    user: sanitizeUser(updatedUser),
-  };
-};
-
-/**
- * Generate TOTP Secret and QR Code for MFA Setup
- */
-export const generateMfaSetup = async ({ userId }) => {
-  const user = await findUserById(userId);
-  if (!user) throw new Error('User not found');
+export const generateMfaSetup = async ({ accountId }) => {
+  const account = await getAccountOrThrow(accountId);
+  if (account.mfaEnabled) throw badRequest('Two-Factor Authentication is already enabled. Disable it before setting it up again.');
 
   const secret = generateSecret();
-  const emailOrUser = user.person?.email || user.username;
-  const otpauth = generateURI({
-    issuer: 'AMU KPI Monitoring',
-    label: emailOrUser,
-    secret,
-  });
+  const otpauth = generateURI({ issuer: 'AMU KPI Monitoring', label: account.person?.email || account.username, secret });
   const qrCodeDataUrl = await QRCode.toDataURL(otpauth);
 
-  // Store pending MFA secret on the user account (mfaEnabled remains false until verified)
-  await prisma.userAccount.update({
-    where: { id: userId },
-    data: { mfaSecret: secret },
-  });
-
-  return {
-    secret,
-    otpauth,
-    qrCodeDataUrl,
-  };
+  await prisma.userAccount.update({ where: { id: accountId }, data: { mfaSecret: secret } });
+  return { secret, otpauth, qrCodeDataUrl };
 };
 
 /**
- * Verify initial code and enable MFA (Only requires code from client)
+ * Verify the first TOTP code against the pending secret and enable MFA.
+ * During login (startSession = true) this completes the login and opens a session;
+ * from an existing session it only enables MFA.
  */
-export const verifyAndEnableMfa = async ({ userId, code, secret: providedSecret }) => {
-  const user = await findUserById(userId);
-  if (!user) throw new Error('User not found');
-
-  const secretToVerify = providedSecret || user.mfaSecret;
-  if (!secretToVerify) {
-    throw new Error('MFA setup secret not found. Please call /mfa/setup first.');
+export const verifyAndEnableMfa = async ({ accountId, code, startSession }, context) => {
+  const account = await getAccountOrThrow(accountId);
+  if (!account.mfaSecret) throw badRequest('MFA setup has not been started. Call POST /api/v1/auth/mfa/setup first.');
+  if (!(await isValidTotp(code, account.mfaSecret))) {
+    throw badRequest('Invalid verification code. Please check your authenticator app and try again.');
   }
 
-  const checkResult = await verify({ token: String(code).trim(), secret: secretToVerify });
-  const isValid = Boolean(checkResult?.valid);
-  if (!isValid) {
-    throw new Error('Invalid verification code. Please check your authenticator app and try again.');
-  }
-
-  const updatedUser = await prisma.userAccount.update({
-    where: { id: userId },
-    data: {
-      mfaSecret: secretToVerify,
-      mfaEnabled: true,
-      lastLoginAt: new Date(),
-    },
-    include: {
-      person: {
-        include: {
-          officePersons: {
-            include: { roles: { include: { role: true } } },
-          },
-        },
-      },
-    },
+  const updated = await prisma.userAccount.update({
+    where: { id: accountId },
+    data: { mfaEnabled: true },
+    include: ACCOUNT_INCLUDE,
   });
-
-  const token = generateAccessToken(updatedUser);
-  return {
-    status: 'SUCCESS',
-    message: 'Two-Factor Authentication has been successfully configured and activated.',
-    token,
-    user: sanitizeUser(updatedUser),
-  };
+  const message = 'Two-Factor Authentication has been successfully configured and activated.';
+  if (!startSession) return { status: 'SUCCESS', message };
+  return { ...(await completeLogin(updated, context)), message };
 };
 
-/**
- * Verify MFA Code during login
- */
-export const verifyMfaLogin = async ({ tempToken, code }) => {
-  const decoded = verifyTempToken(tempToken, 'MFA_VERIFY');
-  const user = await findUserById(decoded.id);
-
-  if (!user || !user.mfaSecret) {
-    throw new Error('MFA is not configured for this account');
+export const verifyMfaLogin = async ({ stageToken, code }, context) => {
+  const { id } = verifyStageToken(stageToken, STAGES.MFA_VERIFY);
+  const account = await getAccountOrThrow(id);
+  if (!account.mfaEnabled || !account.mfaSecret) throw badRequest('MFA is not configured for this account');
+  if (!(await isValidTotp(code, account.mfaSecret))) {
+    throw unauthorized('Invalid MFA code. Please enter the current 6-digit code from your authenticator app.');
   }
-
-  const checkResult = await verify({ token: String(code).trim(), secret: user.mfaSecret });
-  const isValid = Boolean(checkResult?.valid);
-  if (!isValid) {
-    throw new Error('Invalid MFA code. Please enter the current 6-digit code from your authenticator app.');
-  }
-
-  await prisma.userAccount.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
-
-  const token = generateAccessToken(user);
-  return {
-    status: 'SUCCESS',
-    token,
-    user: sanitizeUser(user),
-  };
+  return completeLogin(account, context);
 };
 
-/**
- * Disable MFA (Allowed only if not enforced by admin/policy)
- */
-export const disableMfa = async ({ userId, code }) => {
-  const user = await findUserById(userId);
-  if (!user) throw new Error('User not found');
+export const disableMfa = async ({ accountId, code }) => {
+  const account = await getAccountOrThrow(accountId);
+  if (account.mfaEnforced) throw forbidden('MFA is enforced on your account by policy and cannot be disabled.');
+  if (!account.mfaEnabled) throw badRequest('Two-Factor Authentication is not enabled');
+  if (!(await isValidTotp(code, account.mfaSecret))) throw badRequest('Invalid verification code');
 
-  if (user.mfaEnforced) {
-    throw new Error('MFA is strictly enforced on your account by policy and cannot be disabled.');
-  }
-
-  const checkResult = await verify({ token: String(code).trim(), secret: user.mfaSecret });
-  const isValid = Boolean(checkResult?.valid);
-  if (!isValid) {
-    throw new Error('Invalid verification code');
-  }
-
-  await prisma.userAccount.update({
-    where: { id: userId },
-    data: {
-      mfaEnabled: false,
-      mfaSecret: null,
-    },
-  });
-
+  await prisma.userAccount.update({ where: { id: accountId }, data: { mfaEnabled: false, mfaSecret: null } });
   return { message: 'Two-Factor Authentication disabled' };
 };
 
 /**
- * Administrator: Enforce/Un-enforce MFA for a specific user (by UserAccount ID, Person ID, or Username)
+ * Current user profile, active office placements and effective permission codes.
  */
-export const setMfaEnforced = async ({ userId, enforced = true }) => {
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-  const user = await prisma.userAccount.findFirst({
-    where: isUuid
-      ? { OR: [{ id: userId }, { personId: userId }, { username: userId }] }
-      : { username: userId },
+export const getProfile = async (accountId) => {
+  const account = await getAccountOrThrow(accountId);
+  const grants = await getActiveGrants(account.personId);
+  return {
+    ...sanitizeAccount(account),
+    lastLoginAt: account.lastLoginAt,
+    placements: account.person.officePersons.map((placement) => ({
+      id: placement.id,
+      isPrimary: placement.isPrimary,
+      startDate: placement.startDate,
+      endDate: placement.endDate,
+      office: placement.office,
+      position: placement.position,
+      roles: placement.roles.map((assignment) => ({
+        id: assignment.id,
+        role: assignment.role,
+        scopeOfficeId: assignment.scopeOfficeId,
+        validFrom: assignment.validFrom,
+        validTo: assignment.validTo,
+      })),
+    })),
+    permissions: getPermissionCodes(grants),
+  };
+};
+
+// ===== Administration =====
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Find an account by UserAccount id, Person id, or username.
+ */
+export const findAccountByAnyId = (idOrUsername) =>
+  prisma.userAccount.findFirst({
+    where: UUID_PATTERN.test(idOrUsername)
+      ? { OR: [{ id: idOrUsername }, { personId: idOrUsername }] }
+      : { username: idOrUsername },
   });
 
-  if (!user) throw new Error('User account not found');
+export const setMfaEnforced = async ({ accountId, enforced }) => {
+  const account = await findAccountByAnyId(accountId);
+  if (!account) throw notFound('User account not found');
 
   return prisma.userAccount.update({
-    where: { id: user.id },
+    where: { id: account.id },
     data: { mfaEnforced: Boolean(enforced) },
-    select: {
-      id: true,
-      username: true,
-      mfaEnforced: true,
-      mfaEnabled: true,
-    },
+    select: { id: true, username: true, mfaEnforced: true, mfaEnabled: true },
   });
 };
 
-/**
- * Administrator: Enforce/Un-enforce MFA for all users holding a specific role
- */
-export const setMfaEnforcedForRole = async ({ roleName, roleId, enforced = true }) => {
-  const where = {};
-  if (roleId) {
-    where.id = parseInt(roleId, 10);
-  } else if (roleName) {
-    where.name = { equals: roleName.trim(), mode: 'insensitive' };
-  } else {
-    throw new Error('roleName or roleId is required');
-  }
+export const setMfaEnforcedForRole = async ({ roleName, roleId, enforced }) => {
+  if (!roleId && !roleName) throw badRequest('roleName or roleId is required');
 
   const role = await prisma.role.findFirst({
-    where,
+    where: roleId ? { id: Number.parseInt(roleId, 10) } : { name: { equals: String(roleName).trim(), mode: 'insensitive' } },
     include: {
       officePersonRoles: {
-        include: {
-          officePerson: {
-            include: {
-              person: {
-                include: {
-                  userAccount: true,
-                },
-              },
-            },
-          },
-        },
+        include: { officePerson: { include: { person: { include: { userAccount: true } } } } },
       },
     },
   });
+  if (!role) throw notFound(`Role "${roleName || roleId}" not found`);
 
-  if (!role) {
-    throw new Error(`Role "${roleName || roleId}" not found`);
-  }
+  const accounts = role.officePersonRoles.map((assignment) => assignment.officePerson?.person?.userAccount).filter(Boolean);
+  const accountIds = [...new Set(accounts.map((account) => account.id))];
 
-  const userAccounts = role.officePersonRoles
-    .map((opr) => opr.officePerson?.person?.userAccount)
-    .filter(Boolean);
-
-  const userAccountIds = [...new Set(userAccounts.map((u) => u.id))];
-
-  if (userAccountIds.length > 0) {
-    await prisma.userAccount.updateMany({
-      where: {
-        id: { in: userAccountIds },
-      },
-      data: {
-        mfaEnforced: Boolean(enforced),
-      },
-    });
+  if (accountIds.length > 0) {
+    await prisma.userAccount.updateMany({ where: { id: { in: accountIds } }, data: { mfaEnforced: Boolean(enforced) } });
   }
 
   return {
     roleId: role.id,
     roleName: role.name,
     mfaEnforced: Boolean(enforced),
-    affectedUsersCount: userAccountIds.length,
-    affectedUsernames: userAccounts.map((u) => u.username),
-  };
-};
-
-
-const sanitizeUser = (user) => {
-  return {
-    id: user.id,
-    personId: user.personId,
-    username: user.username,
-    isActive: user.isActive,
-    mustPasswordChange: Boolean(user.mustChangePassword),
-    mustChangePassword: Boolean(user.mustChangePassword),
-    mfaEnabled: user.mfaEnabled,
-    mfaEnforced: user.mfaEnforced,
-    person: user.person
-      ? {
-          firstName: user.person.firstName,
-          middleName: user.person.middleName,
-          lastName: user.person.lastName,
-          email: user.person.email,
-          phone: user.person.phone,
-        }
-      : null,
+    affectedUsersCount: accountIds.length,
+    affectedUsernames: [...new Set(accounts.map((account) => account.username))],
   };
 };
 
 export default {
   authenticate,
   changePasswordFirstLogin,
+  changePassword,
   generateMfaSetup,
   verifyAndEnableMfa,
   verifyMfaLogin,
   disableMfa,
+  getProfile,
   setMfaEnforced,
   setMfaEnforcedForRole,
-  generateAccessToken,
 };
-

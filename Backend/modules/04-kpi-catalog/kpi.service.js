@@ -1,34 +1,41 @@
 import { prisma } from '../../config/database.js';
+import { notImplemented } from '../../utils/httpError.js';
 
-export const getKpis = async () => {
-  // TODO: Implement getKpis
-  return [];
-};
+// ===== Fiscal years =====
 
-export const getKpiById = async (id) => {
-  // TODO: Implement getKpiById
-  return null;
-};
+export const listFiscalYears = async () => notImplemented('listFiscalYears');
 
-export const createKpi = async (data) => {
-  // TODO: Implement createKpi
-  return null;
-};
+export const createFiscalYear = async ({ label, startDate, endDate }, actor) => notImplemented('createFiscalYear');
 
-export const updateKpi = async (id, data) => {
-  // TODO: Implement updateKpi
-  return null;
-};
+/**
+ * Make one fiscal year active and close/deactivate the others.
+ */
+export const activateFiscalYear = async (id, actor) => notImplemented('activateFiscalYear');
 
-export const deleteKpi = async (id) => {
-  // TODO: Implement deleteKpi
-  return null;
-};
+// ===== Strategic themes =====
+
+export const getThemeTree = async () => notImplemented('getThemeTree');
+
+export const createTheme = async ({ name, code, parentThemeId, sortOrder }, actor) => notImplemented('createTheme');
+
+// ===== Master KPIs =====
+
+export const listKpis = async ({ search, kpiThemeId, direction, isActive } = {}) => notImplemented('listKpis');
+
+export const getKpiById = async (id) => notImplemented('getKpiById');
+
+export const createKpi = async (data, actor) => notImplemented('createKpi');
+
+export const updateKpi = async (id, data, actor) => notImplemented('updateKpi');
 
 export default {
-  getKpis,
+  listFiscalYears,
+  createFiscalYear,
+  activateFiscalYear,
+  getThemeTree,
+  createTheme,
+  listKpis,
   getKpiById,
   createKpi,
   updateKpi,
-  deleteKpi,
 };
