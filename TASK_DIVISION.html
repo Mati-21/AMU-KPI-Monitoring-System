@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMU KPI Monitoring System - Developer Task Division Matrix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-glass: rgba(255, 255, 255, 0.03);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(99, 102, 241, 0.3);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      
+      --devA-primary: #6366f1;
+      --devA-secondary: #818cf8;
+      --devA-bg: rgba(99, 102, 241, 0.12);
+      --devA-border: rgba(99, 102, 241, 0.35);
+      
+      --devB-primary: #10b981;
+      --devB-secondary: #34d399;
+      --devB-bg: rgba(16, 185, 129, 0.12);
+      --devB-border: rgba(16, 185, 129, 0.35);
+
+      --shared-primary: #f59e0b;
+      --shared-bg: rgba(245, 158, 11, 0.12);
+      --shared-border: rgba(245, 158, 11, 0.35);
+
+      --status-done: #10b981;
+      --status-prog: #3b82f6;
+      --status-todo: #6b7280;
+
+      --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+      --shadow-glow-a: 0 0 25px rgba(99, 102, 241, 0.2);
+      --shadow-glow-b: 0 0 25px rgba(16, 185, 129, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.12) 0px, transparent 40%),
+        radial-gradient(at 90% 80%, rgba(16, 185, 129, 0.1) 0px, transparent 40%),
+        radial-gradient(at 50% 50%, rgba(17, 24, 39, 0.7) 0px, transparent 100%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 5rem;
+    }
+
+    /* Header styling */
+    header {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--devA-primary) 0%, #a855f7 50%, var(--devB-primary) 100%);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .project-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #c7d2fe;
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 750px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.2rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: #1e293b;
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-primary:hover {
+      background: #334155;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-print {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: white;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-print:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+    }
+
+    /* Developer Profiles Cards */
+    .dev-overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .dev-profile-card {
+      border-radius: 16px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .dev-profile-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .dev-card-a {
+      background: linear-gradient(145deg, rgba(99, 102, 241, 0.08) 0%, rgba(17, 24, 39, 0.8) 100%);
+      border: 1px solid var(--devA-border);
+      box-shadow: var(--shadow-glow-a);
+    }
+
+    .dev-card-b {
+      background: linear-gradient(145deg, rgba(16, 185, 129, 0.08) 0%, rgba(17, 24, 39, 0.8) 100%);
+      border: 1px solid var(--devB-border);
+      box-shadow: var(--shadow-glow-b);
+    }
+
+    .dev-card-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .dev-avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: white;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dev-card-a .dev-avatar {
+      background: linear-gradient(135deg, #6366f1, #4338ca);
+      border: 2px solid #a5b4fc;
+    }
+
+    .dev-card-b .dev-avatar {
+      background: linear-gradient(135deg, #10b981, #047857);
+      border: 2px solid #6ee7b7;
+    }
+
+    .dev-name {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .dev-role-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .dev-card-a .dev-role-badge {
+      background: var(--devA-bg);
+      color: var(--devA-secondary);
+      border: 1px solid var(--devA-border);
+    }
+
+    .dev-card-b .dev-role-badge {
+      background: var(--devB-bg);
+      color: var(--devB-secondary);
+      border: 1px solid var(--devB-border);
+    }
+
+    .dev-focus {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 1.2rem;
+      line-height: 1.5;
+    }
+
+    .dev-stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+      text-align: center;
+    }
+
+    .dev-stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .dev-card-a .dev-stat-value { color: var(--devA-secondary); }
+    .dev-card-b .dev-stat-value { color: var(--devB-secondary); }
+
+    .dev-stat-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Filter & Controls Bar */
+    .controls-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1rem 1.5rem;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.55rem 1.1rem;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .filter-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .filter-btn.active {
+      background: #1f2937;
+      color: white;
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .filter-btn.active.filter-dev-a {
+      background: var(--devA-bg);
+      border-color: var(--devA-border);
+      color: #c7d2fe;
+    }
+
+    .filter-btn.active.filter-dev-b {
+      background: var(--devB-bg);
+      border-color: var(--devB-border);
+      color: #a7f3d0;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      min-width: 280px;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      padding: 0.6rem 1rem 0.6rem 2.4rem;
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 0.875rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--devA-primary);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      pointer-events: none;
+    }
+
+    /* Modules Grid */
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 1.75rem;
+    }
+
+    .module-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 18px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+
+    .module-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .module-card.dev-a-assigned {
+      border-left: 4px solid var(--devA-primary);
+    }
+
+    .module-card.dev-b-assigned {
+      border-left: 4px solid var(--devB-primary);
+    }
+
+    .module-card-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .module-title-box {
+      flex: 1;
+    }
+
+    .module-index {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .module-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .module-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .assigned-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-dev-a {
+      background: var(--devA-bg);
+      color: var(--devA-secondary);
+      border: 1px solid var(--devA-border);
+    }
+
+    .badge-dev-b {
+      background: var(--devB-bg);
+      color: var(--devB-secondary);
+      border: 1px solid var(--devB-border);
+    }
+
+    .module-body {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      flex: 1;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Tag chips */
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .chip {
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: #e2e8f0;
+      padding: 0.22rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .chip-endpoint {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: #93c5fd;
+    }
+
+    .chip-model {
+      background: rgba(168, 85, 247, 0.12);
+      border-color: rgba(168, 85, 247, 0.3);
+      color: #d8b4fe;
+    }
+
+    .chip-fe {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #fcd34d;
+    }
+
+    /* Task Checkboxes */
+    .task-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.6rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      transition: background 0.15s;
+    }
+
+    .task-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .task-status-pill {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+      margin-left: auto;
+      letter-spacing: 0.03em;
+    }
+
+    .status-done {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-wip {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .status-todo {
+      background: rgba(156, 163, 175, 0.12);
+      color: #9ca3af;
+      border: 1px solid rgba(156, 163, 175, 0.2);
+    }
+
+    .task-icon {
+      font-size: 0.95rem;
+      line-height: 1.3;
+    }
+
+    /* Integration touchpoint box */
+    .integration-box {
+      margin-top: auto;
+      padding: 0.85rem 1rem;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px dashed var(--border-color);
+      border-radius: 10px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+
+    .integration-box strong {
+      color: #e2e8f0;
+    }
+
+    /* Shared Matrix Section */
+    .matrix-section {
+      margin-top: 3.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .matrix-section h2 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      color: white;
+    }
+
+    .matrix-table-wrapper {
+      overflow-x: auto;
+      margin-top: 1.5rem;
+    }
+
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      text-align: left;
+    }
+
+    .matrix-table th {
+      background: #1e293b;
+      padding: 0.9rem 1.2rem;
+      color: #cbd5e1;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .matrix-table td {
+      padding: 1rem 1.2rem;
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+    }
+
+    .matrix-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-main);
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #111827 !important;
+      }
+      .container {
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      header, .module-card, .matrix-section, .controls-bar {
+        background: #ffffff !important;
+        border: 1px solid #d1d5db !important;
+        box-shadow: none !important;
+        color: #111827 !important;
+      }
+      .btn, .search-input-wrapper {
+        display: none !important;
+      }
+      h1, h2, .module-title {
+        color: #111827 !important;
+        -webkit-text-fill-color: initial !important;
+      }
+      .chip, .chip-endpoint, .chip-model, .chip-fe {
+        background: #f3f4f6 !important;
+        color: #1f2937 !important;
+        border-color: #e5e7eb !important;
+      }
+      .dev-card-a, .dev-card-b {
+        box-shadow: none !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      .modules-grid { grid-template-columns: 1fr; }
+      .header-top { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header Banner -->
+  <header>
+    <div class="header-top">
+      <div>
+        <div class="project-badge">
+          <span>🎓</span> AMU Final Year Project &bull; Engineering Management
+        </div>
+        <h1>AMU KPI Monitoring System</h1>
+        <p class="subtitle">
+          Full-Stack Task Division & Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>.
+          Every backend endpoint, Prisma model, frontend interface, and integration interface is strictly accounted for.
+        </p>
+      </div>
+      <div class="header-actions">
+        <a class="btn btn-primary" href="MODULES_SPECIFICATION.html" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #10b981; color: white;">
+          📘 2026 Schema & Routes Blueprint
+        </a>
+        <button class="btn btn-primary" onclick="window.scrollTo({top: document.getElementById('matrix-view').offsetTop - 30, behavior: 'smooth'})">
+          📊 View Comparison Table
+        </button>
+        <button class="btn btn-print" onclick="window.print()">
+          🖨️ Print / Export PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Developer Profiles Summary -->
+    <div class="dev-overview-grid">
+      <!-- Developer A Profile -->
+      <div class="dev-profile-card dev-card-a">
+        <div>
+          <div class="dev-card-header">
+            <div class="dev-avatar">A</div>
+            <div>
+              <div class="dev-name">
+                Developer A
+                <span class="dev-role-badge">Core Architecture</span>
+              </div>
+              <div style="font-size: 0.8rem; color: #a5b4fc;">Security, Identity & Institutional Master Data</div>
+            </div>
+          </div>
+          <p class="dev-focus">
+            Responsible for foundational identity, enterprise RBAC security, administrative office hierarchy, master KPI catalog schema, and institutional/company settings.
+          </p>
+        </div>
+        <div class="dev-stats-row">
+          <div>
+            <div class="dev-stat-value">5</div>
+            <div class="dev-stat-label">Modules</div>
+          </div>
+          <div>
+            <div class="dev-stat-value">32+</div>
+            <div class="dev-stat-label">Endpoints</div>
+          </div>
+          <div>
+            <div class="dev-stat-value">50%</div>
+            <div class="dev-stat-label">Workload</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Developer B Profile -->
+      <div class="dev-profile-card dev-card-b">
+        <div>
+          <div class="dev-card-header">
+            <div class="dev-avatar">B</div>
+            <div>
+              <div class="dev-name">
+                Developer B
+                <span class="dev-role-badge">Execution & Ops</span>
+              </div>
+              <div style="font-size: 0.8rem; color: #6ee7b7;">Performance, Evidence & Real-time Collaboration</div>
+            </div>
+          </div>
+          <p class="dev-focus">
+            Responsible for evaluation periods, operational performance calculation, document evidence verification workflows, real-time messaging/notifications, and analytics.
+          </p>
+        </div>
+        <div class="dev-stats-row">
+          <div>
+            <div class="dev-stat-value">4</div>
+            <div class="dev-stat-label">Modules</div>
+          </div>
+          <div>
+            <div class="dev-stat-value">28+</div>
+            <div class="dev-stat-label">Endpoints</div>
+          </div>
+          <div>
+            <div class="dev-stat-value">50%</div>
+            <div class="dev-stat-label">Workload</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter & Search Controls -->
+  <div class="controls-bar">
+    <div class="filter-tabs">
+      <button class="filter-btn active" onclick="filterModules('all', this)">
+        🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(9)</span>
+      </button>
+      <button class="filter-btn filter-dev-a" onclick="filterModules('dev-a', this)">
+        🟣 Developer A Only <span style="opacity: 0.6; font-size: 0.75rem;">(5)</span>
+      </button>
+      <button class="filter-btn filter-dev-b" onclick="filterModules('dev-b', this)">
+        🟢 Developer B Only <span style="opacity: 0.6; font-size: 0.75rem;">(4)</span>
+      </button>
+    </div>
+
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" class="search-input" placeholder="Search module, endpoint, or task..." onkeyup="searchCards()" />
+    </div>
+  </div>
+
+  <!-- Modules Grid -->
+  <div class="modules-grid" id="modulesGrid">
+
+    <!-- MODULE 1: AUTHENTICATION (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="auth authentication jwt login register password token security rbac">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 01 &bull; Backend/modules/auth</div>
+          <div class="module-title">🔐 Authentication & Access Security</div>
+          <div class="module-desc">Centralized JWT authentication, refresh token rotation, password hashing, and token verification security pipeline.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">POST /api/auth/register</span>
+            <span class="chip chip-endpoint">POST /api/auth/login</span>
+            <span class="chip chip-endpoint">POST /api/auth/refresh</span>
+            <span class="chip chip-endpoint">POST /api/auth/logout</span>
+            <span class="chip chip-endpoint">POST /api/auth/forgot-password</span>
+            <span class="chip chip-endpoint">POST /api/auth/reset-password</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">User (credentials)</span>
+            <span class="chip chip-model">RefreshToken</span>
+            <span class="chip chip-model">PasswordResetToken</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Authentication/Login.jsx</span>
+            <span class="chip chip-fe">Pages/Authentication/ForgotPassword.jsx</span>
+            <span class="chip chip-fe">Context/AuthContext.jsx</span>
+            <span class="chip chip-fe">Components/ProtectedRoute.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Set up JWT sign, verify, and HTTP-only cookie refresh flow</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Implement bcryptjs password hashing and credential validation</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Password recovery email trigger with secure reset token</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Implement rate-limiting for auth endpoints (brute-force defense)</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Handoff to Dev B:</strong> Dev A exports <code>authMiddleware</code> and <code>hasRole()</code> used across Dev B's Performance & Evidence controllers.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 2: USER & ROLES (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="user users roles permissions rbac profile avatar admin accounts">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 02 &bull; Backend/modules/user</div>
+          <div class="module-title">👥 User Management & RBAC Roles</div>
+          <div class="module-desc">User accounts, profile management, granular role-based permissions, and university staff account provisioning.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/users</span>
+            <span class="chip chip-endpoint">POST /api/users</span>
+            <span class="chip chip-endpoint">GET /api/users/:id</span>
+            <span class="chip chip-endpoint">PUT /api/users/:id</span>
+            <span class="chip chip-endpoint">DELETE /api/users/:id</span>
+            <span class="chip chip-endpoint">GET /api/roles</span>
+            <span class="chip chip-endpoint">POST /api/roles</span>
+            <span class="chip chip-endpoint">PUT /api/users/:id/role</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">User</span>
+            <span class="chip chip-model">Role</span>
+            <span class="chip chip-model">Permission</span>
+            <span class="chip chip-model">RolePermission</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Admin/UserManagement.jsx</span>
+            <span class="chip chip-fe">Pages/Admin/RoleManagement.jsx</span>
+            <span class="chip chip-fe">Pages/Profile/UserProfile.jsx</span>
+            <span class="chip chip-fe">Components/Modals/UserModal.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>CRUD controllers for user profiles with pagination and search</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Role assignment endpoint supporting SuperAdmin, Dean, Director, Officer</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Frontend user table with filter by role, office, and status</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>User profile photo upload & storage integration</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Handoff to Dev B:</strong> Dev B needs user details & department roles when assigning evaluation responsibilities and notification recipients.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 3: OFFICE & SUBUNIT (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="office subunit department faculty hierarchy organization structure">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 03 &bull; Backend/modules/office</div>
+          <div class="module-title">🏛️ Office & University Hierarchy</div>
+          <div class="module-desc">Multi-tier university organizational structure: President Office, Vice-Presidents, Directorates, Colleges, and SubUnits.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/offices</span>
+            <span class="chip chip-endpoint">POST /api/offices</span>
+            <span class="chip chip-endpoint">GET /api/offices/:id</span>
+            <span class="chip chip-endpoint">PUT /api/offices/:id</span>
+            <span class="chip chip-endpoint">DELETE /api/offices/:id</span>
+            <span class="chip chip-endpoint">GET /api/offices/hierarchy/tree</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">Office</span>
+            <span class="chip chip-model">OfficeType (Enum)</span>
+            <span class="chip chip-model">UserOfficeAssignment</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Admin/OfficeStructure.jsx</span>
+            <span class="chip chip-fe">Pages/SubUnit/SubUnitList.jsx</span>
+            <span class="chip chip-fe">Components/HierarchyTree.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Self-referencing recursive parent-child hierarchy in Prisma</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Office CRUD endpoints with child validation and cascade rules</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Recursive tree builder endpoint for institutional charts</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Interactive visual tree node viewer in React</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Handoff to Dev B:</strong> Performance evaluations roll up by office hierarchy tree created by Dev A.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 4: KPI ARCHITECTURE (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="kpi master category metric target definition weighting strategic objective">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 04 &bull; Backend/modules/kpi</div>
+          <div class="module-title">🎯 Master KPI Catalog & Metrics</div>
+          <div class="module-desc">Strategic KPI repository: KPI templates, categories, measurement units (%, count, currency), target baselines, and weightings.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/kpis</span>
+            <span class="chip chip-endpoint">POST /api/kpis</span>
+            <span class="chip chip-endpoint">GET /api/kpis/:id</span>
+            <span class="chip chip-endpoint">PUT /api/kpis/:id</span>
+            <span class="chip chip-endpoint">DELETE /api/kpis/:id</span>
+            <span class="chip chip-endpoint">GET /api/kpis/categories</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">KPI</span>
+            <span class="chip chip-model">KpiCategory</span>
+            <span class="chip chip-model">StrategicPillar</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/KPI/KpiCatalog.jsx</span>
+            <span class="chip chip-fe">Pages/KPI/CreateKpiModal.jsx</span>
+            <span class="chip chip-fe">Pages/Strategic/StrategicGoals.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Define KPI model schema with target, frequency, and metric unit</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>REST endpoints for KPI creation, category filtering, and updates</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>KPI weight allocation validator (ensuring sum equals 100% per goal)</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>KPI clone/template wizard for recurring academic terms</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Handoff to Dev B:</strong> Dev B consumes master KPIs to generate Period Assignments and Result Evaluations.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 5: COMPANY & SYSTEM SETTINGS (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="company settings system configuration university branding audit">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 05 &bull; Backend/modules/company & system</div>
+          <div class="module-title">⚙️ Institution Settings & Company Profile</div>
+          <div class="module-desc">Arba Minch University institution profile, logo/branding, fiscal year defaults, academic calendar parameters, and system configs.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/company</span>
+            <span class="chip chip-endpoint">PUT /api/company</span>
+            <span class="chip chip-endpoint">GET /api/system/settings</span>
+            <span class="chip chip-endpoint">PUT /api/system/settings</span>
+            <span class="chip chip-endpoint">GET /api/system/audit-logs</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">Company</span>
+            <span class="chip chip-model">SystemSetting</span>
+            <span class="chip chip-model">AuditLog</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Admin/CompanyProfile.jsx</span>
+            <span class="chip chip-fe">Pages/Admin/SystemSettings.jsx</span>
+            <span class="chip chip-fe">Pages/Admin/AuditLogs.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Multi-tenant ready Company and SystemSetting Prisma schemas</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Company details endpoint (legal name, address, contact, logo)</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>System key-value configuration loader with caching</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Audit logger middleware capturing admin configuration modifications</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Shared Resource:</strong> Provides university logo and theme colors dynamically to both Dev A and Dev B frontend components.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 6: PERFORMANCE & EVALUATION (Dev B) -->
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="performance evaluation period target actual score calculation user-kpi results">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 06 &bull; Backend/modules/performance</div>
+          <div class="module-title">📈 Performance Evaluation & KPI Results</div>
+          <div class="module-desc">Evaluation period cycles (Quarterly, Bi-annual, Annual), KPI assignment to offices/staff, actual target scoring, and weighted formulas.</div>
+        </div>
+        <span class="assigned-badge badge-dev-b">Developer B</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/performance/periods</span>
+            <span class="chip chip-endpoint">POST /api/performance/periods</span>
+            <span class="chip chip-endpoint">GET /api/performance/user-kpis</span>
+            <span class="chip chip-endpoint">POST /api/performance/user-kpis</span>
+            <span class="chip chip-endpoint">PUT /api/performance/results/:id</span>
+            <span class="chip chip-endpoint">GET /api/performance/scorecard/:officeId</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">EvaluationPeriod</span>
+            <span class="chip chip-model">UserKpi</span>
+            <span class="chip chip-model">UserKpiResult</span>
+            <span class="chip chip-model">ScoreStatus (Enum)</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/SubUnit/PerformanceTracking.jsx</span>
+            <span class="chip chip-fe">Pages/KPI/SubmitActualsModal.jsx</span>
+            <span class="chip chip-fe">Pages/Strategic/ExecutiveScorecard.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Period model & assignment relationship schema</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Actual vs Target calculation logic with percentage scoring</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Scorecard aggregator by department and academic college</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Automated score lock when evaluation period deadline arrives</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Depends on Dev A:</strong> Relies on Dev A's User, Office, and Master KPI models to bind score evaluations.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 7: EVIDENCE & VERIFICATION (Dev B) -->
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="evidence proof upload file document verification review audit pdf">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 07 &bull; Backend/modules/evidence</div>
+          <div class="module-title">📑 Evidence Upload & Audit Verification</div>
+          <div class="module-desc">Document proof verification for submitted KPI actuals. File uploads (PDF, DOCX, Images), reviewer validation, approval/rejection workflows.</div>
+        </div>
+        <span class="assigned-badge badge-dev-b">Developer B</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">POST /api/evidence/upload</span>
+            <span class="chip chip-endpoint">GET /api/evidence/kpi/:resultId</span>
+            <span class="chip chip-endpoint">PUT /api/evidence/:id/review</span>
+            <span class="chip chip-endpoint">DELETE /api/evidence/:id</span>
+            <span class="chip chip-endpoint">GET /api/evidence/download/:id</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">Evidence</span>
+            <span class="chip chip-model">EvidenceStatus (Enum)</span>
+            <span class="chip chip-model">ReviewComment</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Components/Evidence/FileUploadZone.jsx</span>
+            <span class="chip chip-fe">Components/Evidence/EvidencePreviewModal.jsx</span>
+            <span class="chip chip-fe">Pages/Admin/EvidenceReviewer.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Multer file upload middleware with MIME-type & file-size guards</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Evidence association with UserKpiResult records</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Reviewer workflow: Approve, Request Clarification, or Reject</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>PDF document in-browser viewer component</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Interlinks with:</strong> Directly connects to Module 06 (KPI Results) to validate that claimed scores have authentic proof.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 8: COMMUNICATION & MESSAGING (Dev B) -->
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="communication messaging chat notifications realtime socket.io websocket alerts">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 08 &bull; Backend/modules/communication</div>
+          <div class="module-title">💬 Real-time Messaging & Notifications</div>
+          <div class="module-desc">WebSocket / Socket.io messaging between university leaders and offices, in-app notifications, contact inquiries, and alert feeds.</div>
+        </div>
+        <span class="assigned-badge badge-dev-b">Developer B</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints & Socket Events</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/communication/notifications</span>
+            <span class="chip chip-endpoint">PUT /api/communication/notifications/read</span>
+            <span class="chip chip-endpoint">GET /api/communication/messages</span>
+            <span class="chip chip-endpoint">POST /api/communication/messages</span>
+            <span class="chip chip-endpoint">WS event: 'new_notification'</span>
+            <span class="chip chip-endpoint">WS event: 'direct_message'</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">Notification</span>
+            <span class="chip chip-model">Message</span>
+            <span class="chip chip-model">ContactMessage</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Components/Navigation/NotificationDropdown.jsx</span>
+            <span class="chip chip-fe">Pages/Common/MessagesDrawer.jsx</span>
+            <span class="chip chip-fe">Context/SocketContext.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Socket.io server initialization integrated into Express server.js</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Database notification persistence and unread counter queries</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Real-time dispatch on KPI assignment & evidence review events</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Browser push notification permission handling</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Cross-cutting Service:</strong> Emits notification signals whenever Dev A updates users or when Dev B logs KPI evaluation updates.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 9: ANALYTICS & DASHBOARD (Dev B) -->
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="analytics dashboard charts reports export pdf excel executive summary kpi status">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 09 &bull; Backend/modules/system dashboard</div>
+          <div class="module-title">📊 Executive Dashboard & Analytics</div>
+          <div class="module-desc">High-level institutional intelligence: university performance averages, top/bottom performing offices, trend lines, and PDF/Excel reports.</div>
+        </div>
+        <span class="assigned-badge badge-dev-b">Developer B</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/system/dashboard/summary</span>
+            <span class="chip chip-endpoint">GET /api/system/dashboard/rankings</span>
+            <span class="chip chip-endpoint">GET /api/system/reports/export/excel</span>
+            <span class="chip chip-endpoint">GET /api/system/reports/export/pdf</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models & DB</div>
+          <div class="chip-list">
+            <span class="chip chip-model">UserKpiResult (Aggregated)</span>
+            <span class="chip chip-model">Office (Grouped)</span>
+            <span class="chip chip-model">EvaluationPeriod</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Admin/AdminDashboard.jsx</span>
+            <span class="chip chip-fe">Components/Charts/PerformanceBarChart.jsx</span>
+            <span class="chip chip-fe">Components/Charts/TrendLineChart.jsx</span>
+            <span class="chip chip-fe">Components/ExportModal.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Dashboard summary stats aggregation SQL queries in Prisma</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Admin overview metrics cards (Total Users, Active KPIs, Average Score)</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">🔄</span>
+              <span>Interactive visual charting using Chart.js / Recharts in React</span>
+              <span class="task-status-pill status-wip">In Progress</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">⏳</span>
+              <span>Excel (xlsx) and PDF export downloadable reports generation</span>
+              <span class="task-status-pill status-todo">Planned</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Final Deliverable:</strong> Showcases the final combined data of both developers' modules to the University Senate and President.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Work Breakdown & Responsibility Matrix Table -->
+  <div class="matrix-section" id="matrix-view">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <h2>📋 Detailed Module Allocation & Shared Interfaces</h2>
+        <p style="color: var(--text-muted); font-size: 0.95rem;">
+          Side-by-side comparison of responsibilities, handoff contracts, and technology stack separation.
+        </p>
+      </div>
+      <div style="display: flex; gap: 0.75rem;">
+        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules</span>
+        <span class="assigned-badge badge-dev-b">Dev B: 4 Modules</span>
+      </div>
+    </div>
+
+    <div class="matrix-table-wrapper">
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th>Module Name</th>
+            <th>Primary Owner</th>
+            <th>Primary Backend Directory</th>
+            <th>Prisma Schemas Owned</th>
+            <th>Key Frontend Views</th>
+            <th>Integration Handoff</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>01. Authentication & Security</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/auth</code></td>
+            <td>User (Auth), RefreshToken, PasswordResetToken</td>
+            <td>Login, ForgotPassword, AuthGuard</td>
+            <td>Provides JWT verify middleware to Dev B</td>
+          </tr>
+          <tr>
+            <td><strong>02. User & RBAC Management</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/user</code></td>
+            <td>User, Role, Permission, RolePermission</td>
+            <td>UserManagement, RoleMatrix, Profile</td>
+            <td>Provides user lookup for assignments</td>
+          </tr>
+          <tr>
+            <td><strong>03. Office & Structure</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/office</code></td>
+            <td>Office, OfficeType, UserOfficeAssignment</td>
+            <td>OfficeStructure, HierarchyTree</td>
+            <td>Provides office hierarchy tree for rollup</td>
+          </tr>
+          <tr>
+            <td><strong>04. Master KPI Catalog</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/kpi</code></td>
+            <td>KPI, KpiCategory, StrategicPillar</td>
+            <td>KpiCatalog, CreateKpiModal</td>
+            <td>Provides master KPIs for period assignment</td>
+          </tr>
+          <tr>
+            <td><strong>05. Institution & Settings</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/company</code> & <code>modules/system</code></td>
+            <td>Company, SystemSetting, AuditLog</td>
+            <td>CompanyProfile, SystemSettings</td>
+            <td>Provides global branding & academic calendar</td>
+          </tr>
+          <tr>
+            <td><strong>06. Performance & Evaluation</strong></td>
+            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><code>modules/performance</code></td>
+            <td>EvaluationPeriod, UserKpi, UserKpiResult</td>
+            <td>PerformanceTracking, SubmitActuals</td>
+            <td>Calculates scores using Dev A's KPI targets</td>
+          </tr>
+          <tr>
+            <td><strong>07. Evidence & Verification</strong></td>
+            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><code>modules/evidence</code></td>
+            <td>Evidence, ReviewComment</td>
+            <td>EvidenceUploadZone, ReviewModal</td>
+            <td>Validates proofs uploaded for KPI results</td>
+          </tr>
+          <tr>
+            <td><strong>08. Real-time Communication</strong></td>
+            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><code>modules/communication</code></td>
+            <td>Notification, Message, ContactMessage</td>
+            <td>NotificationBell, MessagesDrawer</td>
+            <td>Broadcasts alerts on events triggered by Dev A & B</td>
+          </tr>
+          <tr>
+            <td><strong>09. Dashboard & Analytics</strong></td>
+            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><code>modules/system</code> (dashboard)</td>
+            <td>UserKpiResult (Aggregated), Reports</td>
+            <td>AdminDashboard, ExportReportsModal</td>
+            <td>Renders executive summary charts & PDF exports</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Suggested Sprints & Milestones -->
+    <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+      <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white;">🚀 Recommended 4-Sprint Coordinated Roadmap</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #a855f7; text-transform: uppercase;">Sprint 1 &bull; Week 1-2</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Foundations & Setup</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            <div><strong>Dev A:</strong> Auth JWT, User CRUD, Prisma baseline migration.</div>
+            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Express scaffolding, EvaluationPeriod schema, Socket.io baseline setup.</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #3b82f6; text-transform: uppercase;">Sprint 2 &bull; Week 3-4</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Structures & Operations</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            <div><strong>Dev A:</strong> Office hierarchy tree, KPI Catalog definition endpoints, Role assignment.</div>
+            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> User KPI assignment, Target vs Actual entry, Multer evidence upload.</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #10b981; text-transform: uppercase;">Sprint 3 &bull; Week 5-6</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Review & Real-time Interaction</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            <div><strong>Dev A:</strong> Company profile settings, system config API, Admin frontend tables.</div>
+            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Evidence review/approval flow, WebSocket notifications, messaging drawer.</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
+          <div style="font-size: 0.78rem; font-weight: 700; color: #f59e0b; text-transform: uppercase;">Sprint 4 &bull; Week 7-8</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Analytics, Polish & Integration</div>
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            <div><strong>Dev A:</strong> End-to-end security audit, error handling, rate limiting, UI polish.</div>
+            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Executive scorecard dashboard, chart visualizations, Excel/PDF export engine.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer style="margin-top: 4rem; text-align: center; color: var(--text-dim); font-size: 0.85rem; border-top: 1px solid var(--border-color); padding-top: 2rem;">
+    <p>AMU KPI Monitoring System &bull; Arba Minch University Final Year Project</p>
+    <p style="margin-top: 0.35rem; font-size: 0.78rem;">Generated automatically for Developer A &amp; Developer B collaboration.</p>
+  </footer>
+
+</div>
+
+<script>
+  function filterModules(type, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const cards = document.querySelectorAll('.module-card');
+    cards.forEach(card => {
+      const dev = card.getAttribute('data-dev');
+      if (type === 'all' || dev === type) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    searchCards();
+  }
+
+  function searchCards() {
+    const query = document.getElementById('searchInput').value.toLowerCase().trim();
+    const activeFilter = document.querySelector('.filter-btn.active');
+    let currentFilterType = 'all';
+    if (activeFilter.classList.contains('filter-dev-a')) currentFilterType = 'dev-a';
+    if (activeFilter.classList.contains('filter-dev-b')) currentFilterType = 'dev-b';
+
+    const cards = document.querySelectorAll('.module-card');
+    cards.forEach(card => {
+      const dev = card.getAttribute('data-dev');
+      const text = card.innerText.toLowerCase();
+      const keywords = card.getAttribute('data-keywords') || '';
+
+      const matchesFilter = (currentFilterType === 'all' || dev === currentFilterType);
+      const matchesSearch = query === '' || text.includes(query) || keywords.includes(query);
+
+      if (matchesFilter && matchesSearch) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

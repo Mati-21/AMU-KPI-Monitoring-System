@@ -6,302 +6,467 @@ datasource db {
   provider = "postgresql"
 }
 
-model AuditLogs {
-  Id String @id @default(uuid()) @db.Uuid
-  UserId      String?  @db.Uuid
-  Action      String   @db.VarChar(255)
-  Resource    String?  @db.VarChar(255)
-  Description String?
-  Status      String?  @default("Success") @db.VarChar(255)
-  IpAddress   String?  @db.VarChar(255)
-  createdAt   DateTime @db.Timestamptz(6)
-  Users       Users?   @relation(fields: [UserId], references: [Id])
+// ===== Identity =====
+
+model Person {
+  id         String    @id @default(uuid()) @db.Uuid
+  firstName  String    @map("first_name")
+  middleName String?   @map("middle_name")
+  lastName   String    @map("last_name")
+  gender     String?
+  birthDate  DateTime? @map("birth_date") @db.Date
+  email      String?   @unique
+  phone      String?
+  status     String    @default("active")
+
+  userAccount            UserAccount?
+  officePersons          OfficePerson[]
+  ownedTargets           KpiTarget[]             @relation("TargetOwner")
+  assignedTargets        KpiTarget[]             @relation("TargetAssigner")
+  evaluationsEvaluated   KpiEvaluation[]
+  reportsSubmitted       CycleReport[]           @relation("ReportSubmitter")
+  reportsReviewed        CycleReport[]           @relation("ReportReviewer")
+  filesUploaded          File[]
+  documentsUploaded      Document[]
+  settingsUpdated        SystemSetting[]
+  notificationsCreated   Notification[]
+  notificationRecipients NotificationRecipient[]
+  auditLogs              AuditLog[]
+
+  @@map("person")
 }
 
-model ContactMessages {
-  Id String @id @default(uuid()) @db.Uuid
-  Username  String   @db.VarChar(255)
-  Email     String   @db.VarChar(255)
-  Subject   String?  @db.VarChar(255)
-  Message   String
-  Status    String   @default("Unread") @db.VarChar(255)
-  createdAt DateTime @db.Timestamptz(6)
-  updatedAt DateTime @db.Timestamptz(6)
+model UserAccount {
+  id                 String    @id @default(uuid()) @db.Uuid
+  personId           String    @unique @map("person_id") @db.Uuid
+  username           String    @unique
+  passwordHash       String    @map("password_hash")
+  isActive           Boolean   @default(true) @map("is_active")
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  mfaEnabled         Boolean   @default(false) @map("mfa_enabled")
+  mfaEnforced        Boolean   @default(false) @map("mfa_enforced")
+  mfaSecret          String?   @map("mfa_secret")
+  mfaType            String    @default("totp") @map("mfa_type")
+  lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@map("user_account")
 }
 
-model KPIDocuments {
-  Id String @id @default(uuid()) @db.Uuid
-  UserId     String    @db.Uuid
-  KPIId      String    @db.Uuid
-  DOCTitle   String    @db.VarChar(255)
-  FileURL    String    @db.VarChar(255)
-  Remark     String?
-  CreatedAt  DateTime? @db.Timestamptz(6)
-  CreatedBy  String?   @db.Uuid
-  IsArchived Boolean?  @default(false)
-  KPIs       KPIs      @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
-  Users      Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+// ===== Office hierarchy =====
+
+model OfficeType {
+  id         Int    @id @default(autoincrement())
+  name       String @unique
+  levelOrder Int?   @map("level_order")
+
+  offices Office[]
+
+  @@map("office_type")
 }
 
-model KPITypes {
-  Id String @id @default(uuid()) @db.Uuid
-  KPIName        String     @db.VarChar(255)
-  ParentKPIID    String?    @db.Uuid
-  Description    String?
-  CreatedAt      DateTime?  @db.Timestamptz(6)
-  CreatedBy      String?    @db.Uuid
-  IsArchived     Boolean?   @default(false)
-  KPITypes       KPITypes?  @relation("KPITypesToKPITypes", fields: [ParentKPIID], references: [Id])
-  other_KPITypes KPITypes[] @relation("KPITypesToKPITypes")
-  KPIs           KPIs[]
+model Office {
+  id             String  @id @default(uuid()) @db.Uuid
+  parentOfficeId String? @map("parent_office_id") @db.Uuid
+  officeTypeId   Int     @map("office_type_id")
+  name           String
+  code           String? @unique
+  isActive       Boolean @default(true) @map("is_active")
+
+  parent     Office?    @relation("OfficeTree", fields: [parentOfficeId], references: [id])
+  children   Office[]   @relation("OfficeTree")
+  officeType OfficeType @relation(fields: [officeTypeId], references: [id])
+
+  positions      Position[]
+  officePersons  OfficePerson[]
+  roleScopes     OfficePersonRole[]
+  kpiTargets     KpiTarget[]
+  cycleReports   CycleReport[]
+  documents      Document[]
+  notifications  Notification[]
+
+  @@index([parentOfficeId])
+  @@map("office")
 }
 
-model KPIYearPlans {
-  Id String @id @default(uuid()) @db.Uuid
-  KPIId            String                    @db.Uuid
-  CycleYear        String                    @db.VarChar(255)
-  Baseline         Decimal?                  @default(0) @db.Decimal(10, 2)
-  Target           Decimal                   @db.Decimal(10, 2)
-  FinalPerformance Decimal?                  @db.Decimal(10, 2)
-  Status           enum_KPIYearPlans_Status? @default(ACTIVE)
-  IsLocked         Boolean?                  @default(false)
-  CreatedAt        DateTime?                 @db.Timestamptz(6)
-  KPIs             KPIs                      @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
-  UserKPIs         UserKPIs[]
+model Position {
+  id       String  @id @default(uuid()) @db.Uuid
+  officeId String  @map("office_id") @db.Uuid
+  title    String
+  isHead   Boolean @default(false) @map("is_head")
+
+  office        Office         @relation(fields: [officeId], references: [id])
+  officePersons OfficePerson[]
+
+  @@index([officeId])
+  @@map("position")
 }
 
-model KPIs {
-  Id String @id @default(uuid()) @db.Uuid
-  KPITypeId          String                  @db.Uuid
-  UnitId             String                  @db.Uuid
-  Weight             Decimal                 @db.Decimal(5, 2)
-  Description        String?
-  IsEvedenceRequired Boolean?                @default(false)
-  Remark             String?
-  CreatedAt          DateTime?               @db.Timestamptz(6)
-  CreatedBy          String?                 @db.Uuid
-  IsArchived         Boolean?                @default(false)
-  LifecycleType      enum_KPIs_LifecycleType @default(RECURRING)
-  DefaultBaseline    Decimal?                @default(0) @db.Decimal(10, 2)
-  IsActive           Boolean?                @default(true)
-  KPIDocuments       KPIDocuments[]
-  KPIYearPlans       KPIYearPlans[]
-  KPITypes           KPITypes                @relation(fields: [KPITypeId], references: [Id], onDelete: Cascade)
-  Units              Units                   @relation(fields: [UnitId], references: [Id], onDelete: Cascade)
-  UserKPIResults     UserKPIResults[]
-  UserKPIs           UserKPIs[]
+model OfficePerson {
+  id         String    @id @default(uuid()) @db.Uuid
+  personId   String    @map("person_id") @db.Uuid
+  officeId   String    @map("office_id") @db.Uuid
+  positionId String    @map("position_id") @db.Uuid
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime? @map("end_date") @db.Date
+  isPrimary  Boolean   @default(false) @map("is_primary")
+
+  person   Person   @relation(fields: [personId], references: [id])
+  office   Office   @relation(fields: [officeId], references: [id])
+  position Position @relation(fields: [positionId], references: [id])
+
+  roles OfficePersonRole[]
+
+  @@index([personId])
+  @@index([officeId])
+  @@map("office_person")
 }
 
-model Messages {
-  Id String @id @default(uuid()) @db.Uuid
-  SenderId                         String   @db.Uuid
-  ReceiverId                       String   @db.Uuid
-  Content                          String?
-  IsRead                           Boolean? @default(false)
-  createdAt                        DateTime @db.Timestamptz(6)
-  updatedAt                        DateTime @db.Timestamptz(6)
-  FileUrl                          String?  @db.VarChar(255)
-  FileName                         String?  @db.VarChar(255)
-  FileType                         String?  @db.VarChar(255)
-  Attachments                      Json?    @db.Json
-  Users_Messages_ReceiverIdToUsers Users    @relation("Messages_ReceiverIdToUsers", fields: [ReceiverId], references: [Id], onDelete: Cascade)
-  Users_Messages_SenderIdToUsers   Users    @relation("Messages_SenderIdToUsers", fields: [SenderId], references: [Id], onDelete: Cascade)
+// ===== Dynamic roles =====
+
+model Role {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  permissions      RolePermission[]
+  officePersonRoles OfficePersonRole[]
+
+  @@map("role")
 }
 
-model Notifications {
-  Id String @id @default(uuid()) @db.Uuid
-  RecipientUserId                            String                      @db.Uuid
-  ActorUserId                                String?                     @db.Uuid
-  Type                                       String?                     @db.VarChar(255)
-  Title                                      String?                     @db.VarChar(255)
-  Message                                    String?
-  Priority                                   enum_Notifications_Priority @default(medium)
-  Data                                       Json?
-  IsRead                                     Boolean                     @default(false)
-  ReadAt                                     DateTime?                   @db.Timestamptz(6)
-  CreatedAt                                  DateTime?                   @db.Timestamptz(6)
-  IsArchived                                 Boolean?                    @default(false)
-  Users_Notifications_ActorUserIdToUsers     Users?                      @relation("Notifications_ActorUserIdToUsers", fields: [ActorUserId], references: [Id])
-  Users_Notifications_RecipientUserIdToUsers Users                       @relation("Notifications_RecipientUserIdToUsers", fields: [RecipientUserId], references: [Id], onDelete: Cascade)
+model Permission {
+  id   Int    @id @default(autoincrement())
+  code String @unique
 
-  @@index([RecipientUserId, IsArchived, CreatedAt], map: "notifications__recipient_user_id__is_archived__created_at")
-  @@index([RecipientUserId, IsRead, IsArchived], map: "notifications__recipient_user_id__is_read__is_archived")
-  @@index([Type], map: "notifications__type")
+  roles         RolePermission[]
+  notifications Notification[]
+
+  @@map("permission")
 }
 
-model OfficeReportSubmissions {
-  Id String @id @default(uuid()) @db.Uuid
-  CycleYear     String   @db.VarChar(255)
-  SourceRoleId  String   @db.Uuid
-  ParentRoleId  String   @db.Uuid
-  ReportPayload Json     @default("{}")
-  SubmittedAt   DateTime @db.Timestamptz(6)
-  SubmittedBy   String?  @db.Uuid
-  IsArchived    Boolean? @default(false)
+model RolePermission {
+  id           Int @id @default(autoincrement())
+  roleId       Int @map("role_id")
+  permissionId Int @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permission")
 }
 
-model RoleCategories {
-  Id String @id @default(uuid()) @db.Uuid
-  CategoryName String    @unique @db.VarChar(255)
-  Description  String?
-  CreatedAt    DateTime? @db.Timestamptz(6)
-  CreatedBy    String?   @db.Uuid
-  IsArchived   Boolean?  @default(false)
-  Roles        Roles[]
+model OfficePersonRole {
+  id             String    @id @default(uuid()) @db.Uuid
+  officePersonId String    @map("office_person_id") @db.Uuid
+  roleId         Int       @map("role_id")
+  scopeOfficeId  String?   @map("scope_office_id") @db.Uuid
+  validFrom      DateTime  @map("valid_from") @db.Date
+  validTo        DateTime? @map("valid_to") @db.Date
+
+  officePerson OfficePerson @relation(fields: [officePersonId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+  scopeOffice  Office?      @relation(fields: [scopeOfficeId], references: [id])
+
+  @@unique([officePersonId, roleId, scopeOfficeId, validFrom])
+  @@map("office_person_role")
 }
 
-model Roles {
-  Id String @id @default(uuid()) @db.Uuid
-  RoleCategoryId    String?         @db.Uuid
-  RoleName          String          @db.VarChar(255)
-  ParentRoleId      String?         @db.Uuid
-  Description       String?
-  HasExtraMeasures  Boolean?        @default(false)
-  CreatedAt         DateTime?       @db.Timestamptz(6)
-  CreatedBy         String?         @db.Uuid
-  IsArchived        Boolean?        @default(false)
-  Permissions       Json?
-  PermissionVersion Int             @default(0)
-  IsDistributable   Boolean?        @default(true)
-  Roles             Roles?          @relation("RolesToRoles", fields: [ParentRoleId], references: [Id])
-  other_Roles       Roles[]         @relation("RolesToRoles")
-  RoleCategories    RoleCategories? @relation(fields: [RoleCategoryId], references: [Id])
-  UserRoles         UserRoles[]
+// ===== KPI =====
+
+model FiscalYear {
+  id        Int      @id @default(autoincrement())
+  label     String   @unique
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  status    String   @default("planned")
+
+  kpiTargets KpiTarget[]
+  evalCycles EvalCycle[]
+
+  @@map("fiscal_year")
 }
 
-model SystemSettings {
-  Id String @id @default(uuid()) @db.Uuid
-  Key       String   @unique @db.VarChar(255)
-  Value     String?
-  Type      String?  @default("string") @db.VarChar(255)
-  createdAt DateTime @db.Timestamptz(6)
-  updatedAt DateTime @db.Timestamptz(6)
+model KpiTheme {
+  id            String  @id @default(uuid()) @db.Uuid
+  parentThemeId String? @map("parent_theme_id") @db.Uuid
+  name          String
+  code          String?
+  sortOrder     Int     @default(0) @map("sort_order")
+  isActive      Boolean @default(true) @map("is_active")
+
+  parent   KpiTheme?  @relation("ThemeTree", fields: [parentThemeId], references: [id])
+  children KpiTheme[] @relation("ThemeTree")
+  kpis     Kpi[]
+
+  @@index([parentThemeId])
+  @@map("kpi_theme")
 }
 
-model Units {
-  Id String @id @default(uuid()) @db.Uuid
-  Name        String    @db.VarChar(255)
-  Code        String    @unique @db.VarChar(255)
-  Description String?
-  CreatedAt   DateTime? @db.Timestamptz(6)
-  CreatedBy   String?   @db.Uuid
-  IsArchived  Boolean?  @default(false)
-  KPIs        KPIs[]
+model Kpi {
+  id                       String   @id @default(uuid()) @db.Uuid
+  kpiThemeId               String   @map("kpi_theme_id") @db.Uuid
+  code                     String   @unique
+  name                     String
+  unitOfMeasure            String   @map("unit_of_measure")
+  direction                String   @default("higher_is_better")
+  cascadeMode              String   @default("split") @map("cascade_mode")
+  maxOverAllocationPercent Decimal? @map("max_over_allocation_percent") @db.Decimal(6, 2)
+  sortOrder                Int      @default(0) @map("sort_order")
+  isActive                 Boolean  @default(true) @map("is_active")
+
+  theme   KpiTheme    @relation(fields: [kpiThemeId], references: [id])
+  targets KpiTarget[]
+
+  @@index([kpiThemeId])
+  @@map("kpi")
 }
 
-model UserActivityLogs {
-  Id String @id @default(uuid()) @db.Uuid
-  UserId       String    @db.Uuid
-  ActivityDate DateTime  @db.Date
-  LastActiveAt DateTime? @db.Timestamptz(6)
-  Users        Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+model KpiTarget {
+  id                 String    @id @default(uuid()) @db.Uuid
+  fiscalYearId       Int       @map("fiscal_year_id")
+  kpiId              String    @map("kpi_id") @db.Uuid
+  officeId           String    @map("office_id") @db.Uuid
+  personId           String?   @map("person_id") @db.Uuid
+  assignedByPersonId String?   @map("assigned_by_person_id") @db.Uuid
+  assignedAt         DateTime? @map("assigned_at") @db.Date
+  parentTargetId     String?   @map("parent_target_id") @db.Uuid
+  baselineValue      Decimal?  @map("baseline_value") @db.Decimal(18, 4)
+  targetValue        Decimal   @map("target_value") @db.Decimal(18, 4)
+  weight             Decimal   @default(1) @db.Decimal(7, 4)
+  status             String    @default("draft")
 
-  @@unique([UserId, ActivityDate], map: "user_activity_logs__user_id__activity_date")
+  fiscalYear FiscalYear   @relation(fields: [fiscalYearId], references: [id])
+  kpi        Kpi          @relation(fields: [kpiId], references: [id])
+  office     Office       @relation(fields: [officeId], references: [id])
+  person     Person?      @relation("TargetOwner", fields: [personId], references: [id])
+  assignedBy Person?      @relation("TargetAssigner", fields: [assignedByPersonId], references: [id])
+  parent     KpiTarget?   @relation("TargetTree", fields: [parentTargetId], references: [id])
+  children   KpiTarget[]  @relation("TargetTree")
+
+  evaluations KpiEvaluation[]
+
+  @@index([fiscalYearId])
+  @@index([kpiId])
+  @@index([officeId])
+  @@index([personId])
+  @@index([parentTargetId])
+  @@map("kpi_target")
 }
 
-model UserKPIResults {
-  Id String @id @default(uuid()) @db.Uuid
-  KPIId            String                     @db.Uuid
-  UserId           String                     @db.Uuid
-  KPIResult        String                     @db.VarChar(255)
-  Description      String?
-  CreatedAt        DateTime?                  @db.Timestamptz(6)
-  CreatedBy        String?                    @db.Uuid
-  IsArchived       Boolean?                   @default(false)
-  CycleYear        String                     @db.VarChar(255)
-  Quarter          String                     @db.VarChar(255)
-  PerformanceTitle String?                    @db.VarChar(255)
-  EvidenceURL      String?                    @db.VarChar(255)
-  UserKPIId        String?                    @db.Uuid
-  Status           enum_UserKPIResults_Status @default(pending)
-  AdjustedResult   String?                    @db.VarChar(255)
-  ApproverRemark   String?
-  KPIs             KPIs                       @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
-  Users            Users                      @relation(fields: [UserId], references: [Id], onDelete: Cascade)
-  UserKPIs         UserKPIs?                  @relation(fields: [UserKPIId], references: [Id])
+// ===== Evaluation =====
+
+model EvalCycle {
+  id           String    @id @default(uuid()) @db.Uuid
+  fiscalYearId Int       @map("fiscal_year_id")
+  name         String
+  periodStart  DateTime  @map("period_start") @db.Date
+  periodEnd    DateTime  @map("period_end") @db.Date
+  dueDate      DateTime? @map("due_date") @db.Date
+  status       String    @default("planned")
+
+  fiscalYear  FiscalYear      @relation(fields: [fiscalYearId], references: [id])
+  reports     CycleReport[]
+  evaluations KpiEvaluation[]
+
+  @@index([fiscalYearId])
+  @@map("eval_cycle")
 }
 
-model UserKPIs {
-  Id String @id @default(uuid()) @db.Uuid
-  KPIId                String           @db.Uuid
-  UserId               String           @db.Uuid
-  Remark               String?
-  CreatedAt            DateTime?        @db.Timestamptz(6)
-  CreatedBy            String?          @db.Uuid
-  IsArchived           Boolean?         @default(false)
-  CycleYear            String           @db.VarChar(255)
-  Baseline             Decimal?         @db.Decimal(10, 2)
-  AssignedTarget       Decimal?         @db.Decimal(10, 2)
-  IsTargetIndividual   Boolean          @default(false)
-  IncludeCurrentOffice Boolean          @default(false)
-  AssignmentBatchId    String?          @db.Uuid
-  Name                 String?          @db.VarChar(255)
-  KPIYearPlanId        String?          @db.Uuid
-  UserKPIResults       UserKPIResults[]
-  KPIs                 KPIs             @relation(fields: [KPIId], references: [Id], onDelete: Cascade)
-  KPIYearPlans         KPIYearPlans?    @relation(fields: [KPIYearPlanId], references: [Id])
-  Users                Users            @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+model CycleReport {
+  id                  String    @id @default(uuid()) @db.Uuid
+  evalCycleId         String    @map("eval_cycle_id") @db.Uuid
+  officeId            String    @map("office_id") @db.Uuid
+  submittedByPersonId String?   @map("submitted_by_person_id") @db.Uuid
+  reviewedByPersonId  String?   @map("reviewed_by_person_id") @db.Uuid
+  status              String    @default("draft")
+  submissionType      String?   @default("normal") @map("submission_type")
+  autoFilledCount     Int       @default(0) @map("auto_filled_count")
+  reviewNote          String?   @map("review_note")
+  submittedAt         DateTime? @map("submitted_at") @db.Timestamptz(6)
+  reviewedAt          DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  evalCycle   EvalCycle @relation(fields: [evalCycleId], references: [id])
+  office      Office    @relation(fields: [officeId], references: [id])
+  submittedBy Person?   @relation("ReportSubmitter", fields: [submittedByPersonId], references: [id])
+  reviewedBy  Person?   @relation("ReportReviewer", fields: [reviewedByPersonId], references: [id])
+
+  evaluations KpiEvaluation[]
+
+  @@unique([evalCycleId, officeId])
+  @@map("cycle_report")
 }
 
-model UserRoles {
-  Id String @id @default(uuid()) @db.Uuid
-  UserId     String    @db.Uuid
-  RoleId     String    @db.Uuid
-  FromDate   DateTime  @db.Timestamptz(6)
-  ToDate     DateTime? @db.Timestamptz(6)
-  CreatedAt  DateTime? @db.Timestamptz(6)
-  CreatedBy  String?   @db.Uuid
-  IsArchived Boolean?  @default(false)
-  Roles      Roles     @relation(fields: [RoleId], references: [Id], onDelete: Cascade)
-  Users      Users     @relation(fields: [UserId], references: [Id], onDelete: Cascade)
+model KpiEvaluation {
+  id                String   @id @default(uuid()) @db.Uuid
+  kpiTargetId       String   @map("kpi_target_id") @db.Uuid
+  evalCycleId       String   @map("eval_cycle_id") @db.Uuid
+  cycleReportId     String?  @map("cycle_report_id") @db.Uuid
+  evaluatorPersonId String?  @map("evaluator_person_id") @db.Uuid
+  reportedValue     Decimal? @map("reported_value") @db.Decimal(18, 4)
+  actualValue       Decimal? @map("actual_value") @db.Decimal(18, 4)
+  valueSource       String?  @map("value_source")
+  score             Decimal? @db.Decimal(7, 2)
+  comment           String?
+  status            String   @default("pending")
+
+  kpiTarget   KpiTarget    @relation(fields: [kpiTargetId], references: [id])
+  evalCycle   EvalCycle    @relation(fields: [evalCycleId], references: [id])
+  cycleReport CycleReport? @relation(fields: [cycleReportId], references: [id])
+  evaluator   Person?      @relation(fields: [evaluatorPersonId], references: [id])
+
+  @@unique([kpiTargetId, evalCycleId])
+  @@index([cycleReportId])
+  @@index([evaluatorPersonId])
+  @@map("kpi_evaluation")
 }
 
-model Users {
-  Id String @id @default(uuid()) @db.Uuid
-  FirstName                                          String             @db.VarChar(255)
-  FatherName                                         String             @db.VarChar(255)
-  GrandFatherName                                    String             @db.VarChar(255)
-  Email                                              String             @unique @db.VarChar(255)
-  UserName                                           String             @unique @db.VarChar(255)
-  Phone                                              String             @db.VarChar(255)
-  password                                           String             @db.VarChar(255)
-  CreatedAt                                          DateTime?          @db.Timestamptz(6)
-  CreatedBy                                          String?            @db.Uuid
-  IsArchived                                         Boolean?           @default(false)
-  LastActiveAt                                       DateTime?          @db.Timestamptz(6)
-  ProfilePicture                                     String?            @db.VarChar(255)
-  AuditLogs                                          AuditLogs[]
-  KPIDocuments                                       KPIDocuments[]
-  Messages_Messages_ReceiverIdToUsers                Messages[]         @relation("Messages_ReceiverIdToUsers")
-  Messages_Messages_SenderIdToUsers                  Messages[]         @relation("Messages_SenderIdToUsers")
-  Notifications_Notifications_ActorUserIdToUsers     Notifications[]    @relation("Notifications_ActorUserIdToUsers")
-  Notifications_Notifications_RecipientUserIdToUsers Notifications[]    @relation("Notifications_RecipientUserIdToUsers")
-  UserActivityLogs                                   UserActivityLogs[]
-  UserKPIResults                                     UserKPIResults[]
-  UserKPIs                                           UserKPIs[]
-  UserRoles                                          UserRoles[]
+// ===== Files and documents =====
+
+model File {
+  id                 String   @id @default(uuid()) @db.Uuid
+  originalName       String   @map("original_name")
+  storagePath        String   @map("storage_path")
+  mimeType           String   @map("mime_type")
+  sizeBytes          BigInt   @map("size_bytes")
+  checksum           String?
+  uploadedByPersonId String?  @map("uploaded_by_person_id") @db.Uuid
+  uploadedAt         DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
+
+  uploadedBy Person?         @relation(fields: [uploadedByPersonId], references: [id])
+  documents  Document[]
+  settings   SystemSetting[]
+
+  @@map("file")
 }
 
-enum enum_KPIYearPlans_Status {
-  ACTIVE
-  LOCKED
-  COMPLETED
+model DocumentType {
+  id                Int     @id @default(autoincrement())
+  name              String
+  code              String  @unique
+  allowedExtensions String? @map("allowed_extensions")
+  maxSizeMb         Int?    @map("max_size_mb")
+  isActive          Boolean @default(true) @map("is_active")
+
+  documents Document[]
+
+  @@map("document_type")
 }
 
-enum enum_KPIs_LifecycleType {
-  RECURRING
-  PROGRESSIVE
-  ONE_TIME
+model Document {
+  id                 String   @id @default(uuid()) @db.Uuid
+  documentTypeId     Int      @map("document_type_id")
+  fileId             String   @map("file_id") @db.Uuid
+  ownerOfficeId      String?  @map("owner_office_id") @db.Uuid
+  uploadedByPersonId String?  @map("uploaded_by_person_id") @db.Uuid
+  title              String
+  description        String?
+  isConfidential     Boolean  @default(false) @map("is_confidential")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
+  file         File         @relation(fields: [fileId], references: [id])
+  ownerOffice  Office?      @relation(fields: [ownerOfficeId], references: [id])
+  uploadedBy   Person?      @relation(fields: [uploadedByPersonId], references: [id])
+
+  links DocumentLink[]
+
+  @@index([documentTypeId])
+  @@index([ownerOfficeId])
+  @@map("document")
 }
 
-enum enum_Notifications_Priority {
-  low
-  medium
-  high
+model DocumentLink {
+  id         String @id @default(uuid()) @db.Uuid
+  documentId String @map("document_id") @db.Uuid
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id") @db.Uuid
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("document_link")
 }
 
-enum enum_UserKPIResults_Status {
-  pending
-  approved
-  adjusted
+// ===== System =====
+
+model SystemSetting {
+  id                 String   @id @default(uuid()) @db.Uuid
+  groupName          String   @map("group_name")
+  key                String
+  value              String?
+  valueType          String   @default("text") @map("value_type")
+  fileId             String?  @map("file_id") @db.Uuid
+  description        String?
+  isPublic           Boolean  @default(false) @map("is_public")
+  updatedByPersonId  String?  @map("updated_by_person_id") @db.Uuid
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  file      File?   @relation(fields: [fileId], references: [id])
+  updatedBy Person? @relation(fields: [updatedByPersonId], references: [id])
+
+  @@unique([groupName, key])
+  @@map("system_setting")
+}
+
+model Notification {
+  id                   String   @id @default(uuid()) @db.Uuid
+  createdByPersonId    String?  @map("created_by_person_id") @db.Uuid
+  targetOfficeId       String?  @map("target_office_id") @db.Uuid
+  includeSubOffices    Boolean  @default(false) @map("include_sub_offices")
+  requiredPermissionId Int?     @map("required_permission_id")
+  title                String
+  message              String
+  channel              String   @default("in_app")
+  entityType           String?  @map("entity_type")
+  entityId             String?  @map("entity_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  createdBy          Person?      @relation(fields: [createdByPersonId], references: [id])
+  targetOffice       Office?      @relation(fields: [targetOfficeId], references: [id])
+  requiredPermission Permission?  @relation(fields: [requiredPermissionId], references: [id])
+
+  recipients NotificationRecipient[]
+
+  @@map("notification")
+}
+
+model NotificationRecipient {
+  id             String    @id @default(uuid()) @db.Uuid
+  notificationId String    @map("notification_id") @db.Uuid
+  personId       String    @map("person_id") @db.Uuid
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at") @db.Timestamptz(6)
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(6)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  person       Person       @relation(fields: [personId], references: [id])
+
+  @@unique([notificationId, personId])
+  @@index([personId, isRead])
+  @@map("notification_recipient")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  actorPersonId String?  @map("actor_person_id") @db.Uuid
+  action        String
+  entityType    String   @map("entity_type")
+  entityId      String?  @map("entity_id")
+  oldValues     Json?    @map("old_values")
+  newValues     Json?    @map("new_values")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor Person? @relation(fields: [actorPersonId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorPersonId])
+  @@index([createdAt])
+  @@map("audit_log")
 }

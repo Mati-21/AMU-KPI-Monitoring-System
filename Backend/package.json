@@ -5,9 +5,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "powershell -Command \"$ErrorActionPreference='SilentlyContinue'; $conn = Get-NetTCPConnection -LocalPort 8058; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }; nodemon server.js\"",
-    "seed": "node scripts/seedAdmin.js && node scripts/seedKpis.js",
+    "dev:backend": "npm run dev",
+    "seed": "node scripts/seedAdmin.js",
     "seed:admin": "node scripts/seedAdmin.js",
-    "seed:kpis": "node scripts/seedKpis.js"
+    "db:seed": "node scripts/seedAdmin.js",
+    "seed:kpis": "node scripts/seedKpis.js",
+    "db:reset": "prisma db push --force-reset",
+    "db:reset:seed": "prisma db push --force-reset && node scripts/seedAdmin.js"
   },
   "keywords": [],
   "author": "",
@@ -28,9 +32,13 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+    "otplib": "^13.5.0",
     "pg": "^8.20.0",
+    "qrcode": "^1.5.4",
     "socket.io": "^4.8.3",
-    "stripe": "^20.4.1"
+    "stripe": "^20.4.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.14",

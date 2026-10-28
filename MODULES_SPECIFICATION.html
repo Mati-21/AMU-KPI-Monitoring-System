@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMU KPI Monitoring System - Architecture & Module Specifications</title>
+  <meta name="description" content="Comprehensive module specifications, database schemas, and REST API routes for the Arba Minch University KPI Monitoring System based on the revised PostgreSQL Prisma schema." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-card: rgba(17, 24, 39, 0.85);
+      --bg-card-hover: rgba(30, 41, 59, 0.9);
+      --bg-glass: rgba(255, 255, 255, 0.03);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(99, 102, 241, 0.5);
+      
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+
+      /* Method Colors */
+      --method-get: #10b981;
+      --method-post: #3b82f6;
+      --method-put: #f59e0b;
+      --method-patch: #8b5cf6;
+      --method-delete: #ef4444;
+
+      /* Module Accent Colors */
+      --acc-blue: #3b82f6;
+      --acc-cyan: #06b6d4;
+      --acc-indigo: #6366f1;
+      --acc-purple: #a855f7;
+      --acc-emerald: #10b981;
+      --acc-amber: #f59e0b;
+      --acc-rose: #f43f5e;
+      --acc-teal: #14b8a6;
+
+      --shadow-elevation: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 100%, rgba(244, 63, 94, 0.08) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem 5rem;
+    }
+
+    /* Top Sticky Bar */
+    .top-nav {
+      position: sticky;
+      top: 1rem;
+      z-index: 50;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 0.85rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #6366f1, #3b82f6);
+      color: white;
+      padding: 0.25rem 0.65rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.4rem 0.85rem;
+      gap: 0.5rem;
+    }
+
+    .search-box input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: white;
+      font-family: inherit;
+      font-size: 0.875rem;
+      width: 200px;
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border-subtle);
+      background: rgba(30, 41, 59, 0.8);
+      color: var(--text-main);
+    }
+
+    .btn:hover {
+      background: #334155;
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      border-color: #6366f1;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #4338ca, #4f46e5);
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    }
+
+    /* Hero Section */
+    .hero-banner {
+      background: linear-gradient(145deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+      border: 1px solid var(--border-subtle);
+      border-radius: 24px;
+      padding: 2.75rem;
+      margin-bottom: 2.5rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-elevation);
+    }
+
+    .hero-banner::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #3b82f6, #6366f1, #10b981, #f59e0b, #ec4899);
+    }
+
+    .hero-title {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #ffffff 30%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.75rem;
+    }
+
+    .hero-desc {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      max-width: 820px;
+      margin-bottom: 2rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .stat-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .stat-val {
+      font-size: 2rem;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: #fff;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    /* Filters Bar */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .filter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .filter-chip {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.4rem 0.9rem;
+      border-radius: 9999px;
+      font-size: 0.825rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-chip:hover, .filter-chip.active {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: #6366f1;
+      color: #fff;
+    }
+
+    /* Modules Grid (Card Format) */
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(410px, 1fr));
+      gap: 1.75rem;
+      margin-bottom: 3rem;
+    }
+
+    .module-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 1.85rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+      overflow: hidden;
+    }
+
+    .module-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--border-focus);
+      box-shadow: 0 15px 30px -10px rgba(99, 102, 241, 0.25);
+      background: var(--bg-card-hover);
+    }
+
+    .module-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--mod-accent, #6366f1);
+    }
+
+    .module-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .module-icon-box {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+    }
+
+    .module-id-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-dim);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .module-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .module-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 1.25rem;
+    }
+
+    .module-tables-section {
+      margin-bottom: 1.25rem;
+    }
+
+    .section-mini-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+
+    .chips-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .table-chip {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      color: #c7d2fe;
+      padding: 0.2rem 0.55rem;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 1.1rem;
+      margin-top: auto;
+    }
+
+    .card-meta-stat {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .card-meta-stat span {
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .card-link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.825rem;
+      font-weight: 700;
+      color: var(--mod-accent, #818cf8);
+      transition: gap 0.2s ease;
+    }
+
+    .module-card:hover .card-link-btn {
+      gap: 0.7rem;
+    }
+
+    /* ========================================================
+       MODULE DETAIL VIEW ("NEW PAGE" SIMULATION VIA ROUTING)
+       ======================================================== */
+    .view-container {
+      display: none;
+    }
+
+    .view-container.active {
+      display: block;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .detail-header {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 2.25rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .detail-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--detail-accent, #6366f1);
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 1.25rem;
+    }
+
+    .breadcrumb a:hover {
+      color: #fff;
+    }
+
+    .detail-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .detail-title-group {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .detail-icon-large {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+    }
+
+    .detail-h1 {
+      font-size: 2.1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .detail-lead {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 900px;
+      line-height: 1.6;
+    }
+
+    /* Detail Tabs & Sections */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-elevation);
+    }
+
+    .section-header-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.4rem;
+      color: #fff;
+    }
+
+    .section-subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Table Specs */
+    .schema-model-block {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .model-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .model-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #a5b4fc;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .db-table-tag {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .custom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    .custom-table th {
+      background: rgba(30, 41, 59, 0.5);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .custom-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+
+    .custom-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .field-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .type-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: rgba(14, 165, 233, 0.12);
+      color: #38bdf8;
+      border: 1px solid rgba(14, 165, 233, 0.25);
+    }
+
+    .constraint-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(245, 158, 11, 0.12);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      margin-right: 0.3rem;
+      display: inline-block;
+    }
+
+    /* Route Cards & Endpoints */
+    .routes-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .route-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      transition: all 0.2s ease;
+    }
+
+    .route-item:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      background: rgba(20, 30, 48, 0.7);
+    }
+
+    .route-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .route-signature {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .method-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .method-get { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .method-post { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+    .method-put { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .method-patch { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+    .method-delete { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    .route-path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .route-ctrl-action {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .auth-perm-badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: #cbd5e1;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .route-desc {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .route-payload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1rem;
+      margin-top: 0.75rem;
+    }
+
+    .code-box {
+      background: #060911;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.85rem;
+      position: relative;
+    }
+
+    .code-box-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .code-pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.45;
+    }
+
+    .btn-copy-code {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-dim);
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-copy-code:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Checklist */
+    .checklist-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+
+    .check-item:hover {
+      background: rgba(30, 41, 59, 0.6);
+    }
+
+    .check-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #6366f1;
+      cursor: pointer;
+    }
+
+    .check-item.done {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .check-item.done .check-text {
+      text-decoration: line-through;
+      color: var(--text-dim);
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #1e293b;
+      color: #fff;
+      border: 1px solid #6366f1;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(15px);
+      transition: all 0.25s ease;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    #toast.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    /* Print styles */
+    @media print {
+      body { background: #fff !important; color: #000 !important; }
+      .top-nav, .filter-bar, .btn { display: none !important; }
+      .module-card, .section-card, .detail-header { border: 1px solid #ccc !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Top Sticky Navigation Bar -->
+    <nav class="top-nav">
+      <div class="brand">
+        <span class="brand-badge">AMU Architecture</span>
+        <span id="nav-title">KPI Monitoring System</span>
+      </div>
+
+      <div class="nav-actions">
+        <div class="search-box">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <input type="text" id="global-search" placeholder="Search modules, tables, routes..." oninput="handleSearch(this.value)">
+        </div>
+
+        <a class="btn" href="TASK_DIVISION.html" title="View Developer Task Matrix">
+          👥 Dev Task Matrix
+        </a>
+
+        <button class="btn btn-primary" onclick="showOverviewView()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          All Modules Grid
+        </button>
+
+        <button class="btn" onclick="window.print()">
+          <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+          Print Spec
+        </button>
+      </div>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- VIEW 1: MODULES OVERVIEW (CARD FORMAT)     -->
+    <!-- ========================================== -->
+    <div id="overview-view" class="view-container active">
+      
+      <!-- Hero Banner -->
+      <section class="hero-banner">
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #818cf8; background: rgba(99, 102, 241, 0.15); padding: 0.2rem 0.7rem; border-radius: 9999px;">
+            Prisma 6.x PostgreSQL Engine
+          </span>
+          <span style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 0.2rem 0.7rem; border-radius: 9999px;">
+            Fully Synchronized
+          </span>
+        </div>
+        <h1 class="hero-title">System Architecture & Modules Implementation Blueprint</h1>
+        <p class="hero-desc">
+          Complete breakdown of the 10 core architectural modules to be built for the Arba Minch University KPI Monitoring System. 
+          Click on any module card below to open its dedicated specification page containing all required database models, constraints, and complete REST API endpoints.
+        </p>
+
+        <!-- Metrics Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-val" style="color: #818cf8;">10</span>
+            <span class="stat-label">Architectural Modules</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-val" style="color: #38bdf8;">25</span>
+            <span class="stat-label">Prisma Database Models</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-val" style="color: #34d399;">92+</span>
+            <span class="stat-label">REST API Routes to Build</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-val" id="stats-progress-count" style="color: #fbbf24;">0%</span>
+            <span class="stat-label">Development Progress</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Category Filter Bar -->
+      <div class="filter-bar">
+        <div class="filter-chips">
+          <button class="filter-chip active" onclick="filterCategory('all', this)">All Modules (10)</button>
+          <button class="filter-chip" onclick="filterCategory('identity', this)">Identity & Hierarchy (2)</button>
+          <button class="filter-chip" onclick="filterCategory('governance', this)">Roles & Strategy (2)</button>
+          <button class="filter-chip" onclick="filterCategory('kpi-ops', this)">KPI Allocation & Scoring (3)</button>
+          <button class="filter-chip" onclick="filterCategory('platform', this)">Files, Alerts & System (3)</button>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-dim);">
+          Tip: Click any card to drill down into its route & schema blueprint
+        </div>
+      </div>
+
+      <!-- Modules Grid Container -->
+      <div class="modules-grid" id="modules-cards-container">
+        <!-- Rendered via JavaScript -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW 2: MODULE DETAIL VIEW (IN NEW PAGE)   -->
+    <!-- ========================================== -->
+    <div id="detail-view" class="view-container">
+      <div id="module-detail-content">
+        <!-- Rendered dynamically depending on URL hash -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast">
+    <svg width="18" height="18" fill="none" stroke="#34d399" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+    <span id="toast-msg">Endpoint copied to clipboard</span>
+  </div>
+
+  <script>
+    // ========================================================
+    // MASTER MODULES DATA DEFINITION (FROM PRISMA SCHEMA)
+    // ========================================================
+    const MODULES_DATA = [
+      {
+        id: "mod-01",
+        slug: "identity-auth",
+        number: "01",
+        category: "identity",
+        title: "Identity & Authentication Module",
+        tagline: "User Accounts, Person Master Registry & JWT Auth",
+        accent: "var(--acc-blue)",
+        icon: "🔐",
+        overview: "Provides a clean architectural separation between physical biological humans (Person) and credentials / login access (UserAccount). Manages secure credential verification, JWT token lifecycle (access & refresh tokens), demographic profiles, and user status toggling.",
+        tables: [
+          {
+            name: "Person",
+            map: "person",
+            description: "Physical person master directory representing faculty, staff, and management with demographic and contact attributes.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Unique person identifier" },
+              { name: "firstName", type: "String", map: "first_name", constraints: "Required", desc: "First name" },
+              { name: "middleName", type: "String?", map: "middle_name", constraints: "Optional", desc: "Father's name" },
+              { name: "lastName", type: "String", map: "last_name", constraints: "Required", desc: "Grandfather's / Family name" },
+              { name: "gender", type: "String?", map: "gender", constraints: "Optional", desc: "Gender (Male/Female/Other)" },
+              { name: "birthDate", type: "DateTime?", map: "birth_date", constraints: "@db.Date", desc: "Date of birth" },
+              { name: "email", type: "String?", map: "email", constraints: "@unique", desc: "Official institutional email address" },
+              { name: "phone", type: "String?", map: "phone", constraints: "Optional", desc: "Contact phone number" },
+              { name: "status", type: "String", map: "status", constraints: "@default('active')", desc: "Active, suspended, or archived" }
+            ],
+            relations: "Has one UserAccount; Has many OfficePerson, KpiTarget (owner/assigner), CycleReport (submitter/reviewer), Documents, Settings, Notifications, AuditLogs."
+          },
+          {
+            name: "UserAccount",
+            map: "user_account",
+            description: "Authentication credential record holding login credentials, first-login password enforcement, and Multi-Factor Authentication (MFA/TOTP) configuration.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Account identifier" },
+              { name: "personId", type: "Uuid", map: "person_id", constraints: "@unique, FK -> Person", desc: "Foreign key to Person (onDelete: Cascade)" },
+              { name: "username", type: "String", map: "username", constraints: "@unique", desc: "Unique login identifier" },
+              { name: "passwordHash", type: "String", map: "password_hash", constraints: "Required", desc: "Bcrypt/Argon2 password hash" },
+              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Enables or disables system access" },
+              { name: "mustChangePassword", type: "Boolean", map: "must_change_password", constraints: "@default(false)", desc: "Forces password change on first login" },
+              { name: "mfaEnabled", type: "Boolean", map: "mfa_enabled", constraints: "@default(false)", desc: "Whether MFA is actively configured" },
+              { name: "mfaEnforced", type: "Boolean", map: "mfa_enforced", constraints: "@default(false)", desc: "Mandatory MFA flag (always true for Super Admin)" },
+              { name: "mfaSecret", type: "String?", map: "mfa_secret", constraints: "Optional", desc: "Base32 TOTP secret key" },
+              { name: "mfaType", type: "String", map: "mfa_type", constraints: "@default('totp')", desc: "MFA mechanism (totp / email)" },
+              { name: "lastLoginAt", type: "DateTime?", map: "last_login_at", constraints: "@db.Timestamptz(6), Optional", desc: "Last successful login timestamp" }
+            ],
+            relations: "1:1 relation to Person."
+          }
+        ],
+        routes: [
+          {
+            method: "POST",
+            path: "/api/v1/auth/login",
+            ctrl: "AuthController.login",
+            perm: "Public",
+            desc: "Authenticates credentials. Sets HTTP-Only cookie 'auth_stage' if password change or MFA is required, or establishes the final HTTP-Only session cookie 'token' on success. No raw tokens exposed in body.",
+            reqBody: '{\n  "username": "mati.admin",\n  "password": "AMU@Temp3944!"\n}',
+            resBody: '{\n  "status": "REQUIRE_PASSWORD_CHANGE",\n  "message": "Temporary password detected. You must change your password before continuing."\n  // Cookie set: auth_stage=... (HttpOnly, SameSite=Lax)\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/change-password-first-login",
+            ctrl: "AuthController.changePasswordFirstLogin",
+            perm: "Cookie: auth_stage",
+            desc: "Changes temporary password to a permanent password on first login. Automatically reads 'auth_stage' cookie. If MFA is enforced, updates 'auth_stage' cookie and returns REQUIRE_MFA_SETUP.",
+            reqBody: '{\n  "newPassword": "PermanentSecurePass123!"\n}',
+            resBody: '{\n  "status": "REQUIRE_MFA_SETUP",\n  "message": "Password changed successfully. Now proceed to set up mandatory Two-Factor Authentication."\n  // Cookie updated: auth_stage=... (HttpOnly)\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/mfa/setup",
+            ctrl: "AuthController.setupMfa",
+            perm: "Cookie: auth_stage or token",
+            desc: "Generates a new Base32 TOTP secret and returns a QR code data URL for Google Authenticator / Authy scanning. Automatically verified via cookie.",
+            reqBody: "{}",
+            resBody: '{\n  "status": "success",\n  "data": {\n    "secret": "JBSWY3DPEHPK3PXP",\n    "qrCodeDataUrl": "data:image/png;base64,iVBORw0KGgo..."\n  }\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/mfa/verify-setup",
+            ctrl: "AuthController.verifyMfaSetup",
+            perm: "Cookie: auth_stage or token",
+            desc: "Verifies the initial 6-digit TOTP code, activates MFA on the account, clears 'auth_stage' cookie, and sets the final HTTP-Only 'token' session cookie.",
+            reqBody: '{\n  "secret": "JBSWY3DPEHPK3PXP",\n  "code": "583921"\n}',
+            resBody: '{\n  "status": "SUCCESS",\n  "message": "Two-Factor Authentication has been successfully configured and activated.",\n  "user": { "username": "mati.admin", "mfaEnabled": true }\n  // Cookie set: token=... (HttpOnly, 7 days)\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/mfa/verify",
+            ctrl: "AuthController.verifyMfa",
+            perm: "Cookie: auth_stage",
+            desc: "Verifies standard 6-digit MFA authenticator code during subsequent logins. Automatically reads 'auth_stage' cookie, clears it, and establishes 'token' session cookie.",
+            reqBody: '{\n  "code": "492019"\n}',
+            resBody: '{\n  "status": "SUCCESS",\n  "user": { "username": "mati.admin" }\n  // Cookie set: token=... (HttpOnly, 7 days)\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/mfa/disable",
+            ctrl: "AuthController.disableMfa",
+            perm: "Cookie: token",
+            desc: "Allows regular users to disable optional MFA using their current code (Forbidden if mfaEnforced is true).",
+            reqBody: '{\n  "code": "123456"\n}',
+            resBody: '{\n  "status": "success",\n  "message": "Two-Factor Authentication disabled"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/auth/users/:id/enforce-mfa",
+            ctrl: "AuthController.enforceUserMfa",
+            perm: "Super Admin (Cookie)",
+            desc: "Administrator endpoint to enforce or remove mandatory MFA policy on any user account.",
+            reqBody: '{\n  "enforced": true\n}',
+            resBody: '{\n  "status": "success",\n  "message": "MFA enforcement for user set to true"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/refresh-token",
+            ctrl: "AuthController.refreshToken",
+            perm: "Public (Cookie)",
+            desc: "Validates refreshToken cookie and issues a fresh short-lived JWT access token.",
+            reqBody: "{}",
+            resBody: '{\n  "token": "eyJhbGciOiJSUzI1Ni..."\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/logout",
+            ctrl: "AuthController.logout",
+            perm: "Authenticated",
+            desc: "Clears auth cookies and invalidates session token.",
+            reqBody: "{}",
+            resBody: '{\n  "message": "Logged out successfully"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/auth/me",
+            ctrl: "AuthController.getCurrentUser",
+            perm: "Authenticated",
+            desc: "Returns authenticated person profile, active office positions, and authorized permission codes.",
+            reqBody: "-",
+            resBody: '{\n  "user": { "id": "...", "username": "admin" },\n  "person": { "firstName": "Abebe", "lastName": "Kebede" },\n  "roles": [{ "name": "Super Admin" }],\n  "permissions": ["kpi:create", "office:manage"]\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/auth/change-password",
+            ctrl: "AuthController.changePassword",
+            perm: "Authenticated",
+            desc: "Allows logged-in user to change their own password upon validating current password.",
+            reqBody: '{\n  "currentPassword": "OldPassword123!",\n  "newPassword": "NewStrongPassword456!"\n}',
+            resBody: '{\n  "message": "Password changed successfully"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/persons",
+            ctrl: "PersonController.getPersons",
+            perm: "user:read",
+            desc: "List persons with pagination, full-text search (name, email), and status filtering.",
+            reqBody: "Query: ?page=1&limit=20&search=abebe&status=active",
+            resBody: '{\n  "total": 45,\n  "data": [{ "id": "uuid", "firstName": "Abebe", "lastName": "Kebede", "email": "a@amu.edu.et" }]\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/persons",
+            ctrl: "PersonController.createPerson",
+            perm: "user:create",
+            desc: "Creates a new person profile in the directory.",
+            reqBody: '{\n  "firstName": "Chala",\n  "lastName": "Tadesse",\n  "email": "chala@amu.edu.et",\n  "phone": "+251911223344",\n  "gender": "Male"\n}',
+            resBody: '{\n  "id": "d8a1f4...",\n  "firstName": "Chala",\n  "status": "active"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/persons/:id",
+            ctrl: "PersonController.getPersonById",
+            perm: "user:read",
+            desc: "Fetches full person profile including office placements, positions, and associated UserAccount.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "id": "uuid",\n  "firstName": "Chala",\n  "userAccount": { "username": "chala.t", "isActive": true },\n  "officePersons": [{ "office": { "name": "Computer Science" } }]\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/persons/:id",
+            ctrl: "PersonController.updatePerson",
+            perm: "user:update",
+            desc: "Updates demographic details of a person.",
+            reqBody: '{\n  "firstName": "Chala",\n  "phone": "+251922334455"\n}',
+            resBody: '{\n  "message": "Person updated"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/persons/:id/account",
+            ctrl: "AuthController.provisionAccount",
+            perm: "user:manage",
+            desc: "Generates or updates a UserAccount login for an existing Person.",
+            reqBody: '{\n  "username": "chala.t",\n  "temporaryPassword": "InitPassword2026!"\n}',
+            resBody: '{\n  "message": "UserAccount created successfully",\n  "username": "chala.t"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/users/:id/toggle-active",
+            ctrl: "AuthController.toggleAccountActive",
+            perm: "user:manage",
+            desc: "Enables or disables login capabilities for a UserAccount.",
+            reqBody: '{\n  "isActive": false\n}',
+            resBody: '{\n  "message": "Account deactivated"\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-02",
+        slug: "office-hierarchy",
+        number: "02",
+        category: "identity",
+        title: "Organizational Hierarchy & Offices Module",
+        tagline: "University Tree, Office Types, Job Positions & Placement",
+        accent: "var(--acc-cyan)",
+        icon: "🏛️",
+        overview: "Models Arba Minch University's complete organizational tree. Supports customizable tier levels (University, College, Directorate, Department, Unit), recursive office parent-child relations, leadership positions (Head vs Staff), and individual person tenure assignments.",
+        tables: [
+          {
+            name: "OfficeType",
+            map: "office_type",
+            description: "Classification of offices with hierarchical ordering (e.g. 1 = University, 2 = College, 3 = Department).",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Identifier" },
+              { name: "name", type: "String", map: "name", constraints: "@unique", desc: "Type name (College, Department, Unit)" },
+              { name: "levelOrder", type: "Int?", map: "level_order", constraints: "Optional", desc: "Order in hierarchy (1 = top)" }
+            ],
+            relations: "1:N with Office."
+          },
+          {
+            name: "Office",
+            map: "office",
+            description: "Core organizational node forming the institutional tree via parentOfficeId.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Office ID" },
+              { name: "parentOfficeId", type: "Uuid?", map: "parent_office_id", constraints: "FK -> Office", desc: "Self-referencing tree relation (OfficeTree)" },
+              { name: "officeTypeId", type: "Int", map: "office_type_id", constraints: "FK -> OfficeType", desc: "Classification level" },
+              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Office name (e.g. College of Computing)" },
+              { name: "code", type: "String?", map: "code", constraints: "@unique", desc: "Short code (e.g. CCS, DEPT_CS)" },
+              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Operational status" }
+            ],
+            relations: "Recursive parent & children OfficeTree; Has many Positions, OfficePerson, KpiTarget, CycleReport, Documents, Notifications."
+          },
+          {
+            name: "Position",
+            map: "position",
+            description: "Designation/job title created within an Office (e.g. Dean, Department Head, Lecturer).",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Position ID" },
+              { name: "officeId", type: "Uuid", map: "office_id", constraints: "FK -> Office", desc: "Associated office" },
+              { name: "title", type: "String", map: "title", constraints: "Required", desc: "Job title" },
+              { name: "isHead", type: "Boolean", map: "is_head", constraints: "@default(false)", desc: "Designates executive head of the office" }
+            ],
+            relations: "Belongs to Office; 1:N with OfficePerson."
+          },
+          {
+            name: "OfficePerson",
+            map: "office_person",
+            description: "Placement connecting a Person to an Office and Position with tenure dates.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Assignment ID" },
+              { name: "personId", type: "Uuid", map: "person_id", constraints: "FK -> Person", desc: "Assigned individual" },
+              { name: "officeId", type: "Uuid", map: "office_id", constraints: "FK -> Office", desc: "Assigned office" },
+              { name: "positionId", type: "Uuid", map: "position_id", constraints: "FK -> Position", desc: "Held position" },
+              { name: "startDate", type: "DateTime", map: "start_date", constraints: "@db.Date", desc: "Tenure start" },
+              { name: "endDate", type: "DateTime?", map: "end_date", constraints: "@db.Date, Optional", desc: "Tenure completion date" },
+              { name: "isPrimary", type: "Boolean", map: "is_primary", constraints: "@default(false)", desc: "Primary employment office" }
+            ],
+            relations: "Links Person, Office, Position; Has many OfficePersonRole."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/office-types",
+            ctrl: "OfficeTypeController.getAll",
+            perm: "Authenticated",
+            desc: "List office types ordered by levelOrder.",
+            reqBody: "-",
+            resBody: '[{ "id": 1, "name": "University", "levelOrder": 1 }, { "id": 2, "name": "College", "levelOrder": 2 }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/office-types",
+            ctrl: "OfficeTypeController.create",
+            perm: "office:manage",
+            desc: "Define a new office tier level.",
+            reqBody: '{\n  "name": "Research Institute",\n  "levelOrder": 3\n}',
+            resBody: '{\n  "id": 4,\n  "name": "Research Institute"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/offices/tree",
+            ctrl: "OfficeController.getOfficeTree",
+            perm: "Authenticated",
+            desc: "Returns the complete university organizational structure in a nested hierarchical tree format.",
+            reqBody: "-",
+            resBody: '{\n  "id": "root-uuid",\n  "name": "Arba Minch University",\n  "children": [\n    {\n      "id": "c1-uuid",\n      "name": "College of Computing",\n      "children": [\n        { "id": "d1-uuid", "name": "Department of Computer Science" }\n      ]\n    }\n  ]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/offices",
+            ctrl: "OfficeController.getOffices",
+            perm: "Authenticated",
+            desc: "Flat listing of offices with filters (officeTypeId, parentOfficeId, isActive, search).",
+            reqBody: "Query: ?officeTypeId=2&search=Computing",
+            resBody: '[{ "id": "...", "name": "College of Computing", "code": "CCS", "isActive": true }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/offices",
+            ctrl: "OfficeController.createOffice",
+            perm: "office:create",
+            desc: "Creates a new office under a parent office.",
+            reqBody: '{\n  "name": "Department of Software Engineering",\n  "code": "DEPT_SE",\n  "officeTypeId": 3,\n  "parentOfficeId": "c1-uuid"\n}',
+            resBody: '{\n  "id": "se-uuid",\n  "name": "Department of Software Engineering"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/offices/:id",
+            ctrl: "OfficeController.getOfficeById",
+            perm: "Authenticated",
+            desc: "Get office profile, sub-offices, positions, and current active head.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "id": "...",\n  "name": "Department of CS",\n  "positions": [...],\n  "currentHead": { "person": { "firstName": "Dr. Haile" } }\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/offices/:id",
+            ctrl: "OfficeController.updateOffice",
+            perm: "office:update",
+            desc: "Update office name, code, parent, or office type.",
+            reqBody: '{\n  "name": "Department of CS & AI"\n}',
+            resBody: '{\n  "message": "Office updated"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/offices/:id/positions",
+            ctrl: "PositionController.getPositionsByOffice",
+            perm: "Authenticated",
+            desc: "List all positions defined under an office.",
+            reqBody: "Param: id (Office UUID)",
+            resBody: '[{ "id": "pos-1", "title": "Department Head", "isHead": true }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/offices/:id/positions",
+            ctrl: "PositionController.createPosition",
+            perm: "office:manage",
+            desc: "Add a new position title to an office.",
+            reqBody: '{\n  "title": "Quality Assurance Coordinator",\n  "isHead": false\n}',
+            resBody: '{\n  "id": "pos-2",\n  "title": "Quality Assurance Coordinator"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/offices/:id/members",
+            ctrl: "OfficePersonController.assignMember",
+            perm: "office:assign",
+            desc: "Assign a person to an office and position with start date and primary status.",
+            reqBody: '{\n  "personId": "p-uuid",\n  "positionId": "pos-uuid",\n  "startDate": "2026-09-01",\n  "isPrimary": true\n}',
+            resBody: '{\n  "id": "op-uuid",\n  "message": "Member assigned to office"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/offices/:id/members",
+            ctrl: "OfficePersonController.getOfficeMembers",
+            perm: "Authenticated",
+            desc: "Retrieve all active faculty/staff placed in the specified office.",
+            reqBody: "Param: id (Office UUID)",
+            resBody: '[{ "id": "op-uuid", "person": { "firstName": "Abebe" }, "position": { "title": "Head" } }]'
+          }
+        ]
+      },
+      {
+        id: "mod-03",
+        slug: "roles-permissions",
+        number: "03",
+        category: "governance",
+        title: "Dynamic Roles & Scoped Access Control",
+        tagline: "Fine-grained RBAC & Scoped ABAC Authority",
+        accent: "var(--acc-indigo)",
+        icon: "🛡️",
+        overview: "Empowers dynamic system access control. Combines canonical roles and atomic permissions with location-scoped role delegations (OfficePersonRole), enabling a person to hold specific managerial authority strictly within their college or department during a valid time window.",
+        tables: [
+          {
+            name: "Role",
+            map: "role",
+            description: "Named collection of permissions (e.g. Dean, Department Head, Strategy Officer).",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Role ID" },
+              { name: "name", type: "String", map: "name", constraints: "@unique", desc: "Unique role name" },
+              { name: "description", type: "String?", map: "description", constraints: "Optional", desc: "Role description" }
+            ],
+            relations: "M:N with Permission via RolePermission; Has many OfficePersonRole."
+          },
+          {
+            name: "Permission",
+            map: "permission",
+            description: "Atomic permission string granting action capabilities (e.g. kpi:cascade, report:review).",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Permission ID" },
+              { name: "code", type: "String", map: "code", constraints: "@unique", desc: "Action code string (e.g. kpi:create)" }
+            ],
+            relations: "Joined to Role via RolePermission; Linked to Notification gating."
+          },
+          {
+            name: "RolePermission",
+            map: "role_permission",
+            description: "Join table mapping atomic permissions to system roles.",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Mapping ID" },
+              { name: "roleId", type: "Int", map: "role_id", constraints: "FK -> Role", desc: "Target role (onDelete: Cascade)" },
+              { name: "permissionId", type: "Int", map: "permission_id", constraints: "FK -> Permission", desc: "Granted permission (onDelete: Cascade)" }
+            ],
+            relations: "Unique on [roleId, permissionId]."
+          },
+          {
+            name: "OfficePersonRole",
+            map: "office_person_role",
+            description: "Scoped delegation table giving an office member a role restricted to an office scope and date bounds.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Assignment ID" },
+              { name: "officePersonId", type: "Uuid", map: "office_person_id", constraints: "FK -> OfficePerson", desc: "Target employee" },
+              { name: "roleId", type: "Int", map: "role_id", constraints: "FK -> Role", desc: "Assigned role" },
+              { name: "scopeOfficeId", type: "Uuid?", map: "scope_office_id", constraints: "FK -> Office, Optional", desc: "Office scope where the role is active" },
+              { name: "validFrom", type: "DateTime", map: "valid_from", constraints: "@db.Date", desc: "Effective start date" },
+              { name: "validTo", type: "DateTime?", map: "valid_to", constraints: "@db.Date, Optional", desc: "Effective end date" }
+            ],
+            relations: "Unique on [officePersonId, roleId, scopeOfficeId, validFrom]."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/roles",
+            ctrl: "RoleController.getRoles",
+            perm: "role:read",
+            desc: "List all roles with counts of assigned permissions and members.",
+            reqBody: "-",
+            resBody: '[{ "id": 1, "name": "Dean", "description": "College executive", "_count": { "permissions": 14 } }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/roles",
+            ctrl: "RoleController.createRole",
+            perm: "role:create",
+            desc: "Create a new customizable system role.",
+            reqBody: '{\n  "name": "Quality Assurance Officer",\n  "description": "Reviews academic KPI achievements"\n}',
+            resBody: '{\n  "id": 5,\n  "name": "Quality Assurance Officer"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/roles/:id",
+            ctrl: "RoleController.getRoleById",
+            perm: "role:read",
+            desc: "Get role details and full array of granted atomic permissions.",
+            reqBody: "Param: id (Int)",
+            resBody: '{\n  "id": 1,\n  "name": "Dean",\n  "permissions": [{ "id": 10, "code": "kpi:assign" }]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/permissions",
+            ctrl: "PermissionController.getPermissions",
+            perm: "role:read",
+            desc: "List all registered atomic permission codes in the system.",
+            reqBody: "-",
+            resBody: '[{ "id": 1, "code": "kpi:create" }, { "id": 2, "code": "kpi:cascade" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/roles/:id/permissions",
+            ctrl: "RoleController.assignPermissions",
+            perm: "role:update",
+            desc: "Batch sync permission codes assigned to a role.",
+            reqBody: '{\n  "permissionIds": [1, 2, 5, 8, 12]\n}',
+            resBody: '{\n  "message": "Permissions updated successfully"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/office-persons/:officePersonId/roles",
+            ctrl: "ScopedRoleController.assignScopedRole",
+            perm: "role:assign",
+            desc: "Assign a role to an employee with optional office scope and validity time limits.",
+            reqBody: '{\n  "roleId": 2,\n  "scopeOfficeId": "college-uuid",\n  "validFrom": "2026-09-01",\n  "validTo": "2027-08-31"\n}',
+            resBody: '{\n  "id": "opr-uuid",\n  "message": "Scoped role assigned"\n}'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/office-person-roles/:id",
+            ctrl: "ScopedRoleController.revokeScopedRole",
+            perm: "role:assign",
+            desc: "Revoke an active scoped role assignment.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "message": "Role assignment revoked"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/auth/check-permission",
+            ctrl: "AuthController.checkPermission",
+            perm: "Authenticated",
+            desc: "Evaluates whether current user holds the required permission within a specific target office scope.",
+            reqBody: "Query: ?permission=kpi:cascade&officeId=dept-uuid",
+            resBody: '{\n  "allowed": true,\n  "scope": "college-uuid"\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-04",
+        slug: "kpi-catalog",
+        number: "04",
+        category: "governance",
+        title: "Strategic KPI Catalog & Fiscal Planning",
+        tagline: "Fiscal Years, Strategic Themes & Master Indicators",
+        accent: "var(--acc-emerald)",
+        icon: "📊",
+        overview: "Defines the strategic foundation of the university. Manages institutional fiscal years, hierarchical strategic themes (e.g., Balanced Scorecard pillars: Academic Excellence, Research, Community Engagement), and the master catalog of Key Performance Indicators with calculation metadata.",
+        tables: [
+          {
+            name: "FiscalYear",
+            map: "fiscal_year",
+            description: "Institutional planning period (e.g. 2024/2025 or 2017 E.C.) containing start, end, and status.",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Fiscal year ID" },
+              { name: "label", type: "String", map: "label", constraints: "@unique", desc: "Display label (e.g. 2025/2026)" },
+              { name: "startDate", type: "DateTime", map: "start_date", constraints: "@db.Date", desc: "Start date" },
+              { name: "endDate", type: "DateTime", map: "end_date", constraints: "@db.Date", desc: "End date" },
+              { name: "status", type: "String", map: "status", constraints: "@default('planned')", desc: "planned, active, or closed" }
+            ],
+            relations: "Has many KpiTarget, EvalCycle."
+          },
+          {
+            name: "KpiTheme",
+            map: "kpi_theme",
+            description: "Strategic pillar or thematic area structured as a self-referencing hierarchy (ThemeTree).",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Theme ID" },
+              { name: "parentThemeId", type: "Uuid?", map: "parent_theme_id", constraints: "FK -> KpiTheme", desc: "Parent theme for nested sub-themes" },
+              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Theme title (e.g. Research & Technology Transfer)" },
+              { name: "code", type: "String?", map: "code", constraints: "Optional", desc: "Theme code (e.g. THEME_RES)" },
+              { name: "sortOrder", type: "Int", map: "sort_order", constraints: "@default(0)", desc: "Display ordering" },
+              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active toggle" }
+            ],
+            relations: "Recursive ThemeTree; 1:N with Kpi."
+          },
+          {
+            name: "Kpi",
+            map: "kpi",
+            description: "Master catalog definition of a Key Performance Indicator.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "KPI ID" },
+              { name: "kpiThemeId", type: "Uuid", map: "kpi_theme_id", constraints: "FK -> KpiTheme", desc: "Associated strategic theme" },
+              { name: "code", type: "String", map: "code", constraints: "@unique", desc: "Unique KPI code (e.g. KPI-PUB-01)" },
+              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Official title of the indicator" },
+              { name: "unitOfMeasure", type: "String", map: "unit_of_measure", constraints: "Required", desc: "Unit (Number, %, USD, ETB, Ratio)" },
+              { name: "direction", type: "String", map: "direction", constraints: "@default('higher_is_better')", desc: "higher_is_better vs lower_is_better" },
+              { name: "cascadeMode", type: "String", map: "cascade_mode", constraints: "@default('split')", desc: "split, replicate, or aggregate" },
+              { name: "maxOverAllocationPercent", type: "Decimal?", map: "max_over_allocation_percent", constraints: "@db.Decimal(6,2)", desc: "Cap on over-allocating targets (e.g. 10.00%)" },
+              { name: "sortOrder", type: "Int", map: "sort_order", constraints: "@default(0)", desc: "Ordering index" },
+              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active status" }
+            ],
+            relations: "Belongs to KpiTheme; Has many KpiTarget."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/fiscal-years",
+            ctrl: "FiscalYearController.getAll",
+            perm: "Authenticated",
+            desc: "List all fiscal years with statuses (planned, active, closed).",
+            reqBody: "-",
+            resBody: '[{ "id": 1, "label": "2025/2026", "status": "active", "startDate": "2025-09-01" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/fiscal-years",
+            ctrl: "FiscalYearController.create",
+            perm: "kpi:manage",
+            desc: "Create a new institutional planning fiscal year.",
+            reqBody: '{\n  "label": "2026/2027",\n  "startDate": "2026-09-01",\n  "endDate": "2027-08-31"\n}',
+            resBody: '{\n  "id": 2,\n  "label": "2026/2027",\n  "status": "planned"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/fiscal-years/:id/activate",
+            ctrl: "FiscalYearController.activate",
+            perm: "kpi:manage",
+            desc: "Activates the specified fiscal year and deactivates others.",
+            reqBody: "-",
+            resBody: '{\n  "message": "Fiscal year 2026/2027 is now ACTIVE"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/kpi-themes",
+            ctrl: "KpiThemeController.getThemeTree",
+            perm: "Authenticated",
+            desc: "Returns strategic themes hierarchy with nested sub-themes and attached KPI counts.",
+            reqBody: "-",
+            resBody: '[{ "id": "t1", "name": "Academic Excellence", "children": [...] }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpi-themes",
+            ctrl: "KpiThemeController.createTheme",
+            perm: "kpi:manage",
+            desc: "Creates a strategic theme or pillar.",
+            reqBody: '{\n  "name": "Research & Community Engagement",\n  "code": "THEME_RES",\n  "sortOrder": 1\n}',
+            resBody: '{\n  "id": "t2",\n  "name": "Research & Community Engagement"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/kpis",
+            ctrl: "KpiController.getKpis",
+            perm: "Authenticated",
+            desc: "List master KPIs with search, theme filter, and direction filter.",
+            reqBody: "Query: ?kpiThemeId=t1&search=publication",
+            resBody: '[{ "id": "k1", "code": "KPI-RES-01", "name": "Peer-Reviewed Publications", "unitOfMeasure": "Number" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpis",
+            ctrl: "KpiController.createKpi",
+            perm: "kpi:create",
+            desc: "Registers a new master KPI indicator in the catalog.",
+            reqBody: '{\n  "kpiThemeId": "t1",\n  "code": "KPI-GRAD-01",\n  "name": "On-Time Student Graduation Rate",\n  "unitOfMeasure": "Percentage",\n  "direction": "higher_is_better",\n  "cascadeMode": "split",\n  "maxOverAllocationPercent": 5.0\n}',
+            resBody: '{\n  "id": "kpi-uuid",\n  "code": "KPI-GRAD-01"\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/kpis/:id",
+            ctrl: "KpiController.updateKpi",
+            perm: "kpi:update",
+            desc: "Updates KPI operational parameters.",
+            reqBody: '{\n  "name": "Revised On-Time Graduation Rate",\n  "maxOverAllocationPercent": 10.0\n}',
+            resBody: '{\n  "message": "KPI updated"\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-05",
+        slug: "target-cascading",
+        number: "05",
+        category: "kpi-ops",
+        title: "Target Cascading & Allocation Module",
+        tagline: "Top-down Goal Decomposition & Office Ownership",
+        accent: "var(--acc-purple)",
+        icon: "🎯",
+        overview: "Handles institutional goal cascading down the organizational hierarchy. A top-level target set for the University is decomposed into child targets for Colleges, which in turn are cascaded to Departments and individuals. Supports split math verification, baseline setting, and target tree visualization.",
+        tables: [
+          {
+            name: "KpiTarget",
+            map: "kpi_target",
+            description: "Target commitment assigned to an Office or Person for a specific FiscalYear and KPI.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Target ID" },
+              { name: "fiscalYearId", type: "Int", map: "fiscal_year_id", constraints: "FK -> FiscalYear", desc: "Planning year" },
+              { name: "kpiId", type: "Uuid", map: "kpi_id", constraints: "FK -> Kpi", desc: "Master KPI indicator" },
+              { name: "officeId", type: "Uuid", map: "office_id", constraints: "FK -> Office", desc: "Target office" },
+              { name: "personId", type: "Uuid?", map: "person_id", constraints: "FK -> Person, Optional", desc: "Target individual owner (TargetOwner)" },
+              { name: "assignedByPersonId", type: "Uuid?", map: "assigned_by_person_id", constraints: "FK -> Person, Optional", desc: "Officer who assigned the target (TargetAssigner)" },
+              { name: "assignedAt", type: "DateTime?", map: "assigned_at", constraints: "@db.Date, Optional", desc: "Assignment date" },
+              { name: "parentTargetId", type: "Uuid?", map: "parent_target_id", constraints: "FK -> KpiTarget", desc: "Self-referencing tree relation (TargetTree)" },
+              { name: "baselineValue", type: "Decimal?", map: "baseline_value", constraints: "@db.Decimal(18,4)", desc: "Starting achievement baseline" },
+              { name: "targetValue", type: "Decimal", map: "target_value", constraints: "@db.Decimal(18,4)", desc: "Committed target figure" },
+              { name: "weight", type: "Decimal", map: "weight", constraints: "@default(1) @db.Decimal(7,4)", desc: "Evaluation weight factor" },
+              { name: "status", type: "String", map: "status", constraints: "@default('draft')", desc: "draft, assigned, accepted, revised" }
+            ],
+            relations: "Recursive TargetTree; Belongs to FiscalYear, Kpi, Office, Person; Has many KpiEvaluation."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/kpi-targets",
+            ctrl: "TargetController.getTargets",
+            perm: "target:read",
+            desc: "List targets filtered by fiscalYearId, officeId, kpiId, and status.",
+            reqBody: "Query: ?fiscalYearId=1&officeId=college-uuid",
+            resBody: '[{ "id": "t-1", "targetValue": "50.0000", "status": "assigned", "kpi": { "name": "Publications" } }]'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/kpi-targets/tree",
+            ctrl: "TargetController.getTargetTree",
+            perm: "target:read",
+            desc: "Returns target decomposition tree starting from root institutional targets down to department/person leaves.",
+            reqBody: "Query: ?fiscalYearId=1&kpiId=kpi-uuid",
+            resBody: '{\n  "id": "root-target",\n  "targetValue": "200",\n  "office": { "name": "Arba Minch University" },\n  "children": [\n    { "id": "c1-target", "targetValue": "80", "office": { "name": "College of Computing" } }\n  ]\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpi-targets",
+            ctrl: "TargetController.createRootTarget",
+            perm: "target:create",
+            desc: "Sets top-level institutional KPI target for the University.",
+            reqBody: '{\n  "fiscalYearId": 1,\n  "kpiId": "kpi-uuid",\n  "officeId": "amu-root-uuid",\n  "baselineValue": 120.0,\n  "targetValue": 250.0,\n  "weight": 1.0\n}',
+            resBody: '{\n  "id": "target-uuid",\n  "targetValue": "250.0000",\n  "status": "draft"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpi-targets/:parentTargetId/cascade",
+            ctrl: "TargetController.cascadeTarget",
+            perm: "target:cascade",
+            desc: "Decomposes a parent target into child targets for sub-offices. Enforces split summation cap according to maxOverAllocationPercent.",
+            reqBody: '{\n  "allocations": [\n    { "officeId": "dept-cs-uuid", "targetValue": 45.0, "weight": 1.0 },\n    { "officeId": "dept-is-uuid", "targetValue": 35.0, "weight": 1.0 }\n  ]\n}',
+            resBody: '{\n  "message": "Cascaded successfully to 2 sub-offices",\n  "allocatedTotal": 80.0\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/kpi-targets/:id",
+            ctrl: "TargetController.updateTarget",
+            perm: "target:update",
+            desc: "Updates draft target values, baseline, or weight.",
+            reqBody: '{\n  "targetValue": 55.0,\n  "baselineValue": 20.0\n}',
+            resBody: '{\n  "message": "Target updated"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/kpi-targets/:id/status",
+            ctrl: "TargetController.updateStatus",
+            perm: "target:assign",
+            desc: "Transitions target status (e.g. from draft to assigned or accepted).",
+            reqBody: '{\n  "status": "assigned"\n}',
+            resBody: '{\n  "message": "Target status updated to assigned"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/kpi-targets/my-targets",
+            ctrl: "TargetController.getMyTargets",
+            perm: "Authenticated",
+            desc: "Returns targets owned by or assigned to the current user's primary office.",
+            reqBody: "-",
+            resBody: '[{ "id": "t-1", "targetValue": "45.0000", "kpi": { "code": "KPI-RES-01" } }]'
+          }
+        ]
+      },
+      {
+        id: "mod-06",
+        slug: "cycles-reports",
+        number: "06",
+        category: "kpi-ops",
+        title: "Evaluation Cycles & Office Report Dossiers",
+        tagline: "Quarterly Periods & Formal Office Report Submission",
+        accent: "var(--acc-amber)",
+        icon: "🗓️",
+        overview: "Coordinates institutional reporting cadence (e.g., Q1, Mid-Year, Annual). Manages formal office submission dossiers (CycleReport). One report per office per cycle tracks draft preparation, submission by office head, review notes, approval, or rejection.",
+        tables: [
+          {
+            name: "EvalCycle",
+            map: "eval_cycle",
+            description: "Evaluation timeline window (Q1, Q2, Semi-Annual, Annual) within a FiscalYear.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Cycle ID" },
+              { name: "fiscalYearId", type: "Int", map: "fiscal_year_id", constraints: "FK -> FiscalYear", desc: "Parent fiscal year" },
+              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Period name (e.g. 2025/2026 Q1)" },
+              { name: "periodStart", type: "DateTime", map: "period_start", constraints: "@db.Date", desc: "Cycle start date" },
+              { name: "periodEnd", type: "DateTime", map: "period_end", constraints: "@db.Date", desc: "Cycle end date" },
+              { name: "dueDate", type: "DateTime?", map: "due_date", constraints: "@db.Date, Optional", desc: "Reporting deadline" },
+              { name: "status", type: "String", map: "status", constraints: "@default('planned')", desc: "planned, open, in_review, closed" }
+            ],
+            relations: "Belongs to FiscalYear; Has many CycleReport, KpiEvaluation."
+          },
+          {
+            name: "CycleReport",
+            map: "cycle_report",
+            description: "Official submission dossier submitted by an Office for an EvalCycle.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Report ID" },
+              { name: "evalCycleId", type: "Uuid", map: "eval_cycle_id", constraints: "FK -> EvalCycle", desc: "Associated cycle" },
+              { name: "officeId", type: "Uuid", map: "office_id", constraints: "FK -> Office", desc: "Reporting office" },
+              { name: "submittedByPersonId", type: "Uuid?", map: "submitted_by_person_id", constraints: "FK -> Person, Optional", desc: "Submitting officer (ReportSubmitter)" },
+              { name: "reviewedByPersonId", type: "Uuid?", map: "reviewed_by_person_id", constraints: "FK -> Person, Optional", desc: "Reviewing evaluator (ReportReviewer)" },
+              { name: "status", type: "String", map: "status", constraints: "@default('draft')", desc: "draft, submitted, approved, rejected, reopened" },
+              { name: "submissionType", type: "String?", map: "submission_type", constraints: "@default('normal')", desc: "normal or late submission" },
+              { name: "autoFilledCount", type: "Int", map: "auto_filled_count", constraints: "@default(0)", desc: "Count of auto-computed indicators" },
+              { name: "reviewNote", type: "String?", map: "review_note", constraints: "Optional", desc: "Evaluator feedback or rejection reason" },
+              { name: "submittedAt", type: "DateTime?", map: "submitted_at", constraints: "@db.Timestamptz(6)", desc: "Submission timestamp" },
+              { name: "reviewedAt", type: "DateTime?", map: "reviewed_at", constraints: "@db.Timestamptz(6)", desc: "Review timestamp" },
+              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Creation timestamp" }
+            ],
+            relations: "Unique on [evalCycleId, officeId]; Belongs to EvalCycle, Office, Person; Has many KpiEvaluation."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/eval-cycles",
+            ctrl: "CycleController.getCycles",
+            perm: "Authenticated",
+            desc: "List evaluation cycles with status, start/end dates, and submission progress.",
+            reqBody: "Query: ?fiscalYearId=1",
+            resBody: '[{ "id": "cyc-1", "name": "Q1 2025/2026", "status": "open", "dueDate": "2025-11-30" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/eval-cycles",
+            ctrl: "CycleController.createCycle",
+            perm: "cycle:manage",
+            desc: "Schedule a new evaluation period with deadline.",
+            reqBody: '{\n  "fiscalYearId": 1,\n  "name": "Q2 Mid-Year Review",\n  "periodStart": "2025-12-01",\n  "periodEnd": "2026-02-28",\n  "dueDate": "2026-03-07"\n}',
+            resBody: '{\n  "id": "cyc-2",\n  "name": "Q2 Mid-Year Review",\n  "status": "planned"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/eval-cycles/:id/status",
+            ctrl: "CycleController.transitionCycleStatus",
+            perm: "cycle:manage",
+            desc: "Transitions cycle between planned, open, in_review, and closed.",
+            reqBody: '{\n  "status": "open"\n}',
+            resBody: '{\n  "message": "Cycle status updated to OPEN"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/cycle-reports/initiate",
+            ctrl: "CycleReportController.initiateReport",
+            perm: "report:create",
+            desc: "Initializes a draft report dossier for an office in an open cycle.",
+            reqBody: '{\n  "evalCycleId": "cyc-1",\n  "officeId": "dept-cs-uuid"\n}',
+            resBody: '{\n  "id": "rep-uuid",\n  "status": "draft",\n  "message": "Dossier initialized"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/cycle-reports/:id",
+            ctrl: "CycleReportController.getReportDossier",
+            perm: "report:read",
+            desc: "Fetches full report dossier including all attached KPI evaluations, progress figures, and review history.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "id": "rep-uuid",\n  "office": { "name": "Department of CS" },\n  "evaluations": [...],\n  "status": "submitted"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/cycle-reports/:id/submit",
+            ctrl: "CycleReportController.submitReport",
+            perm: "report:submit",
+            desc: "Locks draft evaluations and formally submits office report dossier for review.",
+            reqBody: "{}",
+            resBody: '{\n  "message": "Report submitted successfully",\n  "submittedAt": "2026-10-26T11:00:00Z"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/cycle-reports/:id/review",
+            ctrl: "CycleReportController.reviewReport",
+            perm: "report:review",
+            desc: "Evaluator approves, rejects, or requests changes on an office submission with feedback note.",
+            reqBody: '{\n  "decision": "approved",\n  "reviewNote": "Outstanding research achievements verified."\n}',
+            resBody: '{\n  "message": "Report approved"\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-07",
+        slug: "performance-evaluation",
+        number: "07",
+        category: "kpi-ops",
+        title: "KPI Performance Evaluation & Scoring Engine",
+        tagline: "Actual Values, Score Formulas & Institutional Dashboards",
+        accent: "var(--acc-rose)",
+        icon: "📈",
+        overview: "Records periodic achievement entries against assigned KPI targets. Implements automated scoring logic taking into account directional polarities (higher is better vs lower is better), verified actual values, evidence attachments, and aggregated weighted scorecards.",
+        tables: [
+          {
+            name: "KpiEvaluation",
+            map: "kpi_evaluation",
+            description: "Achievement entry for a KpiTarget within an EvalCycle.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Evaluation ID" },
+              { name: "kpiTargetId", type: "Uuid", map: "kpi_target_id", constraints: "FK -> KpiTarget", desc: "Target being evaluated" },
+              { name: "evalCycleId", type: "Uuid", map: "eval_cycle_id", constraints: "FK -> EvalCycle", desc: "Evaluation period" },
+              { name: "cycleReportId", type: "Uuid?", map: "cycle_report_id", constraints: "FK -> CycleReport, Optional", desc: "Parent office report dossier" },
+              { name: "evaluatorPersonId", type: "Uuid?", map: "evaluator_person_id", constraints: "FK -> Person, Optional", desc: "Assigned reviewer" },
+              { name: "reportedValue", type: "Decimal?", map: "reported_value", constraints: "@db.Decimal(18,4)", desc: "Self-reported achievement by office" },
+              { name: "actualValue", type: "Decimal?", map: "actual_value", constraints: "@db.Decimal(18,4)", desc: "Audited/verified actual figure" },
+              { name: "valueSource", type: "String?", map: "value_source", constraints: "Optional", desc: "manual, system, formula, or sis_import" },
+              { name: "score", type: "Decimal?", map: "score", constraints: "@db.Decimal(7,2)", desc: "Calculated achievement score %" },
+              { name: "comment", type: "String?", map: "comment", constraints: "Optional", desc: "Self-assessment comments or remarks" },
+              { name: "status", type: "String", map: "status", constraints: "@default('pending')", desc: "pending, submitted, evaluated, verified" }
+            ],
+            relations: "Unique on [kpiTargetId, evalCycleId]; Belongs to KpiTarget, EvalCycle, CycleReport, Person."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/kpi-evaluations",
+            ctrl: "EvaluationController.getEvaluations",
+            perm: "evaluation:read",
+            desc: "List evaluations filtered by cycle, target, office, and status.",
+            reqBody: "Query: ?evalCycleId=cyc-1&officeId=dept-cs",
+            resBody: '[{ "id": "ev-1", "reportedValue": "12.0000", "score": "95.50", "status": "submitted" }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpi-evaluations",
+            ctrl: "EvaluationController.recordProgress",
+            perm: "evaluation:write",
+            desc: "Enters or updates reported achievement value for a target in an active cycle.",
+            reqBody: '{\n  "kpiTargetId": "target-uuid",\n  "evalCycleId": "cyc-1",\n  "reportedValue": 15.0,\n  "comment": "Completed 15 peer-reviewed publications."\n}',
+            resBody: '{\n  "id": "ev-uuid",\n  "reportedValue": "15.0000",\n  "score": "100.00"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/kpi-evaluations/:id/verify",
+            ctrl: "EvaluationController.verifyEvaluation",
+            perm: "evaluation:verify",
+            desc: "Evaluator audits evidence, confirms actualValue, and finalizes official score.",
+            reqBody: '{\n  "actualValue": 14.0,\n  "comment": "1 publication pending final indexing approval."\n}',
+            resBody: '{\n  "actualValue": "14.0000",\n  "score": "93.33",\n  "status": "verified"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/kpi-evaluations/bulk-update",
+            ctrl: "EvaluationController.bulkUpdateEvaluations",
+            perm: "evaluation:write",
+            desc: "Batch saves reported figures across all KPI indicators in an office scorecard.",
+            reqBody: '{\n  "cycleReportId": "rep-uuid",\n  "entries": [\n    { "kpiTargetId": "t1", "reportedValue": 25 },\n    { "kpiTargetId": "t2", "reportedValue": 98.5 }\n  ]\n}',
+            resBody: '{\n  "message": "2 evaluations updated successfully"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/performance/scorecard/office/:officeId",
+            ctrl: "ScorecardController.getOfficeScorecard",
+            perm: "scorecard:read",
+            desc: "Computes weighted scorecard breakdown, pillar scores, and overall performance grade for an office.",
+            reqBody: "Query: ?evalCycleId=cyc-1",
+            resBody: '{\n  "officeName": "College of Computing",\n  "overallScore": 89.4,\n  "grade": "Very Good",\n  "pillarBreakdown": { "Research": 92.0, "Academics": 86.8 }\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/performance/institution-dashboard",
+            ctrl: "ScorecardController.getInstitutionalDashboard",
+            perm: "dashboard:read",
+            desc: "High-level analytics aggregation for President and VPs showing university-wide achievement vs targets.",
+            reqBody: "Query: ?fiscalYearId=1",
+            resBody: '{\n  "totalTargets": 180,\n  "achievedCount": 145,\n  "universityAverageScore": 84.6\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-08",
+        slug: "documents-evidence",
+        number: "08",
+        category: "platform",
+        title: "Document Management & Evidence Linking",
+        tagline: "Binary Storage, Polymorphic Attachment & Compliance",
+        accent: "var(--acc-teal)",
+        icon: "📁",
+        overview: "Robust repository for evidence verification. Handles physical file storage (checksum, size, mimeType), allowed document types and size limits, document confidentiality flags, and polymorphic entity linking (DocumentLink) connecting proof files directly to KPI evaluations or cycle reports.",
+        tables: [
+          {
+            name: "File",
+            map: "file",
+            description: "Physical or cloud binary storage record capturing integrity checksum, size, and mime-type.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "File ID" },
+              { name: "originalName", type: "String", map: "original_name", constraints: "Required", desc: "Original file name" },
+              { name: "storagePath", type: "String", map: "storage_path", constraints: "Required", desc: "Internal storage directory / key" },
+              { name: "mimeType", type: "String", map: "mime_type", constraints: "Required", desc: "application/pdf, image/png, etc." },
+              { name: "sizeBytes", type: "BigInt", map: "size_bytes", constraints: "Required", desc: "File size in bytes" },
+              { name: "checksum", type: "String?", map: "checksum", constraints: "Optional", desc: "SHA-256 hash for integrity" },
+              { name: "uploadedByPersonId", type: "Uuid?", map: "uploaded_by_person_id", constraints: "FK -> Person, Optional", desc: "Uploader" },
+              { name: "uploadedAt", type: "DateTime", map: "uploaded_at", constraints: "@default(now())", desc: "Timestamp" }
+            ],
+            relations: "Has many Document, SystemSetting (branding/logos)."
+          },
+          {
+            name: "DocumentType",
+            map: "document_type",
+            description: "Evidence taxonomy specifying allowed file extensions and max upload size.",
+            fields: [
+              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Type ID" },
+              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Type name (Publication Proof, MoU, Certificate)" },
+              { name: "code", type: "String", map: "code", constraints: "@unique", desc: "Short code (e.g. DOC_PUB)" },
+              { name: "allowedExtensions", type: "String?", map: "allowed_extensions", constraints: "Optional", desc: "pdf,png,jpg,docx" },
+              { name: "maxSizeMb", type: "Int?", map: "max_size_mb", constraints: "Optional", desc: "Max size ceiling in MB" },
+              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active flag" }
+            ],
+            relations: "1:N with Document."
+          },
+          {
+            name: "Document",
+            map: "document",
+            description: "Business document metadata record wrapping a File with title and confidentiality.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Document ID" },
+              { name: "documentTypeId", type: "Int", map: "document_type_id", constraints: "FK -> DocumentType", desc: "Taxonomy type" },
+              { name: "fileId", type: "Uuid", map: "file_id", constraints: "FK -> File", desc: "Binary file record" },
+              { name: "ownerOfficeId", type: "Uuid?", map: "owner_office_id", constraints: "FK -> Office, Optional", desc: "Owning office" },
+              { name: "uploadedByPersonId", type: "Uuid?", map: "uploaded_by_person_id", constraints: "FK -> Person, Optional", desc: "Person uploader" },
+              { name: "title", type: "String", map: "title", constraints: "Required", desc: "Document title" },
+              { name: "description", type: "String?", map: "description", constraints: "Optional", desc: "Summary notes" },
+              { name: "isConfidential", type: "Boolean", map: "is_confidential", constraints: "@default(false)", desc: "Restricts access to authorized roles" },
+              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Creation timestamp" }
+            ],
+            relations: "Belongs to DocumentType, File, Office, Person; Has many DocumentLink."
+          },
+          {
+            name: "DocumentLink",
+            map: "document_link",
+            description: "Polymorphic link joining a Document to any system entity (e.g. kpi_evaluation, cycle_report, kpi_target).",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Link ID" },
+              { name: "documentId", type: "Uuid", map: "document_id", constraints: "FK -> Document", desc: "Target document (onDelete: Cascade)" },
+              { name: "entityType", type: "String", map: "entity_type", constraints: "Required", desc: "kpi_evaluation, cycle_report, kpi_target" },
+              { name: "entityId", type: "Uuid", map: "entity_id", constraints: "Required", desc: "UUID of the associated record" }
+            ],
+            relations: "Unique on [documentId, entityType, entityId]; Indexed on [entityType, entityId]."
+          }
+        ],
+        routes: [
+          {
+            method: "POST",
+            path: "/api/v1/files/upload",
+            ctrl: "FileController.upload",
+            perm: "file:upload",
+            desc: "Multipart form upload saving binary payload, calculating checksum, and registering File record.",
+            reqBody: "Form-Data: file=@proof_pub.pdf",
+            resBody: '{\n  "fileId": "file-uuid",\n  "originalName": "proof_pub.pdf",\n  "sizeBytes": 204850\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/files/:id/download",
+            ctrl: "FileController.download",
+            perm: "file:read",
+            desc: "Securely streams binary file with permission and confidentiality checks.",
+            reqBody: "Param: id (UUID)",
+            resBody: "Binary Stream (Content-Type: application/pdf)"
+          },
+          {
+            method: "GET",
+            path: "/api/v1/document-types",
+            ctrl: "DocumentTypeController.getAll",
+            perm: "Authenticated",
+            desc: "List acceptable evidence document types and upload constraints.",
+            reqBody: "-",
+            resBody: '[{ "id": 1, "name": "Published Journal Paper", "allowedExtensions": "pdf", "maxSizeMb": 10 }]'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/documents",
+            ctrl: "DocumentController.createDocument",
+            perm: "document:create",
+            desc: "Registers document metadata wrapping an uploaded file.",
+            reqBody: '{\n  "fileId": "file-uuid",\n  "documentTypeId": 1,\n  "title": "IEEE Journal Paper DOI:10.1109/...",\n  "ownerOfficeId": "dept-cs-uuid",\n  "isConfidential": false\n}',
+            resBody: '{\n  "id": "doc-uuid",\n  "title": "IEEE Journal Paper..."\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/documents/:id/link",
+            ctrl: "DocumentController.linkEvidence",
+            perm: "evidence:link",
+            desc: "Polymorphically attaches a document to a KPI evaluation or cycle report as proof.",
+            reqBody: '{\n  "entityType": "kpi_evaluation",\n  "entityId": "ev-uuid"\n}',
+            resBody: '{\n  "message": "Document linked as evidence"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/evidence/:entityType/:entityId",
+            ctrl: "DocumentController.getLinkedEvidence",
+            perm: "evidence:read",
+            desc: "Retrieve all evidence documents attached to a given entity (e.g. kpi_evaluation).",
+            reqBody: "Params: entityType=kpi_evaluation, entityId=ev-uuid",
+            resBody: '[{ "id": "doc-uuid", "title": "Journal Paper", "file": { "originalName": "paper.pdf" } }]'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/document-links/:id",
+            ctrl: "DocumentController.unlinkEvidence",
+            perm: "evidence:link",
+            desc: "Removes attachment link between document and entity.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "message": "Evidence link removed"\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-09",
+        slug: "notifications-alerts",
+        number: "09",
+        category: "platform",
+        title: "Targeted Notifications & Realtime Alerts",
+        tagline: "Office Broadcasts, Permission Gating & Read Receipts",
+        accent: "var(--acc-emerald)",
+        icon: "🔔",
+        overview: "Dispatches actionable announcements and alerts across the university. Supports targeting specific offices, cascading broadcasts to sub-offices (includeSubOffices), gating messages by required permission codes, and tracking individual read receipts.",
+        tables: [
+          {
+            name: "Notification",
+            map: "notification",
+            description: "Notification broadcast event dispatched to an office scope or permission group.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Notification ID" },
+              { name: "createdByPersonId", type: "Uuid?", map: "created_by_person_id", constraints: "FK -> Person, Optional", desc: "Dispatcher" },
+              { name: "targetOfficeId", type: "Uuid?", map: "target_office_id", constraints: "FK -> Office, Optional", desc: "Target office" },
+              { name: "includeSubOffices", type: "Boolean", map: "include_sub_offices", constraints: "@default(false)", desc: "Cascades alert to all child offices" },
+              { name: "requiredPermissionId", type: "Int?", map: "required_permission_id", constraints: "FK -> Permission, Optional", desc: "Gates alert to members holding this permission" },
+              { name: "title", type: "String", map: "title", constraints: "Required", desc: "Notification headline" },
+              { name: "message", type: "String", map: "message", constraints: "Required", desc: "Alert content body" },
+              { name: "channel", type: "String", map: "channel", constraints: "@default('in_app')", desc: "in_app, email, sms" },
+              { name: "entityType", type: "String?", map: "entity_type", constraints: "Optional", desc: "Linked entity (eval_cycle, cycle_report)" },
+              { name: "entityId", type: "Uuid?", map: "entity_id", constraints: "Optional", desc: "Entity record UUID" },
+              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Timestamp" }
+            ],
+            relations: "Belongs to Person, Office, Permission; Has many NotificationRecipient."
+          },
+          {
+            name: "NotificationRecipient",
+            map: "notification_recipient",
+            description: "Personal inbox delivery and read tracking receipt for an individual Person.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Receipt ID" },
+              { name: "notificationId", type: "Uuid", map: "notification_id", constraints: "FK -> Notification", desc: "Alert event (onDelete: Cascade)" },
+              { name: "personId", type: "Uuid", map: "person_id", constraints: "FK -> Person", desc: "Recipient individual" },
+              { name: "isRead", type: "Boolean", map: "is_read", constraints: "@default(false)", desc: "Read status flag" },
+              { name: "readAt", type: "DateTime?", map: "read_at", constraints: "@db.Timestamptz(6), Optional", desc: "Read timestamp" },
+              { name: "deliveredAt", type: "DateTime?", map: "delivered_at", constraints: "@db.Timestamptz(6), Optional", desc: "Delivery timestamp" }
+            ],
+            relations: "Unique on [notificationId, personId]; Indexed on [personId, isRead]."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/notifications/my-notifications",
+            ctrl: "NotificationController.getMyInbox",
+            perm: "Authenticated",
+            desc: "Fetch recipient's paginated notification feed with unread filter.",
+            reqBody: "Query: ?unreadOnly=true&page=1&limit=15",
+            resBody: '{\n  "unreadCount": 3,\n  "notifications": [{\n    "id": "rec-1",\n    "isRead": false,\n    "notification": { "title": "Q1 Report Deadline Approaching", "createdAt": "..." }\n  }]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/notifications/unread-count",
+            ctrl: "NotificationController.getUnreadCount",
+            perm: "Authenticated",
+            desc: "Lightweight endpoint for frontend bell badge count polling.",
+            reqBody: "-",
+            resBody: '{\n  "count": 4\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/notifications/:id/mark-read",
+            ctrl: "NotificationController.markAsRead",
+            perm: "Authenticated",
+            desc: "Marks a specific notification recipient record as read.",
+            reqBody: "Param: id (Recipient UUID)",
+            resBody: '{\n  "message": "Marked as read",\n  "readAt": "2026-10-26T11:20:00Z"\n}'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/notifications/mark-all-read",
+            ctrl: "NotificationController.markAllAsRead",
+            perm: "Authenticated",
+            desc: "Marks all pending unread notifications for current user as read.",
+            reqBody: "-",
+            resBody: '{\n  "message": "All notifications marked as read"\n}'
+          },
+          {
+            method: "POST",
+            path: "/api/v1/notifications",
+            ctrl: "NotificationController.dispatchNotification",
+            perm: "notification:send",
+            desc: "Dispatches a targeted notification to an office hierarchy or permission group, creating recipient records.",
+            reqBody: '{\n  "targetOfficeId": "college-uuid",\n  "includeSubOffices": true,\n  "title": "URGENT: Submit Q1 Cycle Reports",\n  "message": "The reporting portal closes on Friday at 5:00 PM.",\n  "channel": "in_app"\n}',
+            resBody: '{\n  "notificationId": "notif-uuid",\n  "recipientsCount": 42\n}'
+          }
+        ]
+      },
+      {
+        id: "mod-10",
+        slug: "settings-audit",
+        number: "10",
+        category: "platform",
+        title: "System Governance, Settings & Audit Trail",
+        tagline: "Dynamic Configs, Public Parameters & Compliance Logs",
+        accent: "var(--acc-rose)",
+        icon: "⚙️",
+        overview: "Ensures institutional governance, transparency, and configurability. Maintains key-value system settings partitioned by category groups (branding, KPI rules, notifications), and captures an immutable audit trail of state changes with JSON diffs, IP addresses, and user-agent strings.",
+        tables: [
+          {
+            name: "SystemSetting",
+            map: "system_setting",
+            description: "System configuration parameter organized by functional groups.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Setting ID" },
+              { name: "groupName", type: "String", map: "group_name", constraints: "Required", desc: "general, kpi_rules, email, security" },
+              { name: "key", type: "String", map: "key", constraints: "Required", desc: "Setting key (e.g. system_name, active_cycle)" },
+              { name: "value", type: "String?", map: "value", constraints: "Optional", desc: "Config value" },
+              { name: "valueType", type: "String", map: "value_type", constraints: "@default('text')", desc: "text, number, boolean, json, file" },
+              { name: "fileId", type: "Uuid?", map: "file_id", constraints: "FK -> File, Optional", desc: "Linked logo/favicon file" },
+              { name: "description", type: "String?", map: "description", constraints: "Optional", desc: "Setting purpose explanation" },
+              { name: "isPublic", type: "Boolean", map: "is_public", constraints: "@default(false)", desc: "Exposed to unauthenticated public API" },
+              { name: "updatedByPersonId", type: "Uuid?", map: "updated_by_person_id", constraints: "FK -> Person, Optional", desc: "Last modifier" },
+              { name: "updatedAt", type: "DateTime", map: "updated_at", constraints: "@updatedAt", desc: "Last update timestamp" }
+            ],
+            relations: "Unique on [groupName, key]; Belongs to File, Person."
+          },
+          {
+            name: "AuditLog",
+            map: "audit_log",
+            description: "Immutable compliance log recording who changed what, when, and from where.",
+            fields: [
+              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Log ID" },
+              { name: "actorPersonId", type: "Uuid?", map: "actor_person_id", constraints: "FK -> Person, Optional", desc: "Person who performed action" },
+              { name: "action", type: "String", map: "action", constraints: "Required", desc: "CREATE, UPDATE, DELETE, CASCADE, APPROVE" },
+              { name: "entityType", type: "String", map: "entity_type", constraints: "Required", desc: "kpi_target, cycle_report, office, user" },
+              { name: "entityId", type: "String?", map: "entity_id", constraints: "Optional", desc: "Affected entity identifier" },
+              { name: "oldValues", type: "Json?", map: "old_values", constraints: "Optional", desc: "State before mutation" },
+              { name: "newValues", type: "Json?", map: "new_values", constraints: "Optional", desc: "State after mutation" },
+              { name: "ipAddress", type: "String?", map: "ip_address", constraints: "Optional", desc: "Client IP" },
+              { name: "userAgent", type: "String?", map: "user_agent", constraints: "Optional", desc: "Client browser / device" },
+              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Action timestamp" }
+            ],
+            relations: "Indexed on [entityType, entityId], [actorPersonId], [createdAt]; Belongs to Person."
+          }
+        ],
+        routes: [
+          {
+            method: "GET",
+            path: "/api/v1/settings/public",
+            ctrl: "SettingController.getPublicSettings",
+            perm: "Public",
+            desc: "Returns public institutional configurations (university name, active fiscal year label, system logo).",
+            reqBody: "-",
+            resBody: '{\n  "system_name": "AMU KPI Monitoring System",\n  "active_cycle": "2025/2026 Q1",\n  "logo_url": "/uploads/logo.png"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/settings",
+            ctrl: "SettingController.getAllSettings",
+            perm: "settings:manage",
+            desc: "Admin endpoint returning all system settings grouped by functional categories.",
+            reqBody: "-",
+            resBody: '{\n  "general": [{ "key": "system_name", "value": "AMU KPI" }],\n  "kpi_rules": [{ "key": "allow_over_allocation", "value": "true" }]\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/settings/:groupName",
+            ctrl: "SettingController.updateSettingsGroup",
+            perm: "settings:manage",
+            desc: "Batch updates key-value settings within a category group.",
+            reqBody: '{\n  "settings": [\n    { "key": "allow_over_allocation", "value": "true" },\n    { "key": "max_over_allocation_cap", "value": "15.0" }\n  ]\n}',
+            resBody: '{\n  "message": "Settings updated for group kpi_rules"\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/audit-logs",
+            ctrl: "AuditLogController.getAuditLogs",
+            perm: "audit:read",
+            desc: "Queries audit log trail with actor, action, entityType, date range filters, and pagination.",
+            reqBody: "Query: ?action=CASCADE&entityType=kpi_target&page=1",
+            resBody: '{\n  "total": 128,\n  "logs": [{\n    "id": "log-1",\n    "action": "CASCADE",\n    "entityType": "kpi_target",\n    "actor": { "firstName": "Mati" },\n    "createdAt": "..."\n  }]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/audit-logs/:id",
+            ctrl: "AuditLogController.getAuditLogDetail",
+            perm: "audit:read",
+            desc: "Inspects full audit log entry with JSON oldValues vs newValues diff.",
+            reqBody: "Param: id (UUID)",
+            resBody: '{\n  "id": "log-1",\n  "oldValues": { "targetValue": "100" },\n  "newValues": { "targetValue": "150" }\n}'
+          }
+        ]
+      }
+    ];
+
+    // ========================================================
+    // RENDER FUNCTIONS
+    // ========================================================
+
+    function renderModulesGrid(items = MODULES_DATA) {
+      const container = document.getElementById('modules-cards-container');
+      container.innerHTML = '';
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
+            No modules found matching your query.
+          </div>
+        `;
+        return;
+      }
+
+      items.forEach(mod => {
+        const card = document.createElement('div');
+        card.className = 'module-card';
+        card.style.setProperty('--mod-accent', mod.accent);
+        card.onclick = () => navigateToModule(mod.slug);
+
+        const tablesHtml = mod.tables.map(t => `<span class="table-chip">${t.name}</span>`).join('');
+
+        card.innerHTML = `
+          <div>
+            <div class="module-card-header">
+              <div class="module-icon-box">${mod.icon}</div>
+              <span class="module-id-badge">MOD-${mod.number}</span>
+            </div>
+            <h2 class="module-title">${mod.title}</h2>
+            <p class="module-desc">${mod.tagline}</p>
+            
+            <div class="module-tables-section">
+              <div class="section-mini-label">Related Database Tables (${mod.tables.length})</div>
+              <div class="chips-group">
+                ${tablesHtml}
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="card-meta-stat">
+              Routes to build: <span>${mod.routes.length}</span>
+            </div>
+            <span class="card-link-btn">
+              View Blueprint & Routes →
+            </span>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderModuleDetail(slug) {
+      const mod = MODULES_DATA.find(m => m.slug === slug || m.id === slug);
+      if (!mod) {
+        showOverviewView();
+        return;
+      }
+
+      const container = document.getElementById('module-detail-content');
+      container.style.setProperty('--detail-accent', mod.accent);
+
+      // Render Tables Section
+      let tablesHtml = '';
+      mod.tables.forEach(table => {
+        let fieldsRows = table.fields.map(f => `
+          <tr>
+            <td class="field-name">${f.name}</td>
+            <td><span class="type-pill">${f.type}</span></td>
+            <td><code>${f.map}</code></td>
+            <td>${f.constraints.split(', ').map(c => `<span class="constraint-badge">${c}</span>`).join('')}</td>
+            <td style="color: var(--text-muted);">${f.desc}</td>
+          </tr>
+        `).join('');
+
+        tablesHtml += `
+          <div class="schema-model-block">
+            <div class="model-header">
+              <div class="model-name">
+                <span>Model ${table.name}</span>
+                <span class="db-table-tag">DB: "${table.map}"</span>
+              </div>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">${table.description}</p>
+            
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Prisma Type</th>
+                  <th>Column Map</th>
+                  <th>Constraints & Relations</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${fieldsRows}
+              </tbody>
+            </table>
+
+            <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-dim); background: rgba(0,0,0,0.25); padding: 0.6rem 0.85rem; border-radius: 6px;">
+              <strong style="color: #cbd5e1;">Relations:</strong> ${table.relations}
+            </div>
+          </div>
+        `;
+      });
+
+      // Render Routes Section
+      let routesHtml = '';
+      mod.routes.forEach((r, idx) => {
+        const methodClass = `method-${r.method.toLowerCase()}`;
+        const checkId = `check-${mod.slug}-${idx}`;
+        const isDone = localStorage.getItem(checkId) === 'true';
+
+        routesHtml += `
+          <div class="route-item">
+            <div class="route-top">
+              <div class="route-signature">
+                <span class="method-badge ${methodClass}">${r.method}</span>
+                <span class="route-path">${r.path}</span>
+                <span class="route-ctrl-action">→ ${r.ctrl}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="auth-perm-badge">🔑 ${r.perm}</span>
+                <button class="btn btn-copy-code" onclick="copyText('${r.method} ${r.path}')">Copy Endpoint</button>
+              </div>
+            </div>
+
+            <p class="route-desc">${r.desc}</p>
+
+            <div class="route-payload-grid">
+              <div class="code-box">
+                <div class="code-box-label">
+                  <span>Request Payload / Params</span>
+                  <button class="btn-copy-code" onclick="copyText(\`${r.reqBody.replace(/`/g, '\\`')}\`)">Copy</button>
+                </div>
+                <div class="code-pre">${escapeHtml(r.reqBody)}</div>
+              </div>
+
+              <div class="code-box">
+                <div class="code-box-label">
+                  <span>Response (200 / 201)</span>
+                  <button class="btn-copy-code" onclick="copyText(\`${r.resBody.replace(/`/g, '\\`')}\`)">Copy</button>
+                </div>
+                <div class="code-pre">${escapeHtml(r.resBody)}</div>
+              </div>
+            </div>
+
+            <div style="margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.04);">
+              <label class="check-item ${isDone ? 'done' : ''}" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;">
+                <input type="checkbox" id="${checkId}" ${isDone ? 'checked' : ''} onchange="toggleRouteCheck('${checkId}', this)">
+                <span class="check-text">Mark endpoint as Implemented in Backend</span>
+              </label>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = `
+        <div class="detail-header">
+          <div class="breadcrumb">
+            <a href="#" onclick="showOverviewView(); return false;">← All Modules</a>
+            <span>/</span>
+            <span>MOD-${mod.number}</span>
+            <span>/</span>
+            <span style="color: #fff;">${mod.title}</span>
+          </div>
+
+          <div class="detail-title-row">
+            <div class="detail-title-group">
+              <div class="detail-icon-large">${mod.icon}</div>
+              <div>
+                <span class="module-id-badge" style="margin-bottom: 0.4rem; display: inline-block;">MOD-${mod.number} SPECIFICATION</span>
+                <h1 class="detail-h1">${mod.title}</h1>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.6rem;">
+              <button class="btn" onclick="showOverviewView()">← Back to Grid</button>
+              <button class="btn btn-primary" onclick="window.print()">Export Module Spec</button>
+            </div>
+          </div>
+
+          <p class="detail-lead">${mod.overview}</p>
+        </div>
+
+        <!-- Section 1: Database Models -->
+        <div class="section-card">
+          <div class="section-header-title">
+            <span>📦 Database Models & Tables</span>
+            <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-dim);">(${mod.tables.length} tables in PostgreSQL)</span>
+          </div>
+          <p class="section-subtitle">
+            Physical table structures, field definitions, column mapping decorators (@map), nullability, and relational foreign keys.
+          </p>
+          ${tablesHtml}
+        </div>
+
+        <!-- Section 2: REST API Routes -->
+        <div class="section-card">
+          <div class="section-header-title">
+            <span>⚡ REST API Endpoints to Implement</span>
+            <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-dim);">(${mod.routes.length} endpoints)</span>
+          </div>
+          <p class="section-subtitle">
+            HTTP request/response contracts, authorization permission checks, path conventions, and sample payloads.
+          </p>
+          <div class="routes-stack">
+            ${routesHtml}
+          </div>
+        </div>
+      `;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ========================================================
+    // ROUTING & NAVIGATION
+    // ========================================================
+
+    function showOverviewView() {
+      history.pushState(null, '', window.location.pathname);
+      document.getElementById('overview-view').classList.add('active');
+      document.getElementById('detail-view').classList.remove('active');
+      document.getElementById('nav-title').textContent = "KPI Monitoring System";
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      updateProgressStats();
+    }
+
+    function navigateToModule(slug) {
+      window.location.hash = slug;
+    }
+
+    function handleHashChange() {
+      const hash = window.location.hash.replace('#', '');
+      if (hash && hash !== 'all') {
+        const mod = MODULES_DATA.find(m => m.slug === hash || m.id === hash);
+        if (mod) {
+          document.getElementById('overview-view').classList.remove('active');
+          document.getElementById('detail-view').classList.add('active');
+          document.getElementById('nav-title').textContent = `${mod.title}`;
+          renderModuleDetail(mod.slug);
+          return;
+        }
+      }
+      showOverviewView();
+    }
+
+    window.addEventListener('hashchange', handleHashChange);
+
+    // ========================================================
+    // SEARCH & FILTER
+    // ========================================================
+
+    function filterCategory(cat, btn) {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (cat === 'all') {
+        renderModulesGrid(MODULES_DATA);
+      } else {
+        const filtered = MODULES_DATA.filter(m => m.category === cat);
+        renderModulesGrid(filtered);
+      }
+    }
+
+    function handleSearch(q) {
+      const term = q.trim().toLowerCase();
+      if (!term) {
+        renderModulesGrid(MODULES_DATA);
+        return;
+      }
+
+      const filtered = MODULES_DATA.filter(m => {
+        const titleMatch = m.title.toLowerCase().includes(term);
+        const taglineMatch = m.tagline.toLowerCase().includes(term);
+        const tableMatch = m.tables.some(t => t.name.toLowerCase().includes(term) || t.map.toLowerCase().includes(term));
+        const routeMatch = m.routes.some(r => r.path.toLowerCase().includes(term) || r.ctrl.toLowerCase().includes(term));
+        return titleMatch || taglineMatch || tableMatch || routeMatch;
+      });
+
+      renderModulesGrid(filtered);
+    }
+
+    // ========================================================
+    // UTILITIES & PROGRESS TRACKER
+    // ========================================================
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function copyText(txt) {
+      navigator.clipboard.writeText(txt).then(() => {
+        showToast("Copied to clipboard!");
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      const tm = document.getElementById('toast-msg');
+      tm.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    function toggleRouteCheck(id, checkbox) {
+      localStorage.setItem(id, checkbox.checked);
+      const label = checkbox.closest('.check-item');
+      if (checkbox.checked) {
+        label.classList.add('done');
+        showToast("Route marked as Implemented");
+      } else {
+        label.classList.remove('done');
+      }
+      updateProgressStats();
+    }
+
+    function updateProgressStats() {
+      let totalRoutes = 0;
+      let completedRoutes = 0;
+
+      MODULES_DATA.forEach(m => {
+        m.routes.forEach((r, idx) => {
+          totalRoutes++;
+          const checkId = `check-${m.slug}-${idx}`;
+          if (localStorage.getItem(checkId) === 'true') {
+            completedRoutes++;
+          }
+        });
+      });
+
+      const percent = totalRoutes > 0 ? Math.round((completedRoutes / totalRoutes) * 100) : 0;
+      const el = document.getElementById('stats-progress-count');
+      if (el) {
+        el.textContent = `${percent}% (${completedRoutes}/${totalRoutes})`;
+      }
+    }
+
+    // ========================================================
+    // INIT
+    // ========================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      renderModulesGrid();
+      handleHashChange();
+      updateProgressStats();
+    });
+  </script>
+</body>
+</html>

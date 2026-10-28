@@ -7,6 +7,10 @@
     "dev:backend": "npm --prefix Backend run dev",
     "dev:frontend": "npm --prefix Frontend run dev -- --host 0.0.0.0 --port 5174",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "seed:admin": "npm --prefix Backend run seed:admin",
+    "db:seed": "npm --prefix Backend run seed:admin",
+    "db:reset": "npm --prefix Backend run db:reset",
+    "db:reset:seed": "npm --prefix Backend run db:reset:seed",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {

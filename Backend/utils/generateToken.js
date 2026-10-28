@@ -1,9 +1,12 @@
 import jwt from 'jsonwebtoken';
 
-const generateToken = (Id, extraClaims = {}) => {
-  const payload = Object.assign({ Id }, extraClaims || {});
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE,
+/**
+ * Generates JWT access token with user identifier and optional claims
+ */
+export const generateToken = (userId, extraClaims = {}) => {
+  const payload = Object.assign({ id: userId }, extraClaims || {});
+  return jwt.sign(payload, process.env.JWT_SECRET || 'amu_kpi_jwt_secret', {
+    expiresIn: process.env.JWT_EXPIRE || '7d',
   });
 };
 
