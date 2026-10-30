@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (93 REST routes under <code>/api/v1</code>, 26 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (117 REST routes under <code>/api/v1</code>, 33 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -768,11 +768,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">61</div>
+            <div class="dev-stat-value">85</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">66%</div>
+            <div class="dev-stat-value">73%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -801,7 +801,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">34%</div>
+            <div class="dev-stat-value">27%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -955,7 +955,7 @@
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (11)</div>
+          <div class="section-title">Backend Endpoints (12)</div>
           <div class="chip-list">
             <span class="chip chip-endpoint">GET /api/v1/office-types · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/office-types · office:manage</span>
@@ -963,6 +963,7 @@
             <span class="chip chip-endpoint">GET /api/v1/offices · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/offices · office:create</span>
             <span class="chip chip-endpoint">GET /api/v1/offices/:id · Authenticated</span>
+            <span class="chip chip-endpoint">GET /api/v1/offices/:id/history · Authenticated</span>
             <span class="chip chip-endpoint">PUT /api/v1/offices/:id · office:update</span>
             <span class="chip chip-endpoint">GET /api/v1/offices/:id/positions · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/offices/:id/positions · office:manage</span>
@@ -1115,19 +1116,42 @@
         <div class="module-title-box">
           <div class="module-index">Module 04 &bull; Backend/modules/04-kpi-catalog</div>
           <div class="module-title">📚 Strategic KPI Catalog &amp; Fiscal Planning</div>
-          <div class="module-desc">Defines the strategic foundation of the university. Manages institutional fiscal years, hierarchical strategic themes (e.g., Balanced Scorecard pillars: Academic Excellence, Research, Community Engagement), and the master catalog of Key Performance Indicators with calculation metadata.</div>
+          <div class="module-desc">Defines what the university measures. Manages fiscal years (closing one makes its data read-only), strategic objectives, themes, units, reporting frequencies, stage and category scales, currencies and the master KPI catalog. KPIs and scales lock once in use, so past results keep their meaning.</div>
         </div>
         <span class="assigned-badge badge-dev-a">Developer A</span>
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (9)</div>
+          <div class="section-title">Backend Endpoints (32)</div>
           <div class="chip-list">
             <span class="chip chip-endpoint">GET /api/v1/fiscal-years · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/fiscal-years · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/fiscal-years/:id · kpi:manage</span>
             <span class="chip chip-endpoint">PATCH /api/v1/fiscal-years/:id/activate · kpi:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/fiscal-years/:id/close · kpi:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/fiscal-years/:id/reopen · Super Admin</span>
+            <span class="chip chip-endpoint">GET /api/v1/strategic-objectives · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/strategic-objectives · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/strategic-objectives/:id · kpi:manage</span>
             <span class="chip chip-endpoint">GET /api/v1/kpi-themes · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/kpi-themes · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/kpi-themes/:id · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/measurement-units · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/measurement-units · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/measurement-units/:id · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/reporting-frequencies · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/reporting-frequencies · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/reporting-frequencies/:id · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/kpi-scales · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/kpi-scales · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/kpi-scales/:id · Authenticated</span>
+            <span class="chip chip-endpoint">PUT /api/v1/kpi-scales/:id · kpi:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/kpi-scales/:id/scoring · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/currencies · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/currencies · kpi:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/currencies/:id · kpi:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/exchange-rates · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/exchange-rates · kpi:manage</span>
             <span class="chip chip-endpoint">GET /api/v1/kpis · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/kpis · kpi:create</span>
             <span class="chip chip-endpoint">GET /api/v1/kpis/:id · Authenticated</span>
@@ -1139,7 +1163,14 @@
           <div class="section-title">Prisma Models</div>
           <div class="chip-list">
             <span class="chip chip-model">FiscalYear</span>
+            <span class="chip chip-model">StrategicObjective</span>
             <span class="chip chip-model">KpiTheme</span>
+            <span class="chip chip-model">MeasurementUnit</span>
+            <span class="chip chip-model">ReportingFrequency</span>
+            <span class="chip chip-model">KpiScale</span>
+            <span class="chip chip-model">KpiScaleLevel</span>
+            <span class="chip chip-model">Currency</span>
+            <span class="chip chip-model">ExchangeRate</span>
             <span class="chip chip-model">Kpi</span>
           </div>
         </div>
@@ -1158,28 +1189,28 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>Routes, Swagger docs and permission guards wired (kpi:create / update / manage)</span>
+              <span>Fiscal years: one active year, overlap checks, closing makes a year read-only (assertFiscalYearOpen guard), Super Admin can reopen</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Fiscal years with a single active year (activate endpoint)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Strategic objectives, theme tree, units, reporting frequencies, currencies and dated exchange rates</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Strategic theme tree with KPI counts</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Stage and category scales with scoring approval; a scale locks once a KPI uses it</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Master KPI CRUD (direction, cascadeMode, maxOverAllocationPercent)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Master KPIs validated per measurement type; a KPI locks once in use, replacesKpiId keeps the trend</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>scripts/seedKpis.js with the university's initial themes and KPIs</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>scripts/seedKpis.js with sample KPIs from the SRS (one per measurement type)</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1654,7 +1685,7 @@
         </p>
       </div>
       <div style="display: flex; gap: 0.75rem;">
-        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 61 Endpoints</span>
+        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
         <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 32 Endpoints</span>
       </div>
     </div>
@@ -1684,7 +1715,7 @@
             <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
             <td><code>modules/02-office-hierarchy</code></td>
             <td>OfficeType, Office, Position, OfficePerson</td>
-            <td>11</td>
+            <td>12</td>
             <td>The office tree is the roll-up path for target cascading (05), report dossiers (06), scorecards (07) and notification targeting (09).</td>
           </tr>
           <tr>
@@ -1699,8 +1730,8 @@
             <td><strong>04. Strategic KPI Catalog &amp; Fiscal Planning</strong></td>
             <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
             <td><code>modules/04-kpi-catalog</code></td>
-            <td>FiscalYear, KpiTheme, Kpi</td>
-            <td>9</td>
+            <td>FiscalYear, StrategicObjective, KpiTheme, MeasurementUnit, ReportingFrequency, KpiScale, KpiScaleLevel, Currency, ExchangeRate, Kpi</td>
+            <td>32</td>
             <td>Fiscal years and master KPIs are the inputs for targets (05), cycles (06) and direction-aware scoring (07).</td>
           </tr>
           <tr>

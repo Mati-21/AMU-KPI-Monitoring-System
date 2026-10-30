@@ -540,7 +540,7 @@ model ExchangeRate {
   @@map("exchange_rate")
 }
 
-// A KPI locks once it has an approved assignment. A real change means a new KPI,
+// A KPI locks once it has a live assignment. A real change means a new KPI,
 // with replaces_kpi_id keeping the trend connected across years.
 model Kpi {
   id                   String             @id @default(uuid()) @db.Uuid

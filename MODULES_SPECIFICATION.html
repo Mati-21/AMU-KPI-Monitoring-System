@@ -917,7 +917,7 @@
             <span class="stat-label">Prisma Database Models</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #34d399;">93</span>
+            <span class="stat-val" style="color: #34d399;">117</span>
             <span class="stat-label">REST API Routes to Build</span>
           </div>
           <div class="stat-card">
@@ -1385,6 +1385,15 @@
             resBody: '{\n  "id": "...",\n  "name": "Department of CS",\n  "positions": [...],\n  "currentHead": { "person": { "firstName": "Dr. Haile" } }\n}'
           },
           {
+            method: "GET",
+            path: "/api/v1/offices/:id/history",
+            ctrl: "OfficeController.getOfficeHistory",
+            perm: "Authenticated",
+            desc: "Parents this office has had and when, newest first.",
+            reqBody: "Param: id (Uuid)",
+            resBody: '[{ "parent": { "name": "VP Research" }, "validFrom": "2026-11-01", "validTo": null, "reason": "Restructure" }]'
+          },
+          {
             method: "PUT",
             path: "/api/v1/offices/:id",
             ctrl: "OfficeController.updateOffice",
@@ -1588,140 +1597,13 @@
         number: "04",
         category: "governance",
         title: "Strategic KPI Catalog & Fiscal Planning",
-        tagline: "Fiscal Years, Strategic Themes & Master Indicators",
+        tagline: "Fiscal Years, KPI Building Blocks & Master Indicators",
         accent: "var(--acc-emerald)",
         icon: "📊",
-        overview: "Defines the strategic foundation of the university. Manages institutional fiscal years, hierarchical strategic themes (e.g., Balanced Scorecard pillars: Academic Excellence, Research, Community Engagement), and the master catalog of Key Performance Indicators with calculation metadata.",
-        tables: [
-          {
-            name: "FiscalYear",
-            map: "fiscal_year",
-            description: "Institutional planning period (e.g. 2024/2025 or 2017 E.C.) containing start, end, and status.",
-            fields: [
-              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Fiscal year ID" },
-              { name: "label", type: "String", map: "label", constraints: "@unique", desc: "Display label (e.g. 2025/2026)" },
-              { name: "startDate", type: "DateTime", map: "start_date", constraints: "@db.Date", desc: "Start date" },
-              { name: "endDate", type: "DateTime", map: "end_date", constraints: "@db.Date", desc: "End date" },
-              { name: "status", type: "String", map: "status", constraints: "@default('planned')", desc: "planned, active, or closed" }
-            ],
-            relations: "Has many KpiTarget, EvalCycle."
-          },
-          {
-            name: "KpiTheme",
-            map: "kpi_theme",
-            description: "Strategic pillar or thematic area structured as a self-referencing hierarchy (ThemeTree).",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Theme ID" },
-              { name: "parentThemeId", type: "Uuid?", map: "parent_theme_id", constraints: "FK -> KpiTheme", desc: "Parent theme for nested sub-themes" },
-              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Theme title (e.g. Research & Technology Transfer)" },
-              { name: "code", type: "String?", map: "code", constraints: "Optional", desc: "Theme code (e.g. THEME_RES)" },
-              { name: "sortOrder", type: "Int", map: "sort_order", constraints: "@default(0)", desc: "Display ordering" },
-              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active toggle" }
-            ],
-            relations: "Recursive ThemeTree; 1:N with Kpi."
-          },
-          {
-            name: "Kpi",
-            map: "kpi",
-            description: "Master catalog definition of a Key Performance Indicator.",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "KPI ID" },
-              { name: "kpiThemeId", type: "Uuid", map: "kpi_theme_id", constraints: "FK -> KpiTheme", desc: "Associated strategic theme" },
-              { name: "code", type: "String", map: "code", constraints: "@unique", desc: "Unique KPI code (e.g. KPI-PUB-01)" },
-              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Official title of the indicator" },
-              { name: "unitOfMeasure", type: "String", map: "unit_of_measure", constraints: "Required", desc: "Unit (Number, %, USD, ETB, Ratio)" },
-              { name: "direction", type: "String", map: "direction", constraints: "@default('higher_is_better')", desc: "higher_is_better vs lower_is_better" },
-              { name: "cascadeMode", type: "String", map: "cascade_mode", constraints: "@default('split')", desc: "split, replicate, or aggregate" },
-              { name: "maxOverAllocationPercent", type: "Decimal?", map: "max_over_allocation_percent", constraints: "@db.Decimal(6,2)", desc: "Cap on over-allocating targets (e.g. 10.00%)" },
-              { name: "sortOrder", type: "Int", map: "sort_order", constraints: "@default(0)", desc: "Ordering index" },
-              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active status" }
-            ],
-            relations: "Belongs to KpiTheme; Has many KpiTarget."
-          }
-        ],
-        routes: [
-          {
-            method: "GET",
-            path: "/api/v1/fiscal-years",
-            ctrl: "FiscalYearController.getAll",
-            perm: "Authenticated",
-            desc: "List all fiscal years with statuses (planned, active, closed).",
-            reqBody: "-",
-            resBody: '[{ "id": 1, "label": "2025/2026", "status": "active", "startDate": "2025-09-01" }]'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/fiscal-years",
-            ctrl: "FiscalYearController.create",
-            perm: "kpi:manage",
-            desc: "Create a new institutional planning fiscal year.",
-            reqBody: '{\n  "label": "2026/2027",\n  "startDate": "2026-09-01",\n  "endDate": "2027-08-31"\n}',
-            resBody: '{\n  "id": 2,\n  "label": "2026/2027",\n  "status": "planned"\n}'
-          },
-          {
-            method: "PATCH",
-            path: "/api/v1/fiscal-years/:id/activate",
-            ctrl: "FiscalYearController.activate",
-            perm: "kpi:manage",
-            desc: "Activates the specified fiscal year and deactivates others.",
-            reqBody: "-",
-            resBody: '{\n  "message": "Fiscal year 2026/2027 is now ACTIVE"\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/kpi-themes",
-            ctrl: "KpiThemeController.getThemeTree",
-            perm: "Authenticated",
-            desc: "Returns strategic themes hierarchy with nested sub-themes and attached KPI counts.",
-            reqBody: "-",
-            resBody: '[{ "id": "t1", "name": "Academic Excellence", "children": [...] }]'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/kpi-themes",
-            ctrl: "KpiThemeController.createTheme",
-            perm: "kpi:manage",
-            desc: "Creates a strategic theme or pillar.",
-            reqBody: '{\n  "name": "Research & Community Engagement",\n  "code": "THEME_RES",\n  "sortOrder": 1\n}',
-            resBody: '{\n  "id": "t2",\n  "name": "Research & Community Engagement"\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/kpis",
-            ctrl: "KpiController.getKpis",
-            perm: "Authenticated",
-            desc: "List master KPIs with search, theme filter, and direction filter.",
-            reqBody: "Query: ?kpiThemeId=t1&search=publication",
-            resBody: '[{ "id": "k1", "code": "KPI-RES-01", "name": "Peer-Reviewed Publications", "unitOfMeasure": "Number" }]'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/kpis",
-            ctrl: "KpiController.createKpi",
-            perm: "kpi:create",
-            desc: "Registers a new master KPI indicator in the catalog.",
-            reqBody: '{\n  "kpiThemeId": "t1",\n  "code": "KPI-GRAD-01",\n  "name": "On-Time Student Graduation Rate",\n  "unitOfMeasure": "Percentage",\n  "direction": "higher_is_better",\n  "cascadeMode": "split",\n  "maxOverAllocationPercent": 5.0\n}',
-            resBody: '{\n  "id": "kpi-uuid",\n  "code": "KPI-GRAD-01"\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/kpis/:id",
-            ctrl: "KpiController.getKpiById",
-            perm: "Authenticated",
-            desc: "Fetches a master KPI with its theme and calculation metadata.",
-            reqBody: "Param: id (Uuid)",
-            resBody: '{\n  "id": "kpi-uuid",\n  "code": "KPI-GRAD-01",\n  "theme": { "name": "Academic Excellence" }\n}'
-          },
-          {
-            method: "PUT",
-            path: "/api/v1/kpis/:id",
-            ctrl: "KpiController.updateKpi",
-            perm: "kpi:update",
-            desc: "Updates KPI operational parameters.",
-            reqBody: '{\n  "name": "Revised On-Time Graduation Rate",\n  "maxOverAllocationPercent": 10.0\n}',
-            resBody: '{\n  "message": "KPI updated"\n}'
-          }
-        ]
+        overview: "Defines what the university measures. Manages fiscal years (closing one makes its data read-only), strategic objectives, themes, units, reporting frequencies, stage and category scales, currencies and the master KPI catalog. KPIs and scales lock once in use, so past results keep their meaning.",
+        tables: [{"name": "FiscalYear", "map": "fiscal_year", "description": "Planning year. Status moves PLANNING, ACTIVE, CLOSED; a closed year is read-only.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "name", "type": "String", "map": "-", "constraints": "@unique", "desc": "Name"}, {"name": "startDate", "type": "DateTime", "map": "start_date", "constraints": "@db.Date", "desc": "Start date"}, {"name": "endDate", "type": "DateTime", "map": "end_date", "constraints": "@db.Date", "desc": "End date"}, {"name": "status", "type": "FiscalYearStatus", "map": "-", "constraints": "@default(PLANNING)", "desc": "Status"}], "relations": "Has many ReportingPeriod, PerformanceContract."}, {"name": "StrategicObjective", "map": "strategic_objective", "description": "Institutional objective a KPI serves.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "code", "type": "String", "map": "-", "constraints": "@unique", "desc": "Code"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "isActive", "type": "Boolean", "map": "is_active", "constraints": "@default(true)", "desc": "Is active"}], "relations": "Has many Kpi."}, {"name": "KpiTheme", "map": "kpi_theme", "description": "Hierarchical grouping of KPIs.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "parentThemeId", "type": "String?", "map": "parent_theme_id", "constraints": "@db.Uuid", "desc": "Parent theme id"}, {"name": "code", "type": "String?", "map": "-", "constraints": "@unique", "desc": "Code"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "sortOrder", "type": "Int", "map": "sort_order", "constraints": "@default(0)", "desc": "Sort order"}, {"name": "isActive", "type": "Boolean", "map": "is_active", "constraints": "@default(true)", "desc": "Is active"}], "relations": "Self-referencing tree; has many Kpi."}, {"name": "MeasurementUnit", "map": "measurement_unit", "description": "Unit of measurement. Locked once a KPI uses it.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "name", "type": "String", "map": "-", "constraints": "@unique", "desc": "Name"}, {"name": "symbol", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Symbol"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}], "relations": "Has many Kpi."}, {"name": "ReportingFrequency", "map": "reporting_frequency", "description": "How often a KPI is reported. Interval locked once in use.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "name", "type": "String", "map": "-", "constraints": "@unique", "desc": "Name"}, {"name": "intervalMonths", "type": "Int?", "map": "interval_months", "constraints": "Optional", "desc": "Interval months"}, {"name": "isCustom", "type": "Boolean", "map": "is_custom", "constraints": "@default(false)", "desc": "Is custom"}], "relations": "Has many Kpi, KpiAssignment, ReportingPeriod."}, {"name": "KpiScale", "map": "kpi_scale", "description": "Stage or category list. Locked once a KPI uses it; numerical scoring needs approval.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "name", "type": "String", "map": "-", "constraints": "@unique", "desc": "Name"}, {"name": "scaleType", "type": "ScaleType", "map": "scale_type", "constraints": "Required", "desc": "Scale type"}, {"name": "isOrdered", "type": "Boolean", "map": "is_ordered", "constraints": "@default(true)", "desc": "Is ordered"}, {"name": "isBinary", "type": "Boolean", "map": "is_binary", "constraints": "@default(false)", "desc": "Is binary"}, {"name": "scoringApproved", "type": "Boolean", "map": "scoring_approved", "constraints": "@default(false)", "desc": "Scoring approved"}, {"name": "approvedByPersonId", "type": "String?", "map": "approved_by_person_id", "constraints": "@db.Uuid", "desc": "Approved by person id"}, {"name": "approvedAt", "type": "DateTime?", "map": "approved_at", "constraints": "@db.Timestamptz(6)", "desc": "Approved at"}], "relations": "Has many KpiScaleLevel, Kpi."}, {"name": "KpiScaleLevel", "map": "kpi_scale_level", "description": "One level of a scale, with optional score and assessment criteria.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "scaleId", "type": "String", "map": "scale_id", "constraints": "@db.Uuid", "desc": "Scale id"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "sortOrder", "type": "Int", "map": "sort_order", "constraints": "Required", "desc": "Sort order"}, {"name": "score", "type": "Decimal?", "map": "-", "constraints": "@db.Decimal(9, 4)", "desc": "Score"}, {"name": "assessmentCriteria", "type": "String?", "map": "assessment_criteria", "constraints": "Optional", "desc": "Assessment criteria"}], "relations": "Belongs to KpiScale."}, {"name": "Currency", "map": "currency", "description": "Currency; at most one is the reporting currency.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "code", "type": "String", "map": "-", "constraints": "@unique", "desc": "Code"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "symbol", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Symbol"}, {"name": "isReportingCurrency", "type": "Boolean", "map": "is_reporting_currency", "constraints": "@default(false)", "desc": "Is reporting currency"}], "relations": "Has many ExchangeRate, Kpi."}, {"name": "ExchangeRate", "map": "exchange_rate", "description": "Dated conversion rate. Never edited.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "fromCurrencyId", "type": "String", "map": "from_currency_id", "constraints": "@db.Uuid", "desc": "From currency id"}, {"name": "toCurrencyId", "type": "String", "map": "to_currency_id", "constraints": "@db.Uuid", "desc": "To currency id"}, {"name": "rate", "type": "Decimal", "map": "-", "constraints": "@db.Decimal(18, 6)", "desc": "Rate"}, {"name": "rateDate", "type": "DateTime", "map": "rate_date", "constraints": "@db.Date", "desc": "Rate date"}, {"name": "source", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Source"}], "relations": "Belongs to two Currency records."}, {"name": "Kpi", "map": "kpi", "description": "Master KPI definition, not tied to a year. Locked once it has a live assignment; a real change means a new KPI with replacesKpiId.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "code", "type": "String", "map": "-", "constraints": "@unique", "desc": "Code"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "themeId", "type": "String", "map": "theme_id", "constraints": "@db.Uuid", "desc": "Theme id"}, {"name": "strategicObjectiveId", "type": "String", "map": "strategic_objective_id", "constraints": "@db.Uuid", "desc": "Strategic objective id"}, {"name": "measurementType", "type": "MeasurementType", "map": "measurement_type", "constraints": "Required", "desc": "Measurement type"}, {"name": "unitId", "type": "String?", "map": "unit_id", "constraints": "@db.Uuid", "desc": "Unit id"}, {"name": "scaleId", "type": "String?", "map": "scale_id", "constraints": "@db.Uuid", "desc": "Scale id"}, {"name": "currencyId", "type": "String?", "map": "currency_id", "constraints": "@db.Uuid", "desc": "Currency id"}, {"name": "direction", "type": "KpiDirection", "map": "-", "constraints": "Required", "desc": "Direction"}, {"name": "targetType", "type": "TargetType", "map": "target_type", "constraints": "Required", "desc": "Target type"}, {"name": "numeratorLabel", "type": "String?", "map": "numerator_label", "constraints": "Optional", "desc": "Numerator label"}, {"name": "denominatorLabel", "type": "String?", "map": "denominator_label", "constraints": "Optional", "desc": "Denominator label"}, {"name": "formula", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Formula"}, {"name": "dataSource", "type": "String?", "map": "data_source", "constraints": "Optional", "desc": "Data source"}, {"name": "defaultFrequencyId", "type": "String", "map": "default_frequency_id", "constraints": "@db.Uuid", "desc": "Default frequency id"}, {"name": "evidenceRequirement", "type": "String?", "map": "evidence_requirement", "constraints": "Optional", "desc": "Evidence requirement"}, {"name": "aggregationMethod", "type": "AggregationMethod", "map": "aggregation_method", "constraints": "Required", "desc": "Aggregation method"}, {"name": "periodRollupMethod", "type": "PeriodRollupMethod", "map": "period_rollup_method", "constraints": "Required", "desc": "Period rollup method"}, {"name": "scoringMethod", "type": "ScoringBasis", "map": "scoring_method", "constraints": "Required", "desc": "Scoring method"}, {"name": "zeroTargetRule", "type": "ZeroTargetRule", "map": "zero_target_rule", "constraints": "@default(NOT_CALCULABLE)", "desc": "Zero target rule"}, {"name": "isAdditive", "type": "Boolean", "map": "is_additive", "constraints": "@default(false)", "desc": "Is additive"}, {"name": "decimalPlaces", "type": "Int", "map": "decimal_places", "constraints": "@default(2)", "desc": "Decimal places"}, {"name": "maintenanceTolerance", "type": "Decimal?", "map": "maintenance_tolerance", "constraints": "@db.Decimal(9, 4)", "desc": "Maintenance tolerance"}, {"name": "coordinatingOfficeId", "type": "String?", "map": "coordinating_office_id", "constraints": "@db.Uuid", "desc": "Coordinating office id"}, {"name": "replacesKpiId", "type": "String?", "map": "replaces_kpi_id", "constraints": "@db.Uuid", "desc": "Replaces kpi id"}, {"name": "isActive", "type": "Boolean", "map": "is_active", "constraints": "@default(true)", "desc": "Is active"}, {"name": "createdByPersonId", "type": "String?", "map": "created_by_person_id", "constraints": "@db.Uuid", "desc": "Created by person id"}, {"name": "createdAt", "type": "DateTime", "map": "created_at", "constraints": "@default(now()) @db.Timestamptz(6)", "desc": "Created at"}, {"name": "updatedAt", "type": "DateTime", "map": "updated_at", "constraints": "@updatedAt @db.Timestamptz(6)", "desc": "Updated at"}], "relations": "Belongs to KpiTheme, StrategicObjective, ReportingFrequency; optional unit, scale, currency, coordinating office; has many KpiAssignment."}],
+        routes: [{"method": "GET", "path": "/api/v1/fiscal-years", "ctrl": "FiscalYearController.list", "perm": "Authenticated", "desc": "Fiscal years, newest first, with status and counts.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/fiscal-years", "ctrl": "FiscalYearController.create", "perm": "kpi:manage", "desc": "Create a year in PLANNING. Dates cannot overlap another year.", "reqBody": "{\n  \"name\": \"2019 E.C.\",\n  \"startDate\": \"2026-07-08\",\n  \"endDate\": \"2027-07-07\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/fiscal-years/:id", "ctrl": "FiscalYearController.update", "perm": "kpi:manage", "desc": "Change name or dates while the year is in PLANNING.", "reqBody": "{\n  \"name\": \"2019 E.C.\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/fiscal-years/:id/activate", "ctrl": "FiscalYearController.activate", "perm": "kpi:manage", "desc": "Activate a planning year. The active year must be closed first.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/fiscal-years/:id/close", "ctrl": "FiscalYearController.close", "perm": "kpi:manage", "desc": "Close the active year. All its data becomes read-only until a Super Admin reopens it.", "reqBody": "{\n  \"reason\": \"Year-end reports approved\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/fiscal-years/:id/reopen", "ctrl": "FiscalYearController.reopen", "perm": "Super Admin", "desc": "Reopen a closed year, making its data editable again. The active year must be closed first; the reason is audited.", "reqBody": "{\n  \"reason\": \"Correction to an approved report\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/strategic-objectives", "ctrl": "CatalogController.listObjectives", "perm": "Authenticated", "desc": "Strategic objectives with KPI counts.", "reqBody": "Query: ?isActive=true", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/strategic-objectives", "ctrl": "CatalogController.createObjective", "perm": "kpi:manage", "desc": "Create a strategic objective.", "reqBody": "{\n  \"code\": \"SO-1\",\n  \"name\": \"Strengthen research output\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/strategic-objectives/:id", "ctrl": "CatalogController.updateObjective", "perm": "kpi:manage", "desc": "Update or deactivate a strategic objective.", "reqBody": "{\n  \"isActive\": false\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/kpi-themes", "ctrl": "CatalogController.getThemeTree", "perm": "Authenticated", "desc": "Theme hierarchy with nested sub-themes and KPI counts.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/kpi-themes", "ctrl": "CatalogController.createTheme", "perm": "kpi:manage", "desc": "Create a theme or sub-theme.", "reqBody": "{\n  \"code\": \"RES\",\n  \"name\": \"Research\",\n  \"parentThemeId\": null,\n  \"sortOrder\": 1\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/kpi-themes/:id", "ctrl": "CatalogController.updateTheme", "perm": "kpi:manage", "desc": "Update, move or deactivate a theme. Refuses cycles, and deactivation while it has active sub-themes or KPIs.", "reqBody": "{\n  \"name\": \"Research and Innovation\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/measurement-units", "ctrl": "CatalogController.listUnits", "perm": "Authenticated", "desc": "Measurement units.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/measurement-units", "ctrl": "CatalogController.createUnit", "perm": "kpi:manage", "desc": "Create a measurement unit.", "reqBody": "{\n  \"name\": \"Publications\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/measurement-units/:id", "ctrl": "CatalogController.updateUnit", "perm": "kpi:manage", "desc": "Update a unit that no KPI uses yet.", "reqBody": "{\n  \"symbol\": \"pubs\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/reporting-frequencies", "ctrl": "CatalogController.listFrequencies", "perm": "Authenticated", "desc": "Reporting frequencies.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/reporting-frequencies", "ctrl": "CatalogController.createFrequency", "perm": "kpi:manage", "desc": "Create a frequency: intervalMonths 1 to 12, or isCustom.", "reqBody": "{\n  \"name\": \"Every two months\",\n  \"intervalMonths\": 2\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/reporting-frequencies/:id", "ctrl": "CatalogController.updateFrequency", "perm": "kpi:manage", "desc": "Rename a frequency; the interval changes only while nothing uses it.", "reqBody": "{\n  \"name\": \"Bi-monthly\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/kpi-scales", "ctrl": "CatalogController.listScales", "perm": "Authenticated", "desc": "Stage and category scales with levels and isLocked.", "reqBody": "Query: ?scaleType=STAGE", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/kpi-scales", "ctrl": "CatalogController.createScale", "perm": "kpi:manage", "desc": "Create a scale. Stages need assessment criteria; binary scales have two levels.", "reqBody": "{\n  \"name\": \"Digital Maturity\",\n  \"scaleType\": \"STAGE\",\n  \"levels\": [\n    {\n      \"name\": \"Initial\",\n      \"score\": 1,\n      \"assessmentCriteria\": \"...\"\n    },\n    {\n      \"name\": \"Advanced\",\n      \"score\": 2,\n      \"assessmentCriteria\": \"...\"\n    }\n  ]\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/kpi-scales/:id", "ctrl": "CatalogController.getScaleById", "perm": "Authenticated", "desc": "Scale with its levels.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/kpi-scales/:id", "ctrl": "CatalogController.updateScale", "perm": "kpi:manage", "desc": "Replace a scale and its levels. Refused once a KPI uses it; withdraws scoring approval.", "reqBody": "{\n  \"name\": \"Digital Maturity v2\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/kpi-scales/:id/scoring", "ctrl": "CatalogController.setScaleScoring", "perm": "kpi:manage", "desc": "Approve or withdraw numerical scoring. Needs a score on every level in steady order; binary scales cannot be scored.", "reqBody": "{\n  \"approved\": true\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/currencies", "ctrl": "CatalogController.listCurrencies", "perm": "Authenticated", "desc": "Currencies, reporting currency first.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/currencies", "ctrl": "CatalogController.createCurrency", "perm": "kpi:manage", "desc": "Create a currency.", "reqBody": "{\n  \"code\": \"USD\",\n  \"name\": \"US Dollar\",\n  \"symbol\": \"$\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/currencies/:id", "ctrl": "CatalogController.updateCurrency", "perm": "kpi:manage", "desc": "Update a currency, or move the reporting currency flag here.", "reqBody": "{\n  \"isReportingCurrency\": true\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/exchange-rates", "ctrl": "CatalogController.listExchangeRates", "perm": "Authenticated", "desc": "Exchange rates, newest first.", "reqBody": "Query: ?fromCurrencyId=&toCurrencyId=", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/exchange-rates", "ctrl": "CatalogController.createExchangeRate", "perm": "kpi:manage", "desc": "Record a rate for a date. Rates are never edited.", "reqBody": "{\n  \"fromCurrencyId\": \"uuid\",\n  \"toCurrencyId\": \"uuid\",\n  \"rate\": 56.5,\n  \"rateDate\": \"2026-11-01\",\n  \"source\": \"National Bank of Ethiopia\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/kpis", "ctrl": "KpiController.listKpis", "perm": "Authenticated", "desc": "Paginated master KPIs with filters and isLocked.", "reqBody": "Query: ?search=&themeId=&strategicObjectiveId=&measurementType=&direction=&isActive=&page=&limit=", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/kpis", "ctrl": "KpiController.createKpi", "perm": "kpi:create", "desc": "Register a KPI, optionally replacing an older one. Required fields depend on measurementType; methods left out get the usual choice for the type.", "reqBody": "{\n  \"code\": \"KPI-RES-001\",\n  \"name\": \"Number of research publications\",\n  \"description\": \"...\",\n  \"themeId\": \"uuid\",\n  \"strategicObjectiveId\": \"uuid\",\n  \"measurementType\": \"NUMBER\",\n  \"unitId\": \"uuid\",\n  \"direction\": \"HIGHER_IS_BETTER\",\n  \"defaultFrequencyId\": \"uuid\",\n  \"dataSource\": \"Research office records\",\n  \"evidenceRequirement\": \"List of publications\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/kpis/:id", "ctrl": "KpiController.getKpiById", "perm": "Authenticated", "desc": "KPI definition with isLocked and the KPIs it replaces or was replaced by.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/kpis/:id", "ctrl": "KpiController.updateKpi", "perm": "kpi:update", "desc": "Update a KPI. Once locked, only isActive, coordinatingOfficeId and defaultFrequencyId can change.", "reqBody": "{\n  \"isActive\": false\n}", "resBody": "{ \"data\": { ... } }"}]
+        
       },
       {
         id: "mod-05",

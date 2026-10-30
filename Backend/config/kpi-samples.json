@@ -1,0 +1,99 @@
+{
+  "description": "Sample catalog for development and demos, seeded by `npm run seed:kpis`: one KPI per measurement type, taken from the SRS examples. Not the university's official KPI list.",
+  "objectives": [
+    { "code": "SO-RES", "name": "Strengthen research output" },
+    { "code": "SO-EDU", "name": "Improve student success" },
+    { "code": "SO-OPS", "name": "Modernize institutional operations" }
+  ],
+  "themes": [
+    { "code": "RES", "name": "Research", "sortOrder": 1 },
+    { "code": "EDU", "name": "Teaching and Learning", "sortOrder": 2 },
+    { "code": "OPS", "name": "Institutional Efficiency", "sortOrder": 3 }
+  ],
+  "kpis": [
+    {
+      "code": "SAMPLE-NUM-01",
+      "name": "Number of research publications",
+      "description": "Peer-reviewed publications produced in the period.",
+      "theme": "RES",
+      "objective": "SO-RES",
+      "measurementType": "NUMBER",
+      "unit": "Count",
+      "direction": "HIGHER_IS_BETTER",
+      "frequency": "Quarterly",
+      "dataSource": "Research office publication records",
+      "evidenceRequirement": "List of publications with citations"
+    },
+    {
+      "code": "SAMPLE-PCT-01",
+      "name": "Student pass rate",
+      "description": "Share of assessed students who passed.",
+      "theme": "EDU",
+      "objective": "SO-EDU",
+      "measurementType": "PERCENTAGE",
+      "unit": "Percent",
+      "numeratorLabel": "Students passed",
+      "denominatorLabel": "Students assessed",
+      "direction": "HIGHER_IS_BETTER",
+      "frequency": "Semi-annual",
+      "dataSource": "Registrar records",
+      "evidenceRequirement": "Official assessment results"
+    },
+    {
+      "code": "SAMPLE-RAT-01",
+      "name": "Student-to-teacher ratio",
+      "description": "Students per teacher, reduced as the objective.",
+      "theme": "EDU",
+      "objective": "SO-EDU",
+      "measurementType": "RATIO",
+      "unit": "Ratio",
+      "numeratorLabel": "Students",
+      "denominatorLabel": "Teachers",
+      "direction": "LOWER_IS_BETTER",
+      "frequency": "Annual",
+      "periodRollupMethod": "LATEST",
+      "dataSource": "Registrar and HR records",
+      "evidenceRequirement": "Enrollment and staffing reports"
+    },
+    {
+      "code": "SAMPLE-STG-01",
+      "name": "Digital transformation maturity",
+      "description": "Maturity stage reached in digital transformation.",
+      "theme": "OPS",
+      "objective": "SO-OPS",
+      "measurementType": "STAGE",
+      "scale": "Maturity Stages",
+      "direction": "HIGHER_IS_BETTER",
+      "frequency": "Annual",
+      "dataSource": "ICT directorate assessment",
+      "evidenceRequirement": "Maturity assessment report"
+    },
+    {
+      "code": "SAMPLE-CAT-01",
+      "name": "Quality audit rating",
+      "description": "Rating given by the internal quality audit.",
+      "theme": "OPS",
+      "objective": "SO-OPS",
+      "measurementType": "CATEGORY",
+      "scale": "Quality Rating",
+      "direction": "HIGHER_IS_BETTER",
+      "frequency": "Annual",
+      "dataSource": "Quality assurance office",
+      "evidenceRequirement": "Signed audit report"
+    },
+    {
+      "code": "SAMPLE-MON-01",
+      "name": "Research income generated",
+      "description": "Research income received in the period.",
+      "theme": "RES",
+      "objective": "SO-RES",
+      "measurementType": "MONEY",
+      "unit": "Birr",
+      "currency": "ETB",
+      "direction": "HIGHER_IS_BETTER",
+      "frequency": "Quarterly",
+      "dataSource": "Finance office statements",
+      "evidenceRequirement": "Approved financial statement"
+    }
+  ]
+}

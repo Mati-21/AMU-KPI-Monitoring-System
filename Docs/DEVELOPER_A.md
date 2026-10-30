@@ -213,46 +213,19 @@ Tell Developer B: role seeding is ready, and scoped checks work through `actor.a
 
 ## 6. Day 3 — Module 04: Strategic KPI Catalog
 
-**Files:** `modules/04-kpi-catalog/kpi.service.js`, `scripts/seedKpis.js`
-**Permissions:** `kpi:manage`, `kpi:create`, `kpi:update`
+> ✅ **Implemented** against the new ERD in `modules/04-kpi-catalog/`: `fiscalYear.service.js`, `catalog.service.js`,
+> `kpi.service.js`. Routes are listed in `MODULES_SPECIFICATION.html`.
 
-### Task 3.1 — Fiscal years
-- `listFiscalYears()`: ordered by `startDate` descending, with counts of cycles and targets.
-- `createFiscalYear({ label, startDate, endDate })`:
-  - All fields required; `startDate < endDate`; `label` unique (409).
-  - The date range must not overlap an existing fiscal year (409).
-  - New years start as `planned`.
-- `activateFiscalYear(id)`: in a single transaction, set the current `active` year to `closed` and the target year to
-  `active`. A `closed` year cannot be re-activated (409). Developer B relies on **exactly one active year**.
-- Audit `FISCAL_YEAR_CREATED` and `FISCAL_YEAR_ACTIVATED`.
-
-### Task 3.2 — Strategic themes
-- `getThemeTree()`: one query, built in memory into nested themes with `kpiCount` (active KPIs), sorted by
-  `sortOrder` then `name`.
-- `createTheme({ name, code, parentThemeId, sortOrder })`: `name` required; the parent must exist and be active;
-  `code` unique among siblings (409); depth limited to 2 levels (pillar → sub-theme).
-- Audit `KPI_THEME_CREATED`.
-
-### Task 3.3 — Master KPIs
-- `listKpis({ search, kpiThemeId, direction, isActive })`: with the theme `{ id, name, code }`, ordered by theme then
-  `sortOrder`; `search` matches name or code.
-- `getKpiById(id)`: KPI + theme + parent theme + target count. 404 if missing.
-- `createKpi(data)`:
-  - Required: `kpiThemeId` (existing and active), `code` (upper-cased, unique), `name`, `unitOfMeasure`.
-  - Enums: `direction` ∈ `higher_is_better | lower_is_better`; `cascadeMode` ∈ `split | replicate | aggregate`.
-  - `maxOverAllocationPercent` must be 0–100 when given.
-- `updateKpi(id, data)`: `code` is immutable. Once the KPI has targets, `direction` and `cascadeMode` are locked
-  (409) because Developer B's scoring and cascading depend on them. Retire with `isActive: false`.
-- Audit `KPI_CREATED` and `KPI_UPDATED`.
-
-### Task 3.4 — KPI seed
-Fill in `scripts/seedKpis.js` (idempotent upserts):
-- one fiscal year (e.g. `2018 E.C.`, activated);
-- 4 pillars: Academic Excellence, Research & Innovation, Community Engagement, Institutional Capacity;
-- 2–3 KPIs per pillar, mixing directions and cascade modes, e.g. graduation rate (%, higher, split) and student
-  dropout rate (%, lower, replicate).
-
-**Done when:** `npm run seed:kpis` runs twice without errors and `GET /kpi-themes` shows the pillars with KPI counts.
+- **Fiscal years:** PLANNING, ACTIVE, CLOSED. Closing needs a reason and makes the year read-only; only a Super Admin can
+  reopen it, also with a reason. Every module
+  that writes year data must call `assertFiscalYearOpen(fiscalYearId)` first.
+- **Catalog:** strategic objectives, themes, units, reporting frequencies, stage and category scales, currencies,
+  exchange rates.
+- **Locks:** a scale locks once a KPI uses it. A KPI locks once it has an assignment that is not cancelled or rejected;
+  after that only `isActive`, `coordinatingOfficeId` and `defaultFrequencyId` can change. A real change means a new KPI
+  with `replacesKpiId`, which retires the old one.
+- **Validation:** `validateDefinition` in `kpi.service.js` applies the rules per measurement type.
+- **Seed:** `npm run seed:kpis` adds sample KPIs from `config/kpi-samples.json`, one per measurement type.
 
 ### End of Day 3 — handoff
 Tell Developer B: fiscal years and KPIs are ready, so target cascading (05) and cycles (06) can start against real data.

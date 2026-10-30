@@ -42,6 +42,24 @@ export const parseUuid = (value, field, { required = true } = {}) => {
 };
 
 /**
+ * Optional number from a body. With { required: true } a missing value is refused.
+ */
+export const parseNumber = (value, field, { required = false, integer = false } = {}) => {
+  if (value === undefined || value === null || value === '') {
+    if (required) throw badRequest(`${field} is required`);
+    return undefined;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw badRequest(`${field} must be a number`);
+  if (integer && !Number.isInteger(value)) throw badRequest(`${field} must be a whole number`);
+  return value;
+};
+
+export const parseEnum = (value, field, allowed) => {
+  if (!allowed.includes(value)) throw badRequest(`${field} must be one of: ${allowed.join(', ')}`);
+  return value;
+};
+
+/**
  * Body boolean: must be a real boolean when provided.
  */
 export const parseBoolean = (value, field) => {
@@ -74,4 +92,4 @@ export const parseDate = (value, field, { required = true } = {}) => {
   return date;
 };
 
-export default { requireString, optionalString, parseIntId, parseUuid, parseBoolean, parseBooleanQuery, parseDate };
+export default { requireString, optionalString, parseIntId, parseUuid, parseNumber, parseEnum, parseBoolean, parseBooleanQuery, parseDate };

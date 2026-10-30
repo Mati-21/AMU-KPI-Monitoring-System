@@ -64,12 +64,12 @@
       "resources": [
         {
           "resource": "kpi",
-          "label": "Fiscal years, strategic themes & master KPIs",
-          "covers": ["FiscalYear", "KpiTheme", "Kpi"],
+          "label": "Fiscal years, KPI catalog & master KPIs",
+          "covers": ["FiscalYear", "StrategicObjective", "KpiTheme", "MeasurementUnit", "ReportingFrequency", "KpiScale", "Currency", "ExchangeRate", "Kpi"],
           "permissions": [
             { "action": "create", "description": "Register master KPIs" },
-            { "action": "update", "description": "Edit or retire master KPIs" },
-            { "action": "manage", "description": "Manage fiscal years (create, activate) and strategic themes" }
+            { "action": "update", "description": "Edit or retire master KPIs (only a few fields once a KPI is in use)" },
+            { "action": "manage", "description": "Manage fiscal years (create, activate, close; reopening is Super Admin only), strategic objectives, themes, units, frequencies, scales, currencies and exchange rates" }
           ]
         }
       ]
