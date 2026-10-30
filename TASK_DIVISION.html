@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (117 REST routes under <code>/api/v1</code>, 33 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (135 REST routes under <code>/api/v1</code>, 41 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -772,7 +772,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">73%</div>
+            <div class="dev-stat-value">63%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -797,11 +797,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">32</div>
+            <div class="dev-stat-value">50</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">27%</div>
+            <div class="dev-stat-value">37%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -1299,33 +1299,59 @@
     </div>
 
     <!-- MODULE 05 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="target cascade allocation split decomposition tree weight baseline">
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="contract assignment cascade baseline target weight allocation reconciliation change request">
       <div class="module-card-header">
         <div class="module-title-box">
-          <div class="module-index">Module 05 &bull; Backend/modules/05-target-cascading</div>
-          <div class="module-title">🎯 Target Cascading &amp; Allocation Module</div>
-          <div class="module-desc">Handles institutional goal cascading down the organizational hierarchy. A top-level target set for the University is decomposed into child targets for Colleges, which in turn are cascaded to Departments and individuals. Supports split math verification, baseline setting, and target tree visualization.</div>
+          <div class="module-index">Module 05 &bull; Backend/modules/05-contract-cascading</div>
+          <div class="module-title">🎯 Contracts &amp; KPI Cascading</div>
+          <div class="module-desc">Carries KPIs down the hierarchy. Each office has one contract per year with the office above, which sets its official baseline, target and weight. Offices record how they split responsibility, and differences are flagged, not corrected. Approved values change only through a change request, which adds a new version, so history stays traceable.</div>
         </div>
         <span class="assigned-badge badge-dev-b">Developer B</span>
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (7)</div>
+          <div class="section-title">Backend Endpoints (25)</div>
           <div class="chip-list">
-            <span class="chip chip-endpoint">GET /api/v1/kpi-targets · target:read</span>
-            <span class="chip chip-endpoint">GET /api/v1/kpi-targets/tree · target:read</span>
-            <span class="chip chip-endpoint">POST /api/v1/kpi-targets · target:create</span>
-            <span class="chip chip-endpoint">POST /api/v1/kpi-targets/:parentTargetId/cascade · target:cascade</span>
-            <span class="chip chip-endpoint">PUT /api/v1/kpi-targets/:id · target:update</span>
-            <span class="chip chip-endpoint">PATCH /api/v1/kpi-targets/:id/status · target:assign</span>
-            <span class="chip chip-endpoint">GET /api/v1/kpi-targets/my-targets · Authenticated</span>
+            <span class="chip chip-endpoint">GET /api/v1/contracts · contract:read</span>
+            <span class="chip chip-endpoint">POST /api/v1/contracts · contract:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/contracts/:id · contract:read</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/contracts/:id/submit · contract:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/contracts/:id/approve · contract:approve</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/contracts/:id/reject · contract:approve</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/contracts/:id/sign · contract:acknowledge</span>
+            <span class="chip chip-endpoint">POST /api/v1/contracts/:id/assignments · contract:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/assignments/tree · contract:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/assignments/:id · contract:read</span>
+            <span class="chip chip-endpoint">PUT /api/v1/assignments/:id · contract:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/submit · contract:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/approve · contract:approve</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/reject · contract:approve</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/acknowledge · contract:acknowledge</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/cancel · contract:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/baseline/verify · contract:approve</span>
+            <span class="chip chip-endpoint">POST /api/v1/assignments/:id/baseline/evidence · contract:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/assignments/:id/allocations · contract:read</span>
+            <span class="chip chip-endpoint">PUT /api/v1/assignments/:id/allocations · contract:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/assignments/:id/reconciliation · contract:manage</span>
+            <span class="chip chip-endpoint">POST /api/v1/assignments/:id/change-requests · contract:request_change or contract:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/change-requests · contract:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/change-requests/:id · contract:read</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/change-requests/:id/review · contract:approve</span>
           </div>
         </div>
 
         <div>
           <div class="section-title">Prisma Models</div>
           <div class="chip-list">
+            <span class="chip chip-model">PerformanceContract</span>
+            <span class="chip chip-model">KpiAssignment</span>
+            <span class="chip chip-model">KpiWeight</span>
+            <span class="chip chip-model">KpiBaseline</span>
             <span class="chip chip-model">KpiTarget</span>
+            <span class="chip chip-model">ResponsibilityAllocation</span>
+            <span class="chip chip-model">AssignmentChangeRequest</span>
+            <span class="chip chip-model">BaselineEvidence</span>
+            <span class="chip chip-model">ChangeRequestEvidence</span>
           </div>
         </div>
 
@@ -1343,23 +1369,23 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>Routes, Swagger docs and permission guards wired (target:read / create / cascade / update / assign)</span>
+              <span>Contracts: one per office per year, assigning office from the hierarchy, submit / approve / sign</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Root institutional targets per fiscal year and KPI</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Assignments with measurement-specific baselines and targets, weights, approval and acknowledgement</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Cascade engine: split / replicate / aggregate with maxOverAllocationPercent cap, scoped to the caller's offices</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Responsibility split with reconciliation flags; differences are justified, never auto-corrected</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Target tree and my-targets (primary office) queries; status workflow draft → assigned → accepted</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Change requests with evidence: approval adds versions and keeps the old values</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1686,7 +1712,7 @@
       </div>
       <div style="display: flex; gap: 0.75rem;">
         <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
-        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 32 Endpoints</span>
+        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 50 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1743,11 +1769,11 @@
             <td>Both developers call logActivity() from their services so every state change lands in the audit trail.</td>
           </tr>
           <tr>
-            <td><strong>05. Target Cascading &amp; Allocation Module</strong></td>
+            <td><strong>05. Contracts &amp; KPI Cascading</strong></td>
             <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
-            <td><code>modules/05-target-cascading</code></td>
-            <td>KpiTarget</td>
-            <td>7</td>
+            <td><code>modules/05-contract-cascading</code></td>
+            <td>PerformanceContract, KpiAssignment, KpiWeight, KpiBaseline, KpiTarget, ResponsibilityAllocation, AssignmentChangeRequest, BaselineEvidence, ChangeRequestEvidence</td>
+            <td>25</td>
             <td>Needs offices (02), scoped access (03) and KPIs / fiscal years (04).</td>
           </tr>
           <tr>

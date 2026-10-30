@@ -53,7 +53,7 @@ const TAG_ORDER = [
   'Offices',
   'Access Control',
   'KPI Catalog',
-  'Target Cascading',
+  'Contracts & Cascading',
   'Evaluation Cycles',
   'Performance Scoring',
   'Evidence & Documents',

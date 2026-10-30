@@ -33,6 +33,8 @@
         { "key": "max_score_percent", "label": "Maximum score", "type": "number", "default": 100, "min": 100, "max": 200, "integer": true, "public": false, "description": "Highest official achievement score when overachievement is capped" },
         { "key": "contract_total_weight", "label": "Contract total weight", "type": "number", "default": 100, "min": 1, "max": 100, "public": false, "description": "Default total the KPI weights of a new performance contract must reach" },
         { "key": "missing_result_policy", "label": "Missing results", "type": "enum", "options": ["PENDING", "AUTO_FILL_ZERO"], "default": "PENDING", "public": false, "description": "PENDING leaves a missing result unscored and the total provisional. AUTO_FILL_ZERO records 0 and marks the row as auto-filled" },
+        { "key": "require_baseline_verification", "label": "Verify baselines before approval", "type": "boolean", "default": true, "public": false, "description": "A known baseline must be verified before its assignment can be approved" },
+        { "key": "require_separate_approver", "label": "Separate approver", "type": "boolean", "default": false, "public": false, "description": "The person who prepared an assignment or change request cannot also approve it" },
         { "key": "default_max_over_allocation_percent", "label": "Default over-allocation cap", "type": "number", "default": 10, "min": 0, "max": 100, "public": false, "description": "Default over-allocation cap for new KPI assignments when cascading" }
       ]
     },

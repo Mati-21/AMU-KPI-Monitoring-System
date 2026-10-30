@@ -7,7 +7,7 @@ import personRoutes from './01-identity-access/person/person.routes.js';
 import officeRoutes from './02-office-hierarchy/office.routes.js';
 import roleRoutes from './03-access-control/role.routes.js';
 import kpiRoutes from './04-kpi-catalog/kpi.routes.js';
-import targetRoutes from './05-target-cascading/target.routes.js';
+import contractRoutes from './05-contract-cascading/contract.routes.js';
 import cycleRoutes from './06-evaluation-cycles/cycle.routes.js';
 import evaluationRoutes from './07-performance-scoring/evaluation.routes.js';
 import evidenceRoutes from './08-evidence-documents/evidence.routes.js';
@@ -16,7 +16,7 @@ import systemRoutes from './10-system-governance/system.routes.js';
 
 /**
  * API v1 router. Each module router declares its own resource paths exactly as listed in
- * MODULES_SPECIFICATION.html (e.g. /persons, /kpi-targets, /cycle-reports), so they are all mounted at the root.
+ * MODULES_SPECIFICATION.html (e.g. /persons, /contracts, /cycle-reports), so they are all mounted at the root.
  */
 const router = Router();
 
@@ -34,7 +34,7 @@ router.use(personRoutes); // 01 /persons, /users/:id/*
 router.use(officeRoutes); // 02 /office-types, /offices
 router.use(roleRoutes); // 03 /roles, /permissions, /office-persons, /office-person-roles, /auth/check-permission
 router.use(kpiRoutes); // 04 /fiscal-years, /strategic-objectives, /kpi-themes, /measurement-units, /reporting-frequencies, /kpi-scales, /currencies, /exchange-rates, /kpis
-router.use(targetRoutes); // 05 /kpi-targets
+router.use(contractRoutes); // 05 /contracts, /assignments, /change-requests
 router.use(cycleRoutes); // 06 /eval-cycles, /cycle-reports
 router.use(evaluationRoutes); // 07 /kpi-evaluations, /performance
 router.use(evidenceRoutes); // 08 /files, /document-types, /documents, /evidence, /document-links

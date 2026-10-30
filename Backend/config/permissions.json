@@ -76,18 +76,18 @@
     },
     {
       "module": "05",
-      "name": "Target Cascading",
+      "name": "Contracts & Cascading",
       "resources": [
         {
-          "resource": "target",
-          "label": "KPI targets and their cascade tree",
-          "covers": ["KpiTarget"],
+          "resource": "contract",
+          "label": "Performance contracts and KPI assignments",
+          "covers": ["PerformanceContract", "KpiAssignment", "KpiWeight", "KpiBaseline", "KpiTarget", "ResponsibilityAllocation", "AssignmentChangeRequest"],
           "permissions": [
-            { "action": "read", "description": "View targets and the target decomposition tree" },
-            { "action": "create", "description": "Set top-level institutional targets" },
-            { "action": "update", "description": "Edit draft target values, baselines and weights" },
-            { "action": "assign", "description": "Move targets through their status workflow (draft, assigned, accepted)" },
-            { "action": "cascade", "description": "Split a parent target into child targets for sub-offices or persons" }
+            { "action": "read", "description": "View contracts, assignments, baselines, targets, weights and change requests in scope" },
+            { "action": "manage", "description": "Create contracts for subordinate offices, assign KPIs, set baselines, targets and weights, distribute responsibility" },
+            { "action": "approve", "description": "Approve or reject contracts and assignments, verify baselines, review change requests" },
+            { "action": "acknowledge", "description": "Acknowledge assignments and sign contracts for the receiving office" },
+            { "action": "request_change", "description": "Ask for clarification or request a correction of an approved assignment" }
           ]
         }
       ]

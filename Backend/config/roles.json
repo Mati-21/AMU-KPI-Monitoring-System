@@ -10,9 +10,10 @@
       ],
       "typicalScope": "university",
       "permissions": [
+        "contract:read",
+        "contract:approve",
         "dashboard:read",
         "scorecard:read",
-        "target:read",
         "report:read",
         "report:review",
         "evaluation:read",
@@ -22,15 +23,15 @@
     },
     {
       "name": "Strategy Officer",
-      "description": "Owns strategic planning: KPI catalog, fiscal years, institutional targets and evaluation cycles.",
+      "description": "Owns strategic planning: KPI catalog, fiscal years, contracts and reporting periods.",
       "typicalPositions": [
         "Strategy & Planning Director",
         "Planning Officer"
       ],
       "typicalScope": "university",
       "permissions": [
+        "contract:*",
         "kpi:*",
-        "target:*",
         "cycle:manage",
         "report:read",
         "evaluation:read",
@@ -58,20 +59,22 @@
     },
     {
       "name": "College Leadership",
-      "description": "Leads a college or directorate: cascades targets, reviews and verifies its units' performance, assigns department roles.",
+      "description": "Leads a college or directorate: assigns KPIs to subordinate offices, reviews and verifies its units' performance, assigns department roles.",
       "typicalPositions": [
         "Dean",
         "Directorate Director"
       ],
       "typicalScope": "office",
       "permissions": [
+        "contract:read",
+        "contract:manage",
+        "contract:approve",
+        "contract:acknowledge",
+        "contract:request_change",
         "user:read",
         "office:assign",
         "role:read",
         "role:assign",
-        "target:read",
-        "target:assign",
-        "target:cascade",
         "report:*",
         "evaluation:*",
         "scorecard:read",
@@ -83,17 +86,19 @@
     },
     {
       "name": "Department Leadership",
-      "description": "Leads a department or unit: assigns targets to staff, prepares and submits the office report.",
+      "description": "Leads a department or unit: assigns KPIs to subordinate units, prepares and submits the office report.",
       "typicalPositions": [
         "Department Head",
         "Unit Head"
       ],
       "typicalScope": "office",
       "permissions": [
+        "contract:read",
+        "contract:manage",
+        "contract:approve",
+        "contract:acknowledge",
+        "contract:request_change",
         "user:read",
-        "target:read",
-        "target:assign",
-        "target:cascade",
         "report:create",
         "report:read",
         "report:submit",
@@ -115,7 +120,7 @@
       ],
       "typicalScope": "office",
       "permissions": [
-        "target:read",
+        "contract:read",
         "evaluation:read",
         "evaluation:write",
         "file:*",
@@ -131,10 +136,10 @@
       ],
       "typicalScope": "university",
       "permissions": [
+        "contract:read",
         "audit:read",
         "dashboard:read",
         "scorecard:read",
-        "target:read",
         "report:read",
         "evaluation:read",
         "evidence:read",

@@ -665,6 +665,7 @@ model PerformanceContract {
   signedAt            DateTime?      @map("signed_at") @db.Timestamptz(6)
   approvedByPersonId  String?        @map("approved_by_person_id") @db.Uuid
   approvedAt          DateTime?      @map("approved_at") @db.Timestamptz(6)
+  reviewComment       String?        @map("review_comment")
   createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
   fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
@@ -701,6 +702,7 @@ model KpiAssignment {
   approvedAt               DateTime?            @map("approved_at") @db.Timestamptz(6)
   acknowledgedByPersonId   String?              @map("acknowledged_by_person_id") @db.Uuid
   acknowledgedAt           DateTime?            @map("acknowledged_at") @db.Timestamptz(6)
+  reviewComment            String?              @map("review_comment")
 
   contract           PerformanceContract @relation(fields: [contractId], references: [id])
   kpi                Kpi                 @relation(fields: [kpiId], references: [id])
