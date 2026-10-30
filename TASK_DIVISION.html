@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (136 REST routes under <code>/api/v1</code>, 40 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (143 REST routes under <code>/api/v1</code>, 40 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -772,7 +772,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">63%</div>
+            <div class="dev-stat-value">59%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -797,11 +797,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">51</div>
+            <div class="dev-stat-value">58</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">38%</div>
+            <div class="dev-stat-value">41%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -1544,36 +1544,43 @@
     </div>
 
     <!-- MODULE 08 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="evidence file upload document link proof download confidential">
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="evidence file upload document proof download verify logo">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 08 &bull; Backend/modules/08-evidence-documents</div>
           <div class="module-title">📑 Document Management &amp; Evidence Linking</div>
-          <div class="module-desc">Robust repository for evidence verification. Handles physical file storage (checksum, size, mimeType), allowed document types and size limits, document confidentiality flags, and polymorphic entity linking (DocumentLink) connecting proof files directly to KPI evaluations or cycle reports.</div>
+          <div class="module-desc">Stores files safely and proves results. Uploads are checked for type, size and real contents, kept outside any public route and downloaded only through permission checks. Offices attach evidence to reported results and the office above verifies it during review.</div>
         </div>
         <span class="assigned-badge badge-dev-b">Developer B</span>
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (7)</div>
+          <div class="section-title">Backend Endpoints (14)</div>
           <div class="chip-list">
-            <span class="chip chip-endpoint">POST /api/v1/files/upload · file:upload</span>
-            <span class="chip chip-endpoint">GET /api/v1/files/:id/download · file:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/files/:id/download · file:read or document:create, checked by scope</span>
+            <span class="chip chip-endpoint">GET /api/v1/files/:id/public · Public</span>
+            <span class="chip chip-endpoint">POST /api/v1/files/logo · settings:manage</span>
             <span class="chip chip-endpoint">GET /api/v1/document-types · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/document-types · document:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/document-types/:id · document:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/documents · file:read</span>
             <span class="chip chip-endpoint">POST /api/v1/documents · document:create</span>
-            <span class="chip chip-endpoint">POST /api/v1/documents/:id/link · evidence:link</span>
-            <span class="chip chip-endpoint">GET /api/v1/evidence/:entityType/:entityId · evidence:read</span>
-            <span class="chip chip-endpoint">DELETE /api/v1/document-links/:id · evidence:link</span>
+            <span class="chip chip-endpoint">GET /api/v1/documents/:id · file:read</span>
+            <span class="chip chip-endpoint">DELETE /api/v1/documents/:id · document:create</span>
+            <span class="chip chip-endpoint">GET /api/v1/performance-values/:id/evidence · evidence:read</span>
+            <span class="chip chip-endpoint">POST /api/v1/performance-values/:id/evidence · evidence:link</span>
+            <span class="chip chip-endpoint">DELETE /api/v1/performance-evidence/:id · evidence:link</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/performance-evidence/:id/verify · evidence:verify</span>
           </div>
         </div>
 
         <div>
           <div class="section-title">Prisma Models</div>
           <div class="chip-list">
-            <span class="chip chip-model">File</span>
+            <span class="chip chip-model">FileUpload</span>
             <span class="chip chip-model">DocumentType</span>
             <span class="chip chip-model">Document</span>
-            <span class="chip chip-model">DocumentLink</span>
+            <span class="chip chip-model">PerformanceEvidence</span>
           </div>
         </div>
 
@@ -1589,23 +1596,23 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>Routes, Swagger docs and permission guards wired (file:*, document:create, evidence:*)</span>
+              <span>Uploads checked for type, size and real contents, with SHA-256 checksum; nothing served directly</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Multer upload with MIME / size limits from DocumentType and SHA-256 checksum</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Scoped, audited downloads; public route only for files behind public settings such as the logo</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Secure download with confidentiality and office-scope checks</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Document types set by the university; documents owned by an office</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Documents and polymorphic links to kpi_evaluation / cycle_report / kpi_target</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Performance evidence: attach while a report can change, verify or reject during review</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1705,7 +1712,7 @@
       </div>
       <div style="display: flex; gap: 0.75rem;">
         <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
-        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 51 Endpoints</span>
+        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 58 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1789,8 +1796,8 @@
             <td><strong>08. Document Management &amp; Evidence Linking</strong></td>
             <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
             <td><code>modules/08-evidence-documents</code></td>
-            <td>File, DocumentType, Document, DocumentLink</td>
-            <td>7</td>
+            <td>FileUpload, DocumentType, Document, PerformanceEvidence</td>
+            <td>14</td>
             <td>Evidence attached to evaluations (07) and report dossiers (06) is what verifiers review before scoring.</td>
           </tr>
           <tr>

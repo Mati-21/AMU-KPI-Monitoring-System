@@ -37,7 +37,7 @@ router.use(kpiRoutes); // 04 /fiscal-years, /strategic-objectives, /kpi-themes, 
 router.use(contractRoutes); // 05 /contracts, /assignments, /change-requests
 router.use(periodRoutes); // 06 /reporting-periods
 router.use(evaluationRoutes); // 07 /kpi-evaluations, /performance
-router.use(evidenceRoutes); // 08 /files, /document-types, /documents, /evidence, /document-links
+router.use(evidenceRoutes); // 08 /files, /document-types, /documents, /performance-values, /performance-evidence
 router.use(notificationRoutes); // 09 /notifications
 router.use(systemRoutes); // 10 /settings, /audit-logs
 

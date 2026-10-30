@@ -1,8 +1,4 @@
 import 'dotenv/config';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 import express from 'express';
 import cors from 'cors';
@@ -10,7 +6,6 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import compression from 'compression';
-import path from 'path';
 import http from 'http';
 import { connectDB } from './config/database.js';
 import errorHandler from './middleware/errorMiddleware.js';
@@ -68,7 +63,6 @@ app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (httpLogMode !== 'off') {
   app.use(morgan(httpLogMode === 'dev' ? 'dev' : 'tiny'));

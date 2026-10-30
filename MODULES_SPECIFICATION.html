@@ -917,7 +917,7 @@
             <span class="stat-label">Prisma Database Models</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #34d399;">136</span>
+            <span class="stat-val" style="color: #34d399;">143</span>
             <span class="stat-label">REST API Routes to Build</span>
           </div>
           <div class="stat-card">
@@ -1727,136 +1727,13 @@
         number: "08",
         category: "platform",
         title: "Document Management & Evidence Linking",
-        tagline: "Binary Storage, Polymorphic Attachment & Compliance",
+        tagline: "Secure Uploads, Document Types & Performance Evidence",
         accent: "var(--acc-teal)",
         icon: "📁",
-        overview: "Robust repository for evidence verification. Handles physical file storage (checksum, size, mimeType), allowed document types and size limits, document confidentiality flags, and polymorphic entity linking (DocumentLink) connecting proof files directly to KPI evaluations or cycle reports.",
-        tables: [
-          {
-            name: "File",
-            map: "file",
-            description: "Physical or cloud binary storage record capturing integrity checksum, size, and mime-type.",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "File ID" },
-              { name: "originalName", type: "String", map: "original_name", constraints: "Required", desc: "Original file name" },
-              { name: "storagePath", type: "String", map: "storage_path", constraints: "Required", desc: "Internal storage directory / key" },
-              { name: "mimeType", type: "String", map: "mime_type", constraints: "Required", desc: "application/pdf, image/png, etc." },
-              { name: "sizeBytes", type: "BigInt", map: "size_bytes", constraints: "Required", desc: "File size in bytes" },
-              { name: "checksum", type: "String?", map: "checksum", constraints: "Optional", desc: "SHA-256 hash for integrity" },
-              { name: "uploadedByPersonId", type: "Uuid?", map: "uploaded_by_person_id", constraints: "FK -> Person, Optional", desc: "Uploader" },
-              { name: "uploadedAt", type: "DateTime", map: "uploaded_at", constraints: "@default(now())", desc: "Timestamp" }
-            ],
-            relations: "Has many Document, SystemSetting (branding/logos)."
-          },
-          {
-            name: "DocumentType",
-            map: "document_type",
-            description: "Evidence taxonomy specifying allowed file extensions and max upload size.",
-            fields: [
-              { name: "id", type: "Int", map: "-", constraints: "@id @default(autoincrement())", desc: "Type ID" },
-              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Type name (Publication Proof, MoU, Certificate)" },
-              { name: "code", type: "String", map: "code", constraints: "@unique", desc: "Short code (e.g. DOC_PUB)" },
-              { name: "allowedExtensions", type: "String?", map: "allowed_extensions", constraints: "Optional", desc: "pdf,png,jpg,docx" },
-              { name: "maxSizeMb", type: "Int?", map: "max_size_mb", constraints: "Optional", desc: "Max size ceiling in MB" },
-              { name: "isActive", type: "Boolean", map: "is_active", constraints: "@default(true)", desc: "Active flag" }
-            ],
-            relations: "1:N with Document."
-          },
-          {
-            name: "Document",
-            map: "document",
-            description: "Business document metadata record wrapping a File with title and confidentiality.",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Document ID" },
-              { name: "documentTypeId", type: "Int", map: "document_type_id", constraints: "FK -> DocumentType", desc: "Taxonomy type" },
-              { name: "fileId", type: "Uuid", map: "file_id", constraints: "FK -> File", desc: "Binary file record" },
-              { name: "ownerOfficeId", type: "Uuid?", map: "owner_office_id", constraints: "FK -> Office, Optional", desc: "Owning office" },
-              { name: "uploadedByPersonId", type: "Uuid?", map: "uploaded_by_person_id", constraints: "FK -> Person, Optional", desc: "Person uploader" },
-              { name: "title", type: "String", map: "title", constraints: "Required", desc: "Document title" },
-              { name: "description", type: "String?", map: "description", constraints: "Optional", desc: "Summary notes" },
-              { name: "isConfidential", type: "Boolean", map: "is_confidential", constraints: "@default(false)", desc: "Restricts access to authorized roles" },
-              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Creation timestamp" }
-            ],
-            relations: "Belongs to DocumentType, File, Office, Person; Has many DocumentLink."
-          },
-          {
-            name: "DocumentLink",
-            map: "document_link",
-            description: "Polymorphic link joining a Document to any system entity (e.g. kpi_evaluation, cycle_report, kpi_target).",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Link ID" },
-              { name: "documentId", type: "Uuid", map: "document_id", constraints: "FK -> Document", desc: "Target document (onDelete: Cascade)" },
-              { name: "entityType", type: "String", map: "entity_type", constraints: "Required", desc: "kpi_evaluation, cycle_report, kpi_target" },
-              { name: "entityId", type: "Uuid", map: "entity_id", constraints: "Required", desc: "UUID of the associated record" }
-            ],
-            relations: "Unique on [documentId, entityType, entityId]; Indexed on [entityType, entityId]."
-          }
-        ],
-        routes: [
-          {
-            method: "POST",
-            path: "/api/v1/files/upload",
-            ctrl: "FileController.upload",
-            perm: "file:upload",
-            desc: "Multipart form upload saving binary payload, calculating checksum, and registering File record.",
-            reqBody: "Form-Data: file=@proof_pub.pdf",
-            resBody: '{\n  "fileId": "file-uuid",\n  "originalName": "proof_pub.pdf",\n  "sizeBytes": 204850\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/files/:id/download",
-            ctrl: "FileController.download",
-            perm: "file:read",
-            desc: "Securely streams binary file with permission and confidentiality checks.",
-            reqBody: "Param: id (UUID)",
-            resBody: "Binary Stream (Content-Type: application/pdf)"
-          },
-          {
-            method: "GET",
-            path: "/api/v1/document-types",
-            ctrl: "DocumentTypeController.getAll",
-            perm: "Authenticated",
-            desc: "List acceptable evidence document types and upload constraints.",
-            reqBody: "-",
-            resBody: '[{ "id": 1, "name": "Published Journal Paper", "allowedExtensions": "pdf", "maxSizeMb": 10 }]'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/documents",
-            ctrl: "DocumentController.createDocument",
-            perm: "document:create",
-            desc: "Registers document metadata wrapping an uploaded file.",
-            reqBody: '{\n  "fileId": "file-uuid",\n  "documentTypeId": 1,\n  "title": "IEEE Journal Paper DOI:10.1109/...",\n  "ownerOfficeId": "dept-cs-uuid",\n  "isConfidential": false\n}',
-            resBody: '{\n  "id": "doc-uuid",\n  "title": "IEEE Journal Paper..."\n}'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/documents/:id/link",
-            ctrl: "DocumentController.linkEvidence",
-            perm: "evidence:link",
-            desc: "Polymorphically attaches a document to a KPI evaluation or cycle report as proof.",
-            reqBody: '{\n  "entityType": "kpi_evaluation",\n  "entityId": "ev-uuid"\n}',
-            resBody: '{\n  "message": "Document linked as evidence"\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/evidence/:entityType/:entityId",
-            ctrl: "DocumentController.getLinkedEvidence",
-            perm: "evidence:read",
-            desc: "Retrieve all evidence documents attached to a given entity (e.g. kpi_evaluation).",
-            reqBody: "Params: entityType=kpi_evaluation, entityId=ev-uuid",
-            resBody: '[{ "id": "doc-uuid", "title": "Journal Paper", "file": { "originalName": "paper.pdf" } }]'
-          },
-          {
-            method: "DELETE",
-            path: "/api/v1/document-links/:id",
-            ctrl: "DocumentController.unlinkEvidence",
-            perm: "evidence:link",
-            desc: "Removes attachment link between document and entity.",
-            reqBody: "Param: id (UUID)",
-            resBody: '{\n  "message": "Evidence link removed"\n}'
-          }
-        ]
+        overview: "Stores files safely and proves results. Uploads are checked for type, size and real contents, kept outside any public route and downloaded only through permission checks. Offices attach evidence to reported results and the office above verifies it during review.",
+        tables: [{"name": "FileUpload", "map": "file_upload", "description": "A stored file with its checksum. Never served directly.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "originalName", "type": "String", "map": "original_name", "constraints": "Required", "desc": "Original name"}, {"name": "storedPath", "type": "String", "map": "stored_path", "constraints": "Required", "desc": "Stored path"}, {"name": "mimeType", "type": "String", "map": "mime_type", "constraints": "Required", "desc": "Mime type"}, {"name": "sizeBytes", "type": "BigInt", "map": "size_bytes", "constraints": "Required", "desc": "Size bytes"}, {"name": "checksum", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Checksum"}, {"name": "uploadedByPersonId", "type": "String?", "map": "uploaded_by_person_id", "constraints": "@db.Uuid", "desc": "Uploaded by person id"}, {"name": "uploadedAt", "type": "DateTime", "map": "uploaded_at", "constraints": "@default(now()) @db.Timestamptz(6)", "desc": "Uploaded at"}], "relations": "Has many Document, SystemSetting."}, {"name": "DocumentType", "map": "document_type", "description": "What the university accepts: allowed file types and size limit.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "name", "type": "String", "map": "-", "constraints": "@unique", "desc": "Name"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "allowedExtensions", "type": "String?", "map": "allowed_extensions", "constraints": "Optional", "desc": "Allowed extensions"}, {"name": "maxSizeMb", "type": "Int?", "map": "max_size_mb", "constraints": "Optional", "desc": "Max size mb"}, {"name": "isActive", "type": "Boolean", "map": "is_active", "constraints": "@default(true)", "desc": "Is active"}], "relations": "Has many Document."}, {"name": "Document", "map": "document", "description": "An uploaded file with a title, owned by an office.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "documentTypeId", "type": "String", "map": "document_type_id", "constraints": "@db.Uuid", "desc": "Document type id"}, {"name": "fileId", "type": "String", "map": "file_id", "constraints": "@db.Uuid", "desc": "File id"}, {"name": "ownerOfficeId", "type": "String?", "map": "owner_office_id", "constraints": "@db.Uuid", "desc": "Owner office id"}, {"name": "title", "type": "String", "map": "-", "constraints": "Required", "desc": "Title"}, {"name": "description", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Description"}, {"name": "createdByPersonId", "type": "String?", "map": "created_by_person_id", "constraints": "@db.Uuid", "desc": "Created by person id"}, {"name": "createdAt", "type": "DateTime", "map": "created_at", "constraints": "@default(now()) @db.Timestamptz(6)", "desc": "Created at"}], "relations": "Belongs to DocumentType, FileUpload, Office; used by BaselineEvidence, PerformanceEvidence, ChangeRequestEvidence."}, {"name": "PerformanceEvidence", "map": "performance_evidence", "description": "A document supporting a reported result, with its verification status.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "performanceValueId", "type": "String", "map": "performance_value_id", "constraints": "@db.Uuid", "desc": "Performance value id"}, {"name": "documentId", "type": "String", "map": "document_id", "constraints": "@db.Uuid", "desc": "Document id"}, {"name": "verificationStatus", "type": "VerificationStatus", "map": "verification_status", "constraints": "@default(PENDING)", "desc": "Verification status"}, {"name": "verifiedByPersonId", "type": "String?", "map": "verified_by_person_id", "constraints": "@db.Uuid", "desc": "Verified by person id"}, {"name": "verifiedAt", "type": "DateTime?", "map": "verified_at", "constraints": "@db.Timestamptz(6)", "desc": "Verified at"}, {"name": "comment", "type": "String?", "map": "-", "constraints": "Optional", "desc": "Comment"}, {"name": "createdAt", "type": "DateTime", "map": "created_at", "constraints": "@default(now()) @db.Timestamptz(6)", "desc": "Created at"}], "relations": "Links PerformanceValue and Document."}],
+        routes: [{"method": "GET", "path": "/api/v1/files/:id/download", "ctrl": "EvidenceController.downloadFile", "perm": "file:read or document:create, checked by scope", "desc": "Download a file. Needs file:read over an office that owns or uses it, or having uploaded it. Audited.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/files/:id/public", "ctrl": "EvidenceController.getPublicFile", "perm": "Public", "desc": "A file that a public setting points at, such as the logo. Anything else answers 404.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/files/logo", "ctrl": "EvidenceController.uploadLogo", "perm": "settings:manage", "desc": "Upload the logo (png, jpg, webp, up to 5 MB) and set branding.logo.", "reqBody": "multipart: file", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/document-types", "ctrl": "EvidenceController.listDocumentTypes", "perm": "Authenticated", "desc": "Document types with allowed file types and size limits.", "reqBody": "Query: ?isActive=true", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/document-types", "ctrl": "EvidenceController.createDocumentType", "perm": "document:manage", "desc": "Create a document type.", "reqBody": "{\n  \"name\": \"Financial Statement\",\n  \"allowedExtensions\": \"pdf,xlsx\",\n  \"maxSizeMb\": 25\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/document-types/:id", "ctrl": "EvidenceController.updateDocumentType", "perm": "document:manage", "desc": "Update or retire a document type.", "reqBody": "{\n  \"isActive\": false\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/documents", "ctrl": "EvidenceController.listDocuments", "perm": "file:read", "desc": "Documents of offices in scope, and those you uploaded.", "reqBody": "Query: ?ownerOfficeId=&documentTypeId=", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/documents", "ctrl": "EvidenceController.createDocument", "perm": "document:create", "desc": "Upload a file and describe it. Type, size and real contents are checked.", "reqBody": "multipart: file, documentTypeId, ownerOfficeId, title, description", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/documents/:id", "ctrl": "EvidenceController.getDocumentById", "perm": "file:read", "desc": "One document.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "DELETE", "path": "/api/v1/documents/:id", "ctrl": "EvidenceController.deleteDocument", "perm": "document:create", "desc": "Delete a document and its file, unless it is used as evidence.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/performance-values/:id/evidence", "ctrl": "EvidenceController.listEvidence", "perm": "evidence:read", "desc": "Evidence behind a reported result.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/performance-values/:id/evidence", "ctrl": "EvidenceController.attachEvidence", "perm": "evidence:link", "desc": "Attach a document of the reporting office while the report can still change.", "reqBody": "{\n  \"documentId\": \"uuid\",\n  \"comment\": \"...\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "DELETE", "path": "/api/v1/performance-evidence/:id", "ctrl": "EvidenceController.removeEvidence", "perm": "evidence:link", "desc": "Remove evidence while the report can still change.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/performance-evidence/:id/verify", "ctrl": "EvidenceController.verifyEvidence", "perm": "evidence:verify", "desc": "Verify or reject evidence during review. A rejection needs a comment.", "reqBody": "{\n  \"status\": \"VERIFIED\"\n}", "resBody": "{ \"data\": { ... } }"}]
+        
       },
       {
         id: "mod-09",

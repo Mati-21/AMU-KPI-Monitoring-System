@@ -156,10 +156,9 @@
         {
           "resource": "file",
           "label": "Stored files",
-          "covers": ["File"],
+          "covers": ["FileUpload"],
           "permissions": [
-            { "action": "upload", "description": "Upload files" },
-            { "action": "read", "description": "Download files (subject to confidentiality checks)" }
+            { "action": "read", "description": "List documents and download files of offices in scope" }
           ]
         },
         {
@@ -167,16 +166,18 @@
           "label": "Documents",
           "covers": ["Document", "DocumentType"],
           "permissions": [
-            { "action": "create", "description": "Register document metadata for uploaded files" }
+            { "action": "create", "description": "Upload and delete documents for offices in scope" },
+            { "action": "manage", "description": "Manage document types: allowed file types and size limits" }
           ]
         },
         {
           "resource": "evidence",
-          "label": "Evidence links",
-          "covers": ["DocumentLink"],
+          "label": "Performance evidence",
+          "covers": ["PerformanceEvidence"],
           "permissions": [
-            { "action": "link", "description": "Attach documents as evidence to evaluations, reports or targets, and remove links" },
-            { "action": "read", "description": "View evidence attached to an entity" }
+            { "action": "read", "description": "View the evidence behind reported results" },
+            { "action": "link", "description": "Attach evidence to reported results and remove it while the report can change" },
+            { "action": "verify", "description": "Verify or reject evidence during report review" }
           ]
         }
       ]

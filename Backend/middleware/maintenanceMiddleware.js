@@ -5,10 +5,10 @@ import { loadAccess, optionalAuth } from './authMiddleware.js';
 /**
  * Maintenance mode (setting system.maintenance_mode).
  * While on, the API answers 503 to everyone except university-wide settings managers, who can keep working and
- * switch it off. Login/session endpoints, public settings and dev helpers stay reachable so admins can sign in and
+ * switch it off. Login/session endpoints, public settings and files, and dev helpers stay reachable so admins can sign in and
  * the frontend can show the maintenance page.
  */
-const ALWAYS_ALLOWED = [/^\/auth\//, /^\/settings\/public$/, /^\/dev\//];
+const ALWAYS_ALLOWED = [/^\/auth\//, /^\/settings\/public$/, /^\/files\/[^/]+\/public$/, /^\/dev\//];
 
 export const maintenanceGuard = async (req, res, next) => {
   if (ALWAYS_ALLOWED.some((pattern) => pattern.test(req.path))) return next();

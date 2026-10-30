@@ -39,7 +39,8 @@
         "dashboard:read",
         "evidence:read",
         "file:read",
-        "notification:send"
+        "notification:send",
+        "document:manage"
       ]
     },
     {
@@ -125,7 +126,8 @@
         "evaluation:write",
         "file:*",
         "document:create",
-        "evidence:*"
+        "evidence:read",
+        "evidence:link"
       ]
     },
     {
