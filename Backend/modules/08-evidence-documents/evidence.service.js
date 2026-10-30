@@ -12,7 +12,7 @@ import { assertPeriodOpen } from '../06-reporting-periods/period.service.js';
  * The reporting office attaches it while the report can still change. The office above verifies it during review.
  */
 
-const EDITABLE_REPORT_STATUSES = ['NOT_STARTED', 'DRAFT', 'REVISION_REQUIRED'];
+const EDITABLE_REPORT_STATUSES = ['NOT_STARTED', 'DRAFT', 'REVISION_REQUIRED', 'REJECTED'];
 const REVIEWABLE_REPORT_STATUSES = ['SUBMITTED', 'UNDER_REVIEW'];
 
 const REPORT_SELECT = {

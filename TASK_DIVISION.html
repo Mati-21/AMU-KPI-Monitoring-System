@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (143 REST routes under <code>/api/v1</code>, 40 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (150 REST routes under <code>/api/v1</code>, 45 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -772,7 +772,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">59%</div>
+            <div class="dev-stat-value">57%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -797,11 +797,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">58</div>
+            <div class="dev-stat-value">65</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">41%</div>
+            <div class="dev-stat-value">43%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -1469,32 +1469,44 @@
     </div>
 
     <!-- MODULE 07 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="evaluation score actual reported verify scorecard dashboard analytics">
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="report result achievement improvement target score rollup aggregation scorecard threshold">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 07 &bull; Backend/modules/07-performance-scoring</div>
-          <div class="module-title">📈 KPI Performance Evaluation &amp; Scoring Engine</div>
-          <div class="module-desc">Records periodic achievement entries against assigned KPI targets. Implements automated scoring logic taking into account directional polarities (higher is better vs lower is better), verified actual values, evidence attachments, and aggregated weighted scorecards.</div>
+          <div class="module-title">📈 Performance Reporting &amp; Scoring</div>
+          <div class="module-desc">The core of the system. Offices report results per period and the office above reviews them. Improvement and target achievement are calculated separately, respecting direction and approved scoring. Results add up across periods and offices without double counting, and missing results are never treated as zero.</div>
         </div>
         <span class="assigned-badge badge-dev-b">Developer B</span>
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (6)</div>
+          <div class="section-title">Backend Endpoints (13)</div>
           <div class="chip-list">
-            <span class="chip chip-endpoint">GET /api/v1/kpi-evaluations · evaluation:read</span>
-            <span class="chip chip-endpoint">POST /api/v1/kpi-evaluations · evaluation:write</span>
-            <span class="chip chip-endpoint">PATCH /api/v1/kpi-evaluations/:id/verify · evaluation:verify</span>
-            <span class="chip chip-endpoint">POST /api/v1/kpi-evaluations/bulk-update · evaluation:write</span>
-            <span class="chip chip-endpoint">GET /api/v1/performance/scorecard/office/:officeId · scorecard:read</span>
-            <span class="chip chip-endpoint">GET /api/v1/performance/institution-dashboard · dashboard:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/reports · report:read</span>
+            <span class="chip chip-endpoint">POST /api/v1/reports · report:create</span>
+            <span class="chip chip-endpoint">GET /api/v1/reports/:id · report:read</span>
+            <span class="chip chip-endpoint">PUT /api/v1/reports/:id/values · report:create</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/reports/:id/submit · report:submit</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/reports/:id/start-review · report:review</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/reports/:id/review · report:review</span>
+            <span class="chip chip-endpoint">GET /api/v1/scorecards/offices/:officeId · scorecard:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/assignments/:id/performance · scorecard:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/kpis/:id/history · scorecard:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/performance-thresholds · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/performance-thresholds · scorecard:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/performance-thresholds/:id · scorecard:manage</span>
           </div>
         </div>
 
         <div>
           <div class="section-title">Prisma Models</div>
           <div class="chip-list">
-            <span class="chip chip-model">KpiEvaluation</span>
+            <span class="chip chip-model">PerformanceReport</span>
+            <span class="chip chip-model">PerformanceValue</span>
+            <span class="chip chip-model">PerformanceReview</span>
+            <span class="chip chip-model">KpiAchievement</span>
+            <span class="chip chip-model">ContractScore</span>
+            <span class="chip chip-model">PerformanceStatusThreshold</span>
           </div>
         </div>
 
@@ -1513,23 +1525,23 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>Routes, Swagger docs and permission guards wired (evaluation:*, scorecard:read, dashboard:read)</span>
+              <span>Reports: entry by measurement type, submission with deadline rules, review and revision</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Record / bulk-record reported values (upsert per target + cycle) while the cycle is open</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Improvement and target achievement, direction-aware, raw and capped, with SRS 6.4 exceptions</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Direction-aware scoring on verification (higher vs lower is better)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Roll-ups across periods and offices without double counting; weighted contract scores</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Weighted office scorecard with theme breakdown and the institution dashboard</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Office scorecards, assignment performance, KPI history across years, performance bands</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1712,7 +1724,7 @@
       </div>
       <div style="display: flex; gap: 0.75rem;">
         <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
-        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 58 Endpoints</span>
+        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 65 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1785,11 +1797,11 @@
             <td>Module 07 reports are submitted against these periods.</td>
           </tr>
           <tr>
-            <td><strong>07. KPI Performance Evaluation &amp; Scoring Engine</strong></td>
+            <td><strong>07. Performance Reporting &amp; Scoring</strong></td>
             <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
             <td><code>modules/07-performance-scoring</code></td>
-            <td>KpiEvaluation</td>
-            <td>6</td>
+            <td>PerformanceReport, PerformanceValue, PerformanceReview, KpiAchievement, ContractScore, PerformanceStatusThreshold</td>
+            <td>13</td>
             <td>Scorecards and the institution dashboard present the combined data of both developers to the President and VPs.</td>
           </tr>
           <tr>

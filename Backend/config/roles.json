@@ -16,7 +16,6 @@
         "scorecard:read",
         "report:read",
         "report:review",
-        "evaluation:read",
         "evidence:read",
         "file:read"
       ]
@@ -34,13 +33,13 @@
         "kpi:*",
         "period:manage",
         "report:read",
-        "evaluation:read",
         "scorecard:read",
         "dashboard:read",
         "evidence:read",
         "file:read",
         "notification:send",
-        "document:manage"
+        "document:manage",
+        "scorecard:manage"
       ]
     },
     {
@@ -77,7 +76,6 @@
         "role:read",
         "role:assign",
         "report:*",
-        "evaluation:*",
         "scorecard:read",
         "evidence:*",
         "file:*",
@@ -103,12 +101,11 @@
         "report:create",
         "report:read",
         "report:submit",
-        "evaluation:read",
-        "evaluation:write",
         "scorecard:read",
         "evidence:*",
         "file:*",
-        "document:create"
+        "document:create",
+        "report:review"
       ]
     },
     {
@@ -122,12 +119,13 @@
       "typicalScope": "office",
       "permissions": [
         "contract:read",
-        "evaluation:read",
-        "evaluation:write",
+        "report:read",
+        "report:create",
         "file:*",
         "document:create",
         "evidence:read",
-        "evidence:link"
+        "evidence:link",
+        "report:submit"
       ]
     },
     {
@@ -143,7 +141,6 @@
         "dashboard:read",
         "scorecard:read",
         "report:read",
-        "evaluation:read",
         "evidence:read",
         "file:read"
       ]

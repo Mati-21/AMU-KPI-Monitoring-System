@@ -112,39 +112,30 @@
       "resources": [
         {
           "resource": "report",
-          "label": "Office report dossiers",
-          "covers": ["CycleReport"],
+          "label": "Performance reports",
+          "covers": ["PerformanceReport", "PerformanceValue", "PerformanceReview"],
           "permissions": [
-            { "action": "create", "description": "Start the draft report of an office for an open cycle" },
-            { "action": "read", "description": "View report dossiers and their review history" },
-            { "action": "submit", "description": "Submit an office report for review (locks its evaluations)" },
-            { "action": "review", "description": "Approve, reject or request changes on submitted reports" }
-          ]
-        },
-        {
-          "resource": "evaluation",
-          "label": "KPI achievement entries",
-          "covers": ["KpiEvaluation"],
-          "permissions": [
-            { "action": "read", "description": "View reported and verified achievement values" },
-            { "action": "write", "description": "Enter or update reported values for targets in an open cycle" },
-            { "action": "verify", "description": "Confirm actual values and finalize scores" }
+            { "action": "create", "description": "Start an office's report and enter its results" },
+            { "action": "read", "description": "View reports in scope; offices above see them once submitted" },
+            { "action": "submit", "description": "Submit an office's report for review" },
+            { "action": "review", "description": "Approve, reject or ask for revision of a subordinate office's report" }
           ]
         },
         {
           "resource": "scorecard",
-          "label": "Office scorecards",
-          "covers": ["Weighted office scorecard"],
+          "label": "Achievements and scores",
+          "covers": ["KpiAchievement", "ContractScore", "PerformanceStatusThreshold"],
           "permissions": [
-            { "action": "read", "description": "View weighted office scorecards and theme scores" }
+            { "action": "read", "description": "View scorecards, performance and KPI history of offices in scope" },
+            { "action": "manage", "description": "Manage the university's performance bands" }
           ]
         },
         {
           "resource": "dashboard",
-          "label": "Institution dashboard",
-          "covers": ["University-wide analytics"],
+          "label": "Dashboards",
+          "covers": [],
           "permissions": [
-            { "action": "read", "description": "View the university-wide performance dashboard" }
+            { "action": "read", "description": "View dashboards" }
           ]
         }
       ]
