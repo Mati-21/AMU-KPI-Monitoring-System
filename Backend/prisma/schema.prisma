@@ -6,32 +6,222 @@ datasource db {
   provider = "postgresql"
 }
 
+// ===== Enums =====
+
+enum MeasurementType {
+  NUMBER
+  PERCENTAGE
+  RATIO
+  STAGE
+  CATEGORY
+  MONEY
+}
+
+enum KpiDirection {
+  HIGHER_IS_BETTER
+  LOWER_IS_BETTER
+  MAINTAIN
+}
+
+enum TargetType {
+  MINIMUM
+  MAXIMUM
+  EXACT
+}
+
+enum AggregationMethod {
+  SUM
+  RATIO_OF_SUMS
+  WEIGHTED_SCORE
+  SHARE_MEETING_TARGET
+  WEAKEST_LINK
+  STAGE_DISTRIBUTION
+  DIRECT
+}
+
+// How one KPI's period results combine into its year-end result.
+enum PeriodRollupMethod {
+  SUM
+  RATIO_OF_SUMS
+  LATEST
+  AVERAGE
+}
+
+// What to do when an assigned target is zero (the normal formula would divide by zero).
+enum ZeroTargetRule {
+  NOT_CALCULABLE
+  FULL_IF_MET
+}
+
+enum ScoringBasis {
+  IMPROVEMENT
+  TARGET
+}
+
+enum ScaleType {
+  STAGE
+  CATEGORY
+}
+
+enum FiscalYearStatus {
+  PLANNING
+  ACTIVE
+  CLOSED
+}
+
+enum ContractStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  SIGNED
+  CLOSED
+}
+
+enum AssignmentStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  ACKNOWLEDGED
+  REJECTED
+  SUPERSEDED
+  CANCELLED
+}
+
+enum DistributionMethod {
+  EQUAL
+  CUSTOM
+  FULL
+  NONE
+}
+
+// Reconciliation runs only for EXCLUSIVE_COMPLETE.
+enum ScopeRelation {
+  EXCLUSIVE_COMPLETE
+  OVERLAPPING
+  INSTITUTION_WIDE
+}
+
+enum ReconciliationStatus {
+  NOT_REQUIRED
+  BALANCED
+  UNDER_ALLOCATED
+  OVER_ALLOCATED
+  JUSTIFIED
+}
+
+enum AllocationType {
+  DISTRIBUTED
+  RETAINED
+}
+
+enum BaselineStatus {
+  KNOWN
+  UNKNOWN
+  PENDING_VERIFICATION
+  VERIFIED
+}
+
+enum ChangeRequestType {
+  CLARIFICATION
+  CORRECTION
+  MODIFICATION
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReportStatus {
+  NOT_STARTED
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  APPROVED
+  REJECTED
+  OVERDUE
+}
+
+enum ContributionType {
+  DIRECT
+  AGGREGATED
+  TOTAL
+}
+
+enum ReportingStatus {
+  REPORTED
+  NOT_REPORTED
+  AUTO_FILLED
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ReviewDecision {
+  APPROVED
+  REJECTED
+  REVISION_REQUIRED
+}
+
+enum AchievementStatus {
+  BELOW_TARGET
+  AT_TARGET
+  ABOVE_TARGET
+  NOT_REPORTED
+  NOT_CALCULABLE
+  PENDING_VERIFICATION
+}
+
 // ===== Identity =====
 
 model Person {
-  id         String    @id @default(uuid()) @db.Uuid
-  firstName  String    @map("first_name")
-  middleName String?   @map("middle_name")
-  lastName   String    @map("last_name")
-  gender     String?
-  birthDate  DateTime? @map("birth_date") @db.Date
-  email      String?   @unique
-  phone      String?
-  status     String    @default("active")
+  id          String   @id @default(uuid()) @db.Uuid
+  staffNumber String?  @unique @map("staff_number")
+  firstName   String   @map("first_name")
+  middleName  String?  @map("middle_name")
+  lastName    String   @map("last_name")
+  email       String?  @unique
+  phone       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  userAccount            UserAccount?
-  officePersons          OfficePerson[]
-  ownedTargets           KpiTarget[]             @relation("TargetOwner")
-  assignedTargets        KpiTarget[]             @relation("TargetAssigner")
-  evaluationsEvaluated   KpiEvaluation[]
-  reportsSubmitted       CycleReport[]           @relation("ReportSubmitter")
-  reportsReviewed        CycleReport[]           @relation("ReportReviewer")
-  filesUploaded          File[]
-  documentsUploaded      Document[]
-  settingsUpdated        SystemSetting[]
-  notificationsCreated   Notification[]
-  notificationRecipients NotificationRecipient[]
-  auditLogs              AuditLog[]
+  userAccount   UserAccount?
+  officePersons OfficePerson[]
+
+  officeMovesRecorded     OfficeHierarchyHistory[]
+  scalesApproved          KpiScale[]
+  kpisCreated             Kpi[]
+  contractsSigned         PerformanceContract[]      @relation("ContractSigner")
+  contractsApproved       PerformanceContract[]      @relation("ContractApprover")
+  assignmentsCreated      KpiAssignment[]            @relation("AssignmentCreator")
+  assignmentsApproved     KpiAssignment[]            @relation("AssignmentApprover")
+  assignmentsAcknowledged KpiAssignment[]            @relation("AssignmentAcknowledger")
+  weightsCreated          KpiWeight[]                @relation("WeightCreator")
+  weightsApproved         KpiWeight[]                @relation("WeightApprover")
+  baselinesCreated        KpiBaseline[]              @relation("BaselineCreator")
+  baselinesVerified       KpiBaseline[]              @relation("BaselineVerifier")
+  targetsCreated          KpiTarget[]                @relation("TargetCreator")
+  targetsApproved         KpiTarget[]                @relation("TargetApprover")
+  allocationsCreated      ResponsibilityAllocation[]
+  changesRequested        AssignmentChangeRequest[]  @relation("ChangeRequester")
+  changesReviewed         AssignmentChangeRequest[]  @relation("ChangeReviewer")
+  filesUploaded           FileUpload[]
+  documentsCreated        Document[]
+  reportsPrepared         PerformanceReport[]        @relation("ReportPreparer")
+  reportsSubmitted        PerformanceReport[]        @relation("ReportSubmitter")
+  valuesEntered           PerformanceValue[]
+  evidenceVerified        PerformanceEvidence[]
+  reviewsGiven            PerformanceReview[]
+  settingsUpdated         SystemSetting[]
+  notificationsCreated    Notification[]
+  notificationRecipients  NotificationRecipient[]
+  auditLogs               AuditLog[]
 
   @@map("person")
 }
@@ -48,6 +238,7 @@ model UserAccount {
   mfaSecret          String?   @map("mfa_secret")
   mfaType            String    @default("totp") @map("mfa_type")
   lastLoginAt        DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   person   Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
   sessions UserSession[]
@@ -81,9 +272,12 @@ model UserSession {
 // ===== Office hierarchy =====
 
 model OfficeType {
-  id         Int    @id @default(autoincrement())
-  name       String @unique
-  levelOrder Int?   @map("level_order")
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  levelOrder  Int?     @map("level_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   offices Office[]
 
@@ -91,27 +285,55 @@ model OfficeType {
 }
 
 model Office {
-  id             String  @id @default(uuid()) @db.Uuid
-  parentOfficeId String? @map("parent_office_id") @db.Uuid
-  officeTypeId   Int     @map("office_type_id")
+  id             String   @id @default(uuid()) @db.Uuid
+  parentOfficeId String?  @map("parent_office_id") @db.Uuid
+  officeTypeId   String   @map("office_type_id") @db.Uuid
   name           String
-  code           String? @unique
-  isActive       Boolean @default(true) @map("is_active")
+  code           String?  @unique
+  canAssignKpi   Boolean  @default(true) @map("can_assign_kpi")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   parent     Office?    @relation("OfficeTree", fields: [parentOfficeId], references: [id])
   children   Office[]   @relation("OfficeTree")
   officeType OfficeType @relation(fields: [officeTypeId], references: [id])
 
-  positions      Position[]
-  officePersons  OfficePerson[]
-  roleScopes     OfficePersonRole[]
-  kpiTargets     KpiTarget[]
-  cycleReports   CycleReport[]
-  documents      Document[]
-  notifications  Notification[]
+  positions         Position[]
+  officePersons     OfficePerson[]
+  roleScopes        OfficePersonRole[]
+  hierarchyHistory  OfficeHierarchyHistory[] @relation("HistoryOffice")
+  hierarchyChildren OfficeHierarchyHistory[] @relation("HistoryParent")
+  coordinatedKpis   Kpi[]
+  contracts         PerformanceContract[]    @relation("ContractOffice")
+  contractsAssigned PerformanceContract[]    @relation("ContractAssigningOffice")
+  reviews           PerformanceReview[]
+  documents         Document[]
+  notifications     Notification[]
 
   @@index([parentOfficeId])
   @@map("office")
+}
+
+// Which parent an office had and when, so old reports stay tied to the structure they were produced under.
+// valid_to is null on the current row (at most one per office, see the migration).
+model OfficeHierarchyHistory {
+  id                String    @id @default(uuid()) @db.Uuid
+  officeId          String    @map("office_id") @db.Uuid
+  parentOfficeId    String?   @map("parent_office_id") @db.Uuid
+  validFrom         DateTime  @map("valid_from") @db.Date
+  validTo           DateTime? @map("valid_to") @db.Date
+  reason            String?
+  changedByPersonId String?   @map("changed_by_person_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  office    Office  @relation("HistoryOffice", fields: [officeId], references: [id])
+  parent    Office? @relation("HistoryParent", fields: [parentOfficeId], references: [id])
+  changedBy Person? @relation(fields: [changedByPersonId], references: [id])
+
+  @@index([officeId])
+  @@index([parentOfficeId])
+  @@map("office_hierarchy_history")
 }
 
 model Position {
@@ -150,19 +372,24 @@ model OfficePerson {
 // ===== Dynamic roles =====
 
 model Role {
-  id          Int     @id @default(autoincrement())
-  name        String  @unique
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
   description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  permissions      RolePermission[]
+  permissions       RolePermission[]
   officePersonRoles OfficePersonRole[]
 
   @@map("role")
 }
 
 model Permission {
-  id   Int    @id @default(autoincrement())
-  code String @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique
+  name        String?
+  module      String?
+  description String?
 
   roles         RolePermission[]
   notifications Notification[]
@@ -171,9 +398,9 @@ model Permission {
 }
 
 model RolePermission {
-  id           Int @id @default(autoincrement())
-  roleId       Int @map("role_id")
-  permissionId Int @map("permission_id")
+  id           String @id @default(uuid()) @db.Uuid
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -185,7 +412,7 @@ model RolePermission {
 model OfficePersonRole {
   id             String    @id @default(uuid()) @db.Uuid
   officePersonId String    @map("office_person_id") @db.Uuid
-  roleId         Int       @map("role_id")
+  roleId         String    @map("role_id") @db.Uuid
   scopeOfficeId  String?   @map("scope_office_id") @db.Uuid
   validFrom      DateTime  @map("valid_from") @db.Date
   validTo        DateTime? @map("valid_to") @db.Date
@@ -198,26 +425,26 @@ model OfficePersonRole {
   @@map("office_person_role")
 }
 
-// ===== KPI =====
+// ===== KPI definition =====
 
-model FiscalYear {
-  id        Int      @id @default(autoincrement())
-  label     String   @unique
-  startDate DateTime @map("start_date") @db.Date
-  endDate   DateTime @map("end_date") @db.Date
-  status    String   @default("planned")
+model StrategicObjective {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
 
-  kpiTargets KpiTarget[]
-  evalCycles EvalCycle[]
+  kpis Kpi[]
 
-  @@map("fiscal_year")
+  @@map("strategic_objective")
 }
 
 model KpiTheme {
   id            String  @id @default(uuid()) @db.Uuid
   parentThemeId String? @map("parent_theme_id") @db.Uuid
+  code          String? @unique
   name          String
-  code          String?
+  description   String?
   sortOrder     Int     @default(0) @map("sort_order")
   isActive      Boolean @default(true) @map("is_active")
 
@@ -229,131 +456,421 @@ model KpiTheme {
   @@map("kpi_theme")
 }
 
+model MeasurementUnit {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  symbol      String?
+  description String?
+
+  kpis Kpi[]
+
+  @@map("measurement_unit")
+}
+
+// Stage and category lists share one shape. A scale locks once a KPI uses it.
+model KpiScale {
+  id                 String    @id @default(uuid()) @db.Uuid
+  name               String    @unique
+  scaleType          ScaleType @map("scale_type")
+  isOrdered          Boolean   @default(true) @map("is_ordered")
+  isBinary           Boolean   @default(false) @map("is_binary")
+  scoringApproved    Boolean   @default(false) @map("scoring_approved")
+  approvedByPersonId String?   @map("approved_by_person_id") @db.Uuid
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz(6)
+
+  approvedBy Person?         @relation(fields: [approvedByPersonId], references: [id])
+  levels     KpiScaleLevel[]
+  kpis       Kpi[]
+
+  @@map("kpi_scale")
+}
+
+model KpiScaleLevel {
+  id                 String   @id @default(uuid()) @db.Uuid
+  scaleId            String   @map("scale_id") @db.Uuid
+  name               String
+  description        String?
+  sortOrder          Int      @map("sort_order")
+  score              Decimal? @db.Decimal(9, 4)
+  assessmentCriteria String?  @map("assessment_criteria")
+
+  scale             KpiScale           @relation(fields: [scaleId], references: [id], onDelete: Cascade)
+  baselines         KpiBaseline[]
+  targets           KpiTarget[]
+  performanceValues PerformanceValue[]
+  achievements      KpiAchievement[]
+
+  @@unique([scaleId, name])
+  @@unique([scaleId, sortOrder])
+  @@map("kpi_scale_level")
+}
+
+// At most one reporting currency (see the migration).
+model Currency {
+  id                  String  @id @default(uuid()) @db.Uuid
+  code                String  @unique
+  name                String
+  symbol              String?
+  isReportingCurrency Boolean @default(false) @map("is_reporting_currency")
+
+  ratesFrom         ExchangeRate[]     @relation("RateFrom")
+  ratesTo           ExchangeRate[]     @relation("RateTo")
+  kpis              Kpi[]
+  baselines         KpiBaseline[]
+  targets           KpiTarget[]
+  performanceValues PerformanceValue[]
+
+  @@map("currency")
+}
+
+model ExchangeRate {
+  id             String   @id @default(uuid()) @db.Uuid
+  fromCurrencyId String   @map("from_currency_id") @db.Uuid
+  toCurrencyId   String   @map("to_currency_id") @db.Uuid
+  rate           Decimal  @db.Decimal(18, 6)
+  rateDate       DateTime @map("rate_date") @db.Date
+  source         String?
+
+  fromCurrency Currency @relation("RateFrom", fields: [fromCurrencyId], references: [id])
+  toCurrency   Currency @relation("RateTo", fields: [toCurrencyId], references: [id])
+
+  performanceValues PerformanceValue[]
+
+  @@unique([fromCurrencyId, toCurrencyId, rateDate])
+  @@map("exchange_rate")
+}
+
+// A KPI locks once it has an approved assignment. A real change means a new KPI,
+// with replaces_kpi_id keeping the trend connected across years.
 model Kpi {
-  id                       String   @id @default(uuid()) @db.Uuid
-  kpiThemeId               String   @map("kpi_theme_id") @db.Uuid
-  code                     String   @unique
-  name                     String
-  unitOfMeasure            String   @map("unit_of_measure")
-  direction                String   @default("higher_is_better")
-  cascadeMode              String   @default("split") @map("cascade_mode")
-  maxOverAllocationPercent Decimal? @map("max_over_allocation_percent") @db.Decimal(6, 2)
-  sortOrder                Int      @default(0) @map("sort_order")
-  isActive                 Boolean  @default(true) @map("is_active")
+  id                   String             @id @default(uuid()) @db.Uuid
+  code                 String             @unique
+  name                 String
+  description          String?
+  themeId              String             @map("theme_id") @db.Uuid
+  strategicObjectiveId String             @map("strategic_objective_id") @db.Uuid
+  measurementType      MeasurementType    @map("measurement_type")
+  unitId               String?            @map("unit_id") @db.Uuid
+  scaleId              String?            @map("scale_id") @db.Uuid
+  currencyId           String?            @map("currency_id") @db.Uuid
+  direction            KpiDirection
+  targetType           TargetType         @map("target_type")
+  numeratorLabel       String?            @map("numerator_label")
+  denominatorLabel     String?            @map("denominator_label")
+  formula              String?
+  dataSource           String?            @map("data_source")
+  defaultFrequencyId   String             @map("default_frequency_id") @db.Uuid
+  evidenceRequirement  String?            @map("evidence_requirement")
+  aggregationMethod    AggregationMethod  @map("aggregation_method")
+  periodRollupMethod   PeriodRollupMethod @map("period_rollup_method")
+  scoringMethod        ScoringBasis       @map("scoring_method")
+  zeroTargetRule       ZeroTargetRule     @default(NOT_CALCULABLE) @map("zero_target_rule")
+  isAdditive           Boolean            @default(false) @map("is_additive")
+  decimalPlaces        Int                @default(2) @map("decimal_places")
+  maintenanceTolerance Decimal?           @map("maintenance_tolerance") @db.Decimal(9, 4)
+  coordinatingOfficeId String?            @map("coordinating_office_id") @db.Uuid
+  replacesKpiId        String?            @map("replaces_kpi_id") @db.Uuid
+  isActive             Boolean            @default(true) @map("is_active")
+  createdByPersonId    String?            @map("created_by_person_id") @db.Uuid
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  theme   KpiTheme    @relation(fields: [kpiThemeId], references: [id])
-  targets KpiTarget[]
+  theme              KpiTheme           @relation(fields: [themeId], references: [id])
+  strategicObjective StrategicObjective @relation(fields: [strategicObjectiveId], references: [id])
+  unit               MeasurementUnit?   @relation(fields: [unitId], references: [id])
+  scale              KpiScale?          @relation(fields: [scaleId], references: [id])
+  currency           Currency?          @relation(fields: [currencyId], references: [id])
+  defaultFrequency   ReportingFrequency @relation(fields: [defaultFrequencyId], references: [id])
+  coordinatingOffice Office?            @relation(fields: [coordinatingOfficeId], references: [id])
+  replaces           Kpi?               @relation("KpiReplacement", fields: [replacesKpiId], references: [id])
+  replacedBy         Kpi[]              @relation("KpiReplacement")
+  createdBy          Person?            @relation(fields: [createdByPersonId], references: [id])
 
-  @@index([kpiThemeId])
+  assignments KpiAssignment[]
+
+  @@index([themeId])
+  @@index([strategicObjectiveId])
+  @@index([replacesKpiId])
   @@map("kpi")
 }
 
-model KpiTarget {
+// ===== Periods =====
+
+model ReportingFrequency {
+  id             String  @id @default(uuid()) @db.Uuid
+  name           String  @unique
+  intervalMonths Int?    @map("interval_months")
+  isCustom       Boolean @default(false) @map("is_custom")
+
+  kpis        Kpi[]
+  assignments KpiAssignment[]
+  periods     ReportingPeriod[]
+
+  @@map("reporting_frequency")
+}
+
+// Closing a year (status CLOSED) makes everything under it read-only. At most one ACTIVE year (see the migration).
+model FiscalYear {
+  id        String           @id @default(uuid()) @db.Uuid
+  name      String           @unique
+  startDate DateTime         @map("start_date") @db.Date
+  endDate   DateTime         @map("end_date") @db.Date
+  status    FiscalYearStatus @default(PLANNING)
+
+  periods   ReportingPeriod[]
+  contracts PerformanceContract[]
+
+  @@map("fiscal_year")
+}
+
+// is_year_end marks the period whose report is the year's final report:
+// results of shorter periods roll up into it using kpi.period_rollup_method.
+model ReportingPeriod {
   id                 String    @id @default(uuid()) @db.Uuid
-  fiscalYearId       Int       @map("fiscal_year_id")
-  kpiId              String    @map("kpi_id") @db.Uuid
-  officeId           String    @map("office_id") @db.Uuid
-  personId           String?   @map("person_id") @db.Uuid
-  assignedByPersonId String?   @map("assigned_by_person_id") @db.Uuid
-  assignedAt         DateTime? @map("assigned_at") @db.Date
-  parentTargetId     String?   @map("parent_target_id") @db.Uuid
-  baselineValue      Decimal?  @map("baseline_value") @db.Decimal(18, 4)
-  targetValue        Decimal   @map("target_value") @db.Decimal(18, 4)
-  weight             Decimal   @default(1) @db.Decimal(7, 4)
-  status             String    @default("draft")
+  fiscalYearId       String    @map("fiscal_year_id") @db.Uuid
+  frequencyId        String    @map("frequency_id") @db.Uuid
+  name               String
+  startDate          DateTime  @map("start_date") @db.Date
+  endDate            DateTime  @map("end_date") @db.Date
+  submissionDeadline DateTime? @map("submission_deadline") @db.Date
+  isYearEnd          Boolean   @default(false) @map("is_year_end")
+  isClosed           Boolean   @default(false) @map("is_closed")
 
-  fiscalYear FiscalYear   @relation(fields: [fiscalYearId], references: [id])
-  kpi        Kpi          @relation(fields: [kpiId], references: [id])
-  office     Office       @relation(fields: [officeId], references: [id])
-  person     Person?      @relation("TargetOwner", fields: [personId], references: [id])
-  assignedBy Person?      @relation("TargetAssigner", fields: [assignedByPersonId], references: [id])
-  parent     KpiTarget?   @relation("TargetTree", fields: [parentTargetId], references: [id])
-  children   KpiTarget[]  @relation("TargetTree")
+  fiscalYear FiscalYear         @relation(fields: [fiscalYearId], references: [id])
+  frequency  ReportingFrequency @relation(fields: [frequencyId], references: [id])
 
-  evaluations KpiEvaluation[]
+  reports            PerformanceReport[]
+  achievements       KpiAchievement[]
+  contractScores     ContractScore[]
+  baselinesEffective KpiBaseline[]
+  targetsEffective   KpiTarget[]
 
+  @@unique([fiscalYearId, frequencyId, name])
   @@index([fiscalYearId])
-  @@index([kpiId])
+  @@map("reporting_period")
+}
+
+// ===== Contracts and cascading =====
+
+// assigning_office_id is null only for the top office, which has no office above it.
+model PerformanceContract {
+  id                  String         @id @default(uuid()) @db.Uuid
+  fiscalYearId        String         @map("fiscal_year_id") @db.Uuid
+  officeId            String         @map("office_id") @db.Uuid
+  assigningOfficeId   String?        @map("assigning_office_id") @db.Uuid
+  versionNo           Int            @default(1) @map("version_no")
+  requiredTotalWeight Decimal        @default(100) @map("required_total_weight") @db.Decimal(7, 4)
+  status              ContractStatus @default(DRAFT)
+  signedByPersonId    String?        @map("signed_by_person_id") @db.Uuid
+  signedAt            DateTime?      @map("signed_at") @db.Timestamptz(6)
+  approvedByPersonId  String?        @map("approved_by_person_id") @db.Uuid
+  approvedAt          DateTime?      @map("approved_at") @db.Timestamptz(6)
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  office          Office     @relation("ContractOffice", fields: [officeId], references: [id])
+  assigningOffice Office?    @relation("ContractAssigningOffice", fields: [assigningOfficeId], references: [id])
+  signedBy        Person?    @relation("ContractSigner", fields: [signedByPersonId], references: [id])
+  approvedBy      Person?    @relation("ContractApprover", fields: [approvedByPersonId], references: [id])
+
+  assignments KpiAssignment[]
+  reports     PerformanceReport[]
+  scores      ContractScore[]
+
+  @@unique([fiscalYearId, officeId, versionNo])
   @@index([officeId])
-  @@index([personId])
-  @@index([parentTargetId])
+  @@index([assigningOfficeId])
+  @@map("performance_contract")
+}
+
+model KpiAssignment {
+  id                       String               @id @default(uuid()) @db.Uuid
+  contractId               String               @map("contract_id") @db.Uuid
+  kpiId                    String               @map("kpi_id") @db.Uuid
+  parentAssignmentId       String?              @map("parent_assignment_id") @db.Uuid
+  reportingFrequencyId     String               @map("reporting_frequency_id") @db.Uuid
+  distributionMethod       DistributionMethod   @default(NONE) @map("distribution_method")
+  scopeRelation            ScopeRelation        @map("scope_relation")
+  reconciliationStatus     ReconciliationStatus @default(NOT_REQUIRED) @map("reconciliation_status")
+  reconciliationNote       String?              @map("reconciliation_note")
+  maxOverAllocationPercent Decimal?             @map("max_over_allocation_percent") @db.Decimal(6, 2)
+  status                   AssignmentStatus     @default(DRAFT)
+  createdByPersonId        String?              @map("created_by_person_id") @db.Uuid
+  createdAt                DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  approvedByPersonId       String?              @map("approved_by_person_id") @db.Uuid
+  approvedAt               DateTime?            @map("approved_at") @db.Timestamptz(6)
+  acknowledgedByPersonId   String?              @map("acknowledged_by_person_id") @db.Uuid
+  acknowledgedAt           DateTime?            @map("acknowledged_at") @db.Timestamptz(6)
+
+  contract           PerformanceContract @relation(fields: [contractId], references: [id])
+  kpi                Kpi                 @relation(fields: [kpiId], references: [id])
+  parent             KpiAssignment?      @relation("AssignmentTree", fields: [parentAssignmentId], references: [id])
+  children           KpiAssignment[]     @relation("AssignmentTree")
+  reportingFrequency ReportingFrequency  @relation(fields: [reportingFrequencyId], references: [id])
+  createdBy          Person?             @relation("AssignmentCreator", fields: [createdByPersonId], references: [id])
+  approvedBy         Person?             @relation("AssignmentApprover", fields: [approvedByPersonId], references: [id])
+  acknowledgedBy     Person?             @relation("AssignmentAcknowledger", fields: [acknowledgedByPersonId], references: [id])
+
+  weights            KpiWeight[]
+  baselines          KpiBaseline[]
+  targets            KpiTarget[]
+  allocationsGiven   ResponsibilityAllocation[] @relation("AllocationParent")
+  allocationReceived ResponsibilityAllocation[] @relation("AllocationChild")
+  changeRequests     AssignmentChangeRequest[]
+  performanceValues  PerformanceValue[]
+  achievements       KpiAchievement[]
+
+  @@unique([contractId, kpiId])
+  @@index([kpiId])
+  @@index([parentAssignmentId])
+  @@map("kpi_assignment")
+}
+
+// Weight, baseline and target are versioned: a change adds a row and moves is_current,
+// with at most one current row per assignment (see the migration).
+model KpiWeight {
+  id                 String    @id @default(uuid()) @db.Uuid
+  assignmentId       String    @map("assignment_id") @db.Uuid
+  weight             Decimal   @db.Decimal(7, 4)
+  versionNo          Int       @default(1) @map("version_no")
+  isCurrent          Boolean   @default(true) @map("is_current")
+  reason             String?
+  createdByPersonId  String?   @map("created_by_person_id") @db.Uuid
+  approvedByPersonId String?   @map("approved_by_person_id") @db.Uuid
+  approvedAt         DateTime? @map("approved_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  assignment KpiAssignment @relation(fields: [assignmentId], references: [id])
+  createdBy  Person?       @relation("WeightCreator", fields: [createdByPersonId], references: [id])
+  approvedBy Person?       @relation("WeightApprover", fields: [approvedByPersonId], references: [id])
+
+  achievements   KpiAchievement[]
+  changeRequests AssignmentChangeRequest[]
+
+  @@unique([assignmentId, versionNo])
+  @@map("kpi_weight")
+}
+
+model KpiBaseline {
+  id                    String         @id @default(uuid()) @db.Uuid
+  assignmentId          String         @map("assignment_id") @db.Uuid
+  versionNo             Int            @default(1) @map("version_no")
+  baselineStatus        BaselineStatus @map("baseline_status")
+  value                 Decimal?       @db.Decimal(18, 4)
+  numerator             Decimal?       @db.Decimal(18, 4)
+  denominator           Decimal?       @db.Decimal(18, 4)
+  scaleLevelId          String?        @map("scale_level_id") @db.Uuid
+  currencyId            String?        @map("currency_id") @db.Uuid
+  unknownJustification  String?        @map("unknown_justification")
+  effectiveFromPeriodId String?        @map("effective_from_period_id") @db.Uuid
+  isCurrent             Boolean        @default(true) @map("is_current")
+  reason                String?
+  createdByPersonId     String?        @map("created_by_person_id") @db.Uuid
+  verifiedByPersonId    String?        @map("verified_by_person_id") @db.Uuid
+  verifiedAt            DateTime?      @map("verified_at") @db.Timestamptz(6)
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  assignment          KpiAssignment    @relation(fields: [assignmentId], references: [id])
+  scaleLevel          KpiScaleLevel?   @relation(fields: [scaleLevelId], references: [id])
+  currency            Currency?        @relation(fields: [currencyId], references: [id])
+  effectiveFromPeriod ReportingPeriod? @relation(fields: [effectiveFromPeriodId], references: [id])
+  createdBy           Person?          @relation("BaselineCreator", fields: [createdByPersonId], references: [id])
+  verifiedBy          Person?          @relation("BaselineVerifier", fields: [verifiedByPersonId], references: [id])
+
+  evidence       BaselineEvidence[]
+  achievements   KpiAchievement[]
+  changeRequests AssignmentChangeRequest[]
+
+  @@unique([assignmentId, versionNo])
+  @@map("kpi_baseline")
+}
+
+model KpiTarget {
+  id                    String    @id @default(uuid()) @db.Uuid
+  assignmentId          String    @map("assignment_id") @db.Uuid
+  versionNo             Int       @default(1) @map("version_no")
+  value                 Decimal?  @db.Decimal(18, 4)
+  numerator             Decimal?  @db.Decimal(18, 4)
+  denominator           Decimal?  @db.Decimal(18, 4)
+  scaleLevelId          String?   @map("scale_level_id") @db.Uuid
+  currencyId            String?   @map("currency_id") @db.Uuid
+  effectiveFromPeriodId String?   @map("effective_from_period_id") @db.Uuid
+  isCurrent             Boolean   @default(true) @map("is_current")
+  reason                String?
+  createdByPersonId     String?   @map("created_by_person_id") @db.Uuid
+  approvedByPersonId    String?   @map("approved_by_person_id") @db.Uuid
+  approvedAt            DateTime? @map("approved_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  assignment          KpiAssignment    @relation(fields: [assignmentId], references: [id])
+  scaleLevel          KpiScaleLevel?   @relation(fields: [scaleLevelId], references: [id])
+  currency            Currency?        @relation(fields: [currencyId], references: [id])
+  effectiveFromPeriod ReportingPeriod? @relation(fields: [effectiveFromPeriodId], references: [id])
+  createdBy           Person?          @relation("TargetCreator", fields: [createdByPersonId], references: [id])
+  approvedBy          Person?          @relation("TargetApprover", fields: [approvedByPersonId], references: [id])
+
+  achievements   KpiAchievement[]
+  changeRequests AssignmentChangeRequest[]
+
+  @@unique([assignmentId, versionNo])
   @@map("kpi_target")
 }
 
-// ===== Evaluation =====
+// child_assignment_id is null on the RETAINED row (at most one per parent, see the migration).
+model ResponsibilityAllocation {
+  id                 String         @id @default(uuid()) @db.Uuid
+  parentAssignmentId String         @map("parent_assignment_id") @db.Uuid
+  childAssignmentId  String?        @map("child_assignment_id") @db.Uuid
+  allocationType     AllocationType @map("allocation_type")
+  allocatedAmount    Decimal        @map("allocated_amount") @db.Decimal(18, 4)
+  note               String?
+  createdByPersonId  String?        @map("created_by_person_id") @db.Uuid
+  createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
 
-model EvalCycle {
-  id           String    @id @default(uuid()) @db.Uuid
-  fiscalYearId Int       @map("fiscal_year_id")
-  name         String
-  periodStart  DateTime  @map("period_start") @db.Date
-  periodEnd    DateTime  @map("period_end") @db.Date
-  dueDate      DateTime? @map("due_date") @db.Date
-  status       String    @default("planned")
+  parentAssignment KpiAssignment  @relation("AllocationParent", fields: [parentAssignmentId], references: [id])
+  childAssignment  KpiAssignment? @relation("AllocationChild", fields: [childAssignmentId], references: [id])
+  createdBy        Person?        @relation(fields: [createdByPersonId], references: [id])
 
-  fiscalYear  FiscalYear      @relation(fields: [fiscalYearId], references: [id])
-  reports     CycleReport[]
-  evaluations KpiEvaluation[]
-
-  @@index([fiscalYearId])
-  @@map("eval_cycle")
+  @@unique([parentAssignmentId, childAssignmentId])
+  @@index([childAssignmentId])
+  @@map("responsibility_allocation")
 }
 
-model CycleReport {
-  id                  String    @id @default(uuid()) @db.Uuid
-  evalCycleId         String    @map("eval_cycle_id") @db.Uuid
-  officeId            String    @map("office_id") @db.Uuid
-  submittedByPersonId String?   @map("submitted_by_person_id") @db.Uuid
-  reviewedByPersonId  String?   @map("reviewed_by_person_id") @db.Uuid
-  status              String    @default("draft")
-  submissionType      String?   @default("normal") @map("submission_type")
-  autoFilledCount     Int       @default(0) @map("auto_filled_count")
-  reviewNote          String?   @map("review_note")
-  submittedAt         DateTime? @map("submitted_at") @db.Timestamptz(6)
-  reviewedAt          DateTime? @map("reviewed_at") @db.Timestamptz(6)
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+model AssignmentChangeRequest {
+  id                  String              @id @default(uuid()) @db.Uuid
+  assignmentId        String              @map("assignment_id") @db.Uuid
+  requestType         ChangeRequestType   @map("request_type")
+  requestedByPersonId String?             @map("requested_by_person_id") @db.Uuid
+  proposedValues      Json?               @map("proposed_values")
+  reason              String
+  status              ChangeRequestStatus @default(PENDING)
+  reviewedByPersonId  String?             @map("reviewed_by_person_id") @db.Uuid
+  reviewedAt          DateTime?           @map("reviewed_at") @db.Timestamptz(6)
+  reviewComment       String?             @map("review_comment")
+  newBaselineId       String?             @map("new_baseline_id") @db.Uuid
+  newTargetId         String?             @map("new_target_id") @db.Uuid
+  newWeightId         String?             @map("new_weight_id") @db.Uuid
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  evalCycle   EvalCycle @relation(fields: [evalCycleId], references: [id])
-  office      Office    @relation(fields: [officeId], references: [id])
-  submittedBy Person?   @relation("ReportSubmitter", fields: [submittedByPersonId], references: [id])
-  reviewedBy  Person?   @relation("ReportReviewer", fields: [reviewedByPersonId], references: [id])
+  assignment  KpiAssignment @relation(fields: [assignmentId], references: [id])
+  requestedBy Person?       @relation("ChangeRequester", fields: [requestedByPersonId], references: [id])
+  reviewedBy  Person?       @relation("ChangeReviewer", fields: [reviewedByPersonId], references: [id])
+  newBaseline KpiBaseline?  @relation(fields: [newBaselineId], references: [id])
+  newTarget   KpiTarget?    @relation(fields: [newTargetId], references: [id])
+  newWeight   KpiWeight?    @relation(fields: [newWeightId], references: [id])
 
-  evaluations KpiEvaluation[]
+  evidence ChangeRequestEvidence[]
 
-  @@unique([evalCycleId, officeId])
-  @@map("cycle_report")
-}
-
-model KpiEvaluation {
-  id                String   @id @default(uuid()) @db.Uuid
-  kpiTargetId       String   @map("kpi_target_id") @db.Uuid
-  evalCycleId       String   @map("eval_cycle_id") @db.Uuid
-  cycleReportId     String?  @map("cycle_report_id") @db.Uuid
-  evaluatorPersonId String?  @map("evaluator_person_id") @db.Uuid
-  reportedValue     Decimal? @map("reported_value") @db.Decimal(18, 4)
-  actualValue       Decimal? @map("actual_value") @db.Decimal(18, 4)
-  valueSource       String?  @map("value_source")
-  score             Decimal? @db.Decimal(7, 2)
-  comment           String?
-  status            String   @default("pending")
-
-  kpiTarget   KpiTarget    @relation(fields: [kpiTargetId], references: [id])
-  evalCycle   EvalCycle    @relation(fields: [evalCycleId], references: [id])
-  cycleReport CycleReport? @relation(fields: [cycleReportId], references: [id])
-  evaluator   Person?      @relation(fields: [evaluatorPersonId], references: [id])
-
-  @@unique([kpiTargetId, evalCycleId])
-  @@index([cycleReportId])
-  @@index([evaluatorPersonId])
-  @@map("kpi_evaluation")
+  @@index([assignmentId])
+  @@map("assignment_change_request")
 }
 
 // ===== Files and documents =====
 
-model File {
+model FileUpload {
   id                 String   @id @default(uuid()) @db.Uuid
   originalName       String   @map("original_name")
-  storagePath        String   @map("storage_path")
+  storedPath         String   @map("stored_path")
   mimeType           String   @map("mime_type")
   sizeBytes          BigInt   @map("size_bytes")
   checksum           String?
@@ -364,13 +881,13 @@ model File {
   documents  Document[]
   settings   SystemSetting[]
 
-  @@map("file")
+  @@map("file_upload")
 }
 
 model DocumentType {
-  id                Int     @id @default(autoincrement())
-  name              String
-  code              String  @unique
+  id                String  @id @default(uuid()) @db.Uuid
+  name              String  @unique
+  description       String?
   allowedExtensions String? @map("allowed_extensions")
   maxSizeMb         Int?    @map("max_size_mb")
   isActive          Boolean @default(true) @map("is_active")
@@ -381,57 +898,241 @@ model DocumentType {
 }
 
 model Document {
-  id                 String   @id @default(uuid()) @db.Uuid
-  documentTypeId     Int      @map("document_type_id")
-  fileId             String   @map("file_id") @db.Uuid
-  ownerOfficeId      String?  @map("owner_office_id") @db.Uuid
-  uploadedByPersonId String?  @map("uploaded_by_person_id") @db.Uuid
-  title              String
-  description        String?
-  isConfidential     Boolean  @default(false) @map("is_confidential")
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String   @id @default(uuid()) @db.Uuid
+  documentTypeId    String   @map("document_type_id") @db.Uuid
+  fileId            String   @map("file_id") @db.Uuid
+  ownerOfficeId     String?  @map("owner_office_id") @db.Uuid
+  title             String
+  description       String?
+  createdByPersonId String?  @map("created_by_person_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   documentType DocumentType @relation(fields: [documentTypeId], references: [id])
-  file         File         @relation(fields: [fileId], references: [id])
+  file         FileUpload   @relation(fields: [fileId], references: [id])
   ownerOffice  Office?      @relation(fields: [ownerOfficeId], references: [id])
-  uploadedBy   Person?      @relation(fields: [uploadedByPersonId], references: [id])
+  createdBy    Person?      @relation(fields: [createdByPersonId], references: [id])
 
-  links DocumentLink[]
+  baselineEvidence      BaselineEvidence[]
+  performanceEvidence   PerformanceEvidence[]
+  changeRequestEvidence ChangeRequestEvidence[]
 
   @@index([documentTypeId])
   @@index([ownerOfficeId])
   @@map("document")
 }
 
-model DocumentLink {
-  id         String @id @default(uuid()) @db.Uuid
-  documentId String @map("document_id") @db.Uuid
-  entityType String @map("entity_type")
-  entityId   String @map("entity_id") @db.Uuid
+model BaselineEvidence {
+  id                String    @id @default(uuid()) @db.Uuid
+  baselineId        String    @map("baseline_id") @db.Uuid
+  documentId        String    @map("document_id") @db.Uuid
+  sourceDescription String?   @map("source_description")
+  sourceDate        DateTime? @map("source_date") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  baseline KpiBaseline @relation(fields: [baselineId], references: [id])
+  document Document    @relation(fields: [documentId], references: [id])
 
-  @@unique([documentId, entityType, entityId])
-  @@index([entityType, entityId])
-  @@map("document_link")
+  @@unique([baselineId, documentId])
+  @@map("baseline_evidence")
+}
+
+model ChangeRequestEvidence {
+  id              String   @id @default(uuid()) @db.Uuid
+  changeRequestId String   @map("change_request_id") @db.Uuid
+  documentId      String   @map("document_id") @db.Uuid
+  comment         String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  changeRequest AssignmentChangeRequest @relation(fields: [changeRequestId], references: [id])
+  document      Document                @relation(fields: [documentId], references: [id])
+
+  @@unique([changeRequestId, documentId])
+  @@map("change_request_evidence")
+}
+
+// ===== Reporting and evaluation =====
+
+model PerformanceReport {
+  id                  String       @id @default(uuid()) @db.Uuid
+  contractId          String       @map("contract_id") @db.Uuid
+  reportingPeriodId   String       @map("reporting_period_id") @db.Uuid
+  status              ReportStatus @default(NOT_STARTED)
+  preparedByPersonId  String?      @map("prepared_by_person_id") @db.Uuid
+  submittedByPersonId String?      @map("submitted_by_person_id") @db.Uuid
+  submittedAt         DateTime?    @map("submitted_at") @db.Timestamptz(6)
+  isProvisional       Boolean      @default(true) @map("is_provisional")
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  contract        PerformanceContract @relation(fields: [contractId], references: [id])
+  reportingPeriod ReportingPeriod     @relation(fields: [reportingPeriodId], references: [id])
+  preparedBy      Person?             @relation("ReportPreparer", fields: [preparedByPersonId], references: [id])
+  submittedBy     Person?             @relation("ReportSubmitter", fields: [submittedByPersonId], references: [id])
+
+  values  PerformanceValue[]
+  reviews PerformanceReview[]
+
+  @@unique([contractId, reportingPeriodId])
+  @@index([reportingPeriodId])
+  @@map("performance_report")
+}
+
+model PerformanceValue {
+  id                String           @id @default(uuid()) @db.Uuid
+  reportId          String           @map("report_id") @db.Uuid
+  assignmentId      String           @map("assignment_id") @db.Uuid
+  contributionType  ContributionType @map("contribution_type")
+  reportingStatus   ReportingStatus  @default(REPORTED) @map("reporting_status")
+  value             Decimal?         @db.Decimal(18, 4)
+  numerator         Decimal?         @db.Decimal(18, 4)
+  denominator       Decimal?         @db.Decimal(18, 4)
+  scaleLevelId      String?          @map("scale_level_id") @db.Uuid
+  currencyId        String?          @map("currency_id") @db.Uuid
+  convertedValue    Decimal?         @map("converted_value") @db.Decimal(18, 4)
+  exchangeRateId    String?          @map("exchange_rate_id") @db.Uuid
+  note              String?
+  enteredByPersonId String?          @map("entered_by_person_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  report       PerformanceReport @relation(fields: [reportId], references: [id])
+  assignment   KpiAssignment     @relation(fields: [assignmentId], references: [id])
+  scaleLevel   KpiScaleLevel?    @relation(fields: [scaleLevelId], references: [id])
+  currency     Currency?         @relation(fields: [currencyId], references: [id])
+  exchangeRate ExchangeRate?     @relation(fields: [exchangeRateId], references: [id])
+  enteredBy    Person?           @relation(fields: [enteredByPersonId], references: [id])
+
+  evidence PerformanceEvidence[]
+
+  @@unique([reportId, assignmentId, contributionType])
+  @@index([assignmentId])
+  @@map("performance_value")
+}
+
+model PerformanceEvidence {
+  id                 String             @id @default(uuid()) @db.Uuid
+  performanceValueId String             @map("performance_value_id") @db.Uuid
+  documentId         String             @map("document_id") @db.Uuid
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  verifiedByPersonId String?            @map("verified_by_person_id") @db.Uuid
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(6)
+  comment            String?
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  performanceValue PerformanceValue @relation(fields: [performanceValueId], references: [id])
+  document         Document         @relation(fields: [documentId], references: [id])
+  verifiedBy       Person?          @relation(fields: [verifiedByPersonId], references: [id])
+
+  @@unique([performanceValueId, documentId])
+  @@map("performance_evidence")
+}
+
+model PerformanceReview {
+  id               String         @id @default(uuid()) @db.Uuid
+  reportId         String         @map("report_id") @db.Uuid
+  reviewerPersonId String         @map("reviewer_person_id") @db.Uuid
+  reviewerOfficeId String?        @map("reviewer_office_id") @db.Uuid
+  decision         ReviewDecision
+  comment          String?
+  reviewedAt       DateTime       @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+
+  report         PerformanceReport @relation(fields: [reportId], references: [id])
+  reviewer       Person            @relation(fields: [reviewerPersonId], references: [id])
+  reviewerOffice Office?           @relation(fields: [reviewerOfficeId], references: [id])
+
+  @@index([reportId])
+  @@map("performance_review")
+}
+
+model PerformanceStatusThreshold {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String   @unique
+  minPercent Decimal  @map("min_percent") @db.Decimal(9, 4)
+  maxPercent Decimal? @map("max_percent") @db.Decimal(9, 4)
+  color      String?
+  sortOrder  Int      @default(0) @map("sort_order")
+  isActive   Boolean  @default(true) @map("is_active")
+
+  achievements KpiAchievement[]
+
+  @@map("performance_status_threshold")
+}
+
+// Records the exact baseline, target and weight versions used, so past results stay traceable.
+model KpiAchievement {
+  id                           String            @id @default(uuid()) @db.Uuid
+  assignmentId                 String            @map("assignment_id") @db.Uuid
+  reportingPeriodId            String            @map("reporting_period_id") @db.Uuid
+  baselineId                   String            @map("baseline_id") @db.Uuid
+  targetId                     String            @map("target_id") @db.Uuid
+  weightId                     String            @map("weight_id") @db.Uuid
+  actualValue                  Decimal?          @map("actual_value") @db.Decimal(18, 4)
+  actualNumerator              Decimal?          @map("actual_numerator") @db.Decimal(18, 4)
+  actualDenominator            Decimal?          @map("actual_denominator") @db.Decimal(18, 4)
+  actualScaleLevelId           String?           @map("actual_scale_level_id") @db.Uuid
+  requiredImprovement          Decimal?          @map("required_improvement") @db.Decimal(18, 4)
+  actualImprovement            Decimal?          @map("actual_improvement") @db.Decimal(18, 4)
+  improvementCalculable        Boolean           @default(true) @map("improvement_calculable")
+  notCalculableReason          String?           @map("not_calculable_reason")
+  improvementAchievementRaw    Decimal?          @map("improvement_achievement_raw") @db.Decimal(12, 4)
+  improvementAchievementCapped Decimal?          @map("improvement_achievement_capped") @db.Decimal(12, 4)
+  targetAchievementRaw         Decimal?          @map("target_achievement_raw") @db.Decimal(12, 4)
+  targetAchievementCapped      Decimal?          @map("target_achievement_capped") @db.Decimal(12, 4)
+  targetMet                    Boolean?          @map("target_met")
+  achievementStatus            AchievementStatus @map("achievement_status")
+  statusThresholdId            String?           @map("status_threshold_id") @db.Uuid
+  weightedImprovementScore     Decimal?          @map("weighted_improvement_score") @db.Decimal(12, 4)
+  weightedTargetScore          Decimal?          @map("weighted_target_score") @db.Decimal(12, 4)
+  isProvisional                Boolean           @default(true) @map("is_provisional")
+  calculatedAt                 DateTime          @default(now()) @map("calculated_at") @db.Timestamptz(6)
+
+  assignment       KpiAssignment               @relation(fields: [assignmentId], references: [id])
+  reportingPeriod  ReportingPeriod             @relation(fields: [reportingPeriodId], references: [id])
+  baseline         KpiBaseline                 @relation(fields: [baselineId], references: [id])
+  target           KpiTarget                   @relation(fields: [targetId], references: [id])
+  weight           KpiWeight                   @relation(fields: [weightId], references: [id])
+  actualScaleLevel KpiScaleLevel?              @relation(fields: [actualScaleLevelId], references: [id])
+  statusThreshold  PerformanceStatusThreshold? @relation(fields: [statusThresholdId], references: [id])
+
+  @@unique([assignmentId, reportingPeriodId])
+  @@index([reportingPeriodId])
+  @@map("kpi_achievement")
+}
+
+model ContractScore {
+  id                       String       @id @default(uuid()) @db.Uuid
+  contractId               String       @map("contract_id") @db.Uuid
+  reportingPeriodId        String       @map("reporting_period_id") @db.Uuid
+  totalWeight              Decimal      @map("total_weight") @db.Decimal(7, 4)
+  reportedWeight           Decimal      @map("reported_weight") @db.Decimal(7, 4)
+  weightedImprovementScore Decimal?     @map("weighted_improvement_score") @db.Decimal(12, 4)
+  weightedTargetScore      Decimal?     @map("weighted_target_score") @db.Decimal(12, 4)
+  officialBasis            ScoringBasis @map("official_basis")
+  isProvisional            Boolean      @default(true) @map("is_provisional")
+  calculatedAt             DateTime     @default(now()) @map("calculated_at") @db.Timestamptz(6)
+
+  contract        PerformanceContract @relation(fields: [contractId], references: [id])
+  reportingPeriod ReportingPeriod     @relation(fields: [reportingPeriodId], references: [id])
+
+  @@unique([contractId, reportingPeriodId])
+  @@map("contract_score")
 }
 
 // ===== System =====
 
 model SystemSetting {
-  id                 String   @id @default(uuid()) @db.Uuid
-  groupName          String   @map("group_name")
-  key                String
-  value              String?
-  valueType          String   @default("text") @map("value_type")
-  fileId             String?  @map("file_id") @db.Uuid
-  description        String?
-  isPublic           Boolean  @default(false) @map("is_public")
-  updatedByPersonId  String?  @map("updated_by_person_id") @db.Uuid
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                String   @id @default(uuid()) @db.Uuid
+  groupName         String   @map("group_name")
+  key               String
+  value             String?
+  valueType         String   @default("text") @map("value_type")
+  fileId            String?  @map("file_id") @db.Uuid
+  description       String?
+  isPublic          Boolean  @default(false) @map("is_public")
+  updatedByPersonId String?  @map("updated_by_person_id") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  file      File?   @relation(fields: [fileId], references: [id])
-  updatedBy Person? @relation(fields: [updatedByPersonId], references: [id])
+  file      FileUpload? @relation(fields: [fileId], references: [id])
+  updatedBy Person?     @relation(fields: [updatedByPersonId], references: [id])
 
   @@unique([groupName, key])
   @@map("system_setting")
@@ -442,17 +1143,17 @@ model Notification {
   createdByPersonId    String?  @map("created_by_person_id") @db.Uuid
   targetOfficeId       String?  @map("target_office_id") @db.Uuid
   includeSubOffices    Boolean  @default(false) @map("include_sub_offices")
-  requiredPermissionId Int?     @map("required_permission_id")
+  requiredPermissionId String?  @map("required_permission_id") @db.Uuid
   title                String
   message              String
-  channel              String   @default("in_app")
+  notificationType     String?  @map("notification_type")
   entityType           String?  @map("entity_type")
   entityId             String?  @map("entity_id") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdBy          Person?      @relation(fields: [createdByPersonId], references: [id])
-  targetOffice       Office?      @relation(fields: [targetOfficeId], references: [id])
-  requiredPermission Permission?  @relation(fields: [requiredPermissionId], references: [id])
+  createdBy          Person?     @relation(fields: [createdByPersonId], references: [id])
+  targetOffice       Office?     @relation(fields: [targetOfficeId], references: [id])
+  requiredPermission Permission? @relation(fields: [requiredPermissionId], references: [id])
 
   recipients NotificationRecipient[]
 
@@ -463,6 +1164,7 @@ model NotificationRecipient {
   id             String    @id @default(uuid()) @db.Uuid
   notificationId String    @map("notification_id") @db.Uuid
   personId       String    @map("person_id") @db.Uuid
+  channel        String    @default("in_app")
   isRead         Boolean   @default(false) @map("is_read")
   readAt         DateTime? @map("read_at") @db.Timestamptz(6)
   deliveredAt    DateTime? @map("delivered_at") @db.Timestamptz(6)
@@ -470,7 +1172,7 @@ model NotificationRecipient {
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   person       Person       @relation(fields: [personId], references: [id])
 
-  @@unique([notificationId, personId])
+  @@unique([notificationId, personId, channel])
   @@index([personId, isRead])
   @@map("notification_recipient")
 }
@@ -483,6 +1185,7 @@ model AuditLog {
   entityId      String?  @map("entity_id")
   oldValues     Json?    @map("old_values")
   newValues     Json?    @map("new_values")
+  reason        String?
   ipAddress     String?  @map("ip_address")
   userAgent     String?  @map("user_agent")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

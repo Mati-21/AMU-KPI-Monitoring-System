@@ -48,14 +48,14 @@ router.post('/roles', protect, requirePermission(PERMISSIONS.ROLE_CREATE), roleC
  *     summary: Role details with granted permission codes
  *     tags: [Access Control]
  *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: integer } }
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
  *       200: { description: Role }
  *   put:
  *     summary: Rename or re-describe a role
  *     tags: [Access Control]
  *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: integer } }
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       content:
  *         application/json:
@@ -70,7 +70,7 @@ router.post('/roles', protect, requirePermission(PERMISSIONS.ROLE_CREATE), roleC
  *     summary: Delete a role that has no active assignments
  *     tags: [Access Control]
  *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: integer } }
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
  *       200: { description: Deleted }
  */
@@ -85,7 +85,7 @@ router.delete('/roles/:id', protect, requirePermission(PERMISSIONS.ROLE_DELETE),
  *     summary: Replace the role's permission set
  *     tags: [Access Control]
  *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: integer } }
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
  *       required: true
  *       content:
@@ -127,7 +127,7 @@ router.get('/permissions', protect, requirePermission(PERMISSIONS.ROLE_READ), ro
  *             type: object
  *             required: [roleId]
  *             properties:
- *               roleId: { type: integer }
+ *               roleId: { type: string, format: uuid }
  *               scopeOfficeId:
  *                 type: string
  *                 format: uuid

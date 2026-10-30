@@ -37,6 +37,11 @@ export const updateOffice = async (req, res) => {
   res.json({ status: 'success', data: office });
 };
 
+export const getOfficeHistory = async (req, res) => {
+  const history = await officeService.getOfficeHistory(req.params.id);
+  res.json({ status: 'success', data: history });
+};
+
 export const listPositions = async (req, res) => {
   const positions = await officeService.listPositions(req.params.id);
   res.json({ status: 'success', data: positions });
@@ -65,6 +70,7 @@ export default {
   getOfficeById,
   createOffice,
   updateOffice,
+  getOfficeHistory,
   listPositions,
   createPosition,
   listMembers,

@@ -28,32 +28,20 @@
       "label": "KPI & Scoring",
       "description": "Defaults for KPI planning and performance scoring.",
       "settings": [
-        { "key": "default_cycle_names", "label": "Default evaluation cycles", "type": "json", "validator": "stringList", "default": ["Q1", "Q2", "Q3", "Q4"], "public": false, "description": "Cycle names suggested when scheduling evaluation cycles for a fiscal year" },
-        {
-          "key": "rating_bands",
-          "label": "Performance rating bands",
-          "type": "json",
-          "validator": "ratingBands",
-          "default": [
-            { "min": 90, "label": "Excellent" },
-            { "min": 75, "label": "Very Good" },
-            { "min": 60, "label": "Good" },
-            { "min": 50, "label": "Satisfactory" },
-            { "min": 0, "label": "Needs Improvement" }
-          ],
-          "public": false,
-          "description": "Score thresholds (percent) and labels used to grade KPIs, offices and scorecards; highest band first, last band starts at 0"
-        },
-        { "key": "max_score_percent", "label": "Maximum score", "type": "number", "default": 120, "min": 100, "max": 200, "integer": true, "public": false, "description": "Cap on an achievement score when actuals exceed the target" },
-        { "key": "default_max_over_allocation_percent", "label": "Default over-allocation cap", "type": "number", "default": 10, "min": 0, "max": 100, "public": false, "description": "Default maxOverAllocationPercent for new KPIs when cascading targets" }
+        { "key": "official_basis", "label": "Official score basis", "type": "enum", "options": ["TARGET", "IMPROVEMENT"], "default": "TARGET", "public": false, "description": "Which achievement is the official weighted score. Both are always calculated and kept" },
+        { "key": "cap_overachievement", "label": "Cap overachievement", "type": "boolean", "default": true, "public": false, "description": "Cap official scores at the maximum score. The raw value is always kept" },
+        { "key": "max_score_percent", "label": "Maximum score", "type": "number", "default": 100, "min": 100, "max": 200, "integer": true, "public": false, "description": "Highest official achievement score when overachievement is capped" },
+        { "key": "contract_total_weight", "label": "Contract total weight", "type": "number", "default": 100, "min": 1, "max": 100, "public": false, "description": "Default total the KPI weights of a new performance contract must reach" },
+        { "key": "missing_result_policy", "label": "Missing results", "type": "enum", "options": ["PENDING", "AUTO_FILL_ZERO"], "default": "PENDING", "public": false, "description": "PENDING leaves a missing result unscored and the total provisional. AUTO_FILL_ZERO records 0 and marks the row as auto-filled" },
+        { "key": "default_max_over_allocation_percent", "label": "Default over-allocation cap", "type": "number", "default": 10, "min": 0, "max": 100, "public": false, "description": "Default over-allocation cap for new KPI assignments when cascading" }
       ]
     },
     {
       "group": "reporting",
       "label": "Reporting & Deadlines",
-      "description": "Rules for submitting KPI reports in evaluation cycles.",
+      "description": "Rules for submitting KPI reports in reporting periods.",
       "settings": [
-        { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a cycle's period end until the report submission deadline (used when a cycle has no explicit due date)" },
+        { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a reporting period ends until the report is due (used when a period has no explicit deadline)" },
         { "key": "reminder_days_before_deadline", "label": "Deadline reminders", "type": "json", "validator": "dayList", "default": [7, 3, 1], "public": false, "description": "Days before the deadline on which offices with unsubmitted reports are reminded" },
         { "key": "allow_late_submission", "label": "Allow late submission", "type": "boolean", "default": true, "public": false, "description": "Whether offices may still submit after the deadline (within the grace period)" },
         { "key": "late_submission_grace_days", "label": "Late submission grace period", "type": "number", "default": 5, "min": 0, "max": 60, "integer": true, "public": false, "description": "Days after the deadline during which late submissions are accepted and flagged as late" },

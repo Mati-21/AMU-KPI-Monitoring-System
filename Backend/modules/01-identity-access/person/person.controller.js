@@ -1,8 +1,8 @@
 import * as personService from './person.service.js';
 
 export const listPersons = async (req, res) => {
-  const { search, status, officeId, hasAccount, page, limit } = req.query;
-  const result = await personService.listPersons({ search, status, officeId, hasAccount, page, limit });
+  const { search, isActive, officeId, hasAccount, page, limit } = req.query;
+  const result = await personService.listPersons({ search, isActive, officeId, hasAccount, page, limit });
   res.json({ status: 'success', ...result });
 };
 

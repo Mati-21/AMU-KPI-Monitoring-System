@@ -1,9 +1,9 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
-import { activeOn, overlaps } from '../../utils/dates.js';
+import { activeOn, overlaps, startOfTodayUtc } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
-import { optionalString, parseBoolean, parseBooleanQuery, parseDate, parseIntId, requireString } from '../../utils/validation.js';
+import { optionalString, parseBoolean, parseBooleanQuery, parseDate, parseIntId, parseUuid, requireString } from '../../utils/validation.js';
 
 /**
  * Module 02 — Office hierarchy.
@@ -11,7 +11,7 @@ import { optionalString, parseBoolean, parseBooleanQuery, parseDate, parseIntId,
  * OfficeType.levelOrder orders the tiers: a child must sit at a deeper level than its parent.
  */
 
-const OFFICE_TYPE_SELECT = { id: true, name: true, levelOrder: true };
+const OFFICE_TYPE_SELECT = { id: true, name: true, description: true, levelOrder: true, isActive: true };
 const OFFICE_REF_SELECT = { id: true, name: true, code: true };
 const PERSON_REF_SELECT = { id: true, firstName: true, middleName: true, lastName: true, email: true };
 
@@ -83,7 +83,7 @@ export const listOfficeTypes = async () => {
   return types.map(({ _count, ...type }) => ({ ...type, officeCount: _count.offices }));
 };
 
-export const createOfficeType = async ({ name, levelOrder } = {}, actor) => {
+export const createOfficeType = async ({ name, description, levelOrder } = {}, actor) => {
   if (!actor.access.canGlobally(PERMISSIONS.OFFICE_MANAGE)) {
     throw forbidden('Defining office types requires university-wide office:manage authority');
   }
@@ -94,7 +94,7 @@ export const createOfficeType = async ({ name, levelOrder } = {}, actor) => {
   const duplicate = await prisma.officeType.findFirst({ where: { name: { equals: cleanName, mode: 'insensitive' } } });
   if (duplicate) throw conflict(`Office type "${duplicate.name}" already exists`);
 
-  const officeType = await prisma.officeType.create({ data: { name: cleanName, levelOrder: level }, select: OFFICE_TYPE_SELECT });
+  const officeType = await prisma.officeType.create({ data: { name: cleanName, description: optionalString(description, 'description') ?? null, levelOrder: level }, select: OFFICE_TYPE_SELECT });
   await auditAction(actor, { action: 'OFFICE_TYPE_CREATED', entityType: 'office_type', entityId: officeType.id, newValues: officeType });
   return officeType;
 };
@@ -103,7 +103,7 @@ export const createOfficeType = async ({ name, levelOrder } = {}, actor) => {
 
 export const listOffices = async ({ officeTypeId, parentOfficeId, isActive, search } = {}) => {
   const where = {};
-  const typeId = parseIntId(officeTypeId, 'officeTypeId', { required: false });
+  const typeId = parseUuid(officeTypeId, 'officeTypeId', { required: false });
   const active = parseBooleanQuery(isActive, 'isActive');
   if (typeId) where.officeTypeId = typeId;
   if (parentOfficeId) where.parentOfficeId = parentOfficeId;
@@ -161,10 +161,11 @@ export const getOfficeById = async (id) => {
   };
 };
 
-export const createOffice = async ({ name, code, officeTypeId, parentOfficeId } = {}, actor) => {
+export const createOffice = async ({ name, code, officeTypeId, parentOfficeId, canAssignKpi } = {}, actor) => {
   const cleanName = requireString(name, 'name');
   const cleanCode = normalizeCode(optionalString(code, 'code'));
-  const typeId = parseIntId(officeTypeId, 'officeTypeId');
+  const typeId = parseUuid(officeTypeId, 'officeTypeId');
+  const canAssign = parseBoolean(canAssignKpi, 'canAssignKpi') ?? true;
 
   const officeType = await prisma.officeType.findUnique({ where: { id: typeId } });
   if (!officeType) throw badRequest('Office type not found');
@@ -185,16 +186,23 @@ export const createOffice = async ({ name, code, officeTypeId, parentOfficeId } 
   }
   await assertCodeAvailable(cleanCode);
 
-  const office = await prisma.office.create({
-    data: { name: cleanName, code: cleanCode ?? null, officeTypeId: typeId, parentOfficeId: parentOfficeId || null },
+  const office = await prisma.$transaction(async (tx) => {
+    const created = await tx.office.create({
+      data: { name: cleanName, code: cleanCode ?? null, officeTypeId: typeId, parentOfficeId: parentOfficeId || null, canAssignKpi: canAssign },
+    });
+    await tx.officeHierarchyHistory.create({
+      data: { officeId: created.id, parentOfficeId: created.parentOfficeId, validFrom: startOfTodayUtc(), changedByPersonId: actor.personId },
+    });
+    return created;
   });
   await auditAction(actor, { action: 'OFFICE_CREATED', entityType: 'office', entityId: office.id, newValues: office });
   return getOfficeById(office.id);
 };
 
 /**
- * Update name, code, type, parent or active flag.
- * Re-parenting is refused when the new parent is the office itself or one of its descendants (would create a cycle).
+ * Update name, code, type, parent, KPI-assigning flag or active flag.
+ * Re-parenting is refused when the new parent is the office itself or one of its descendants (would create a cycle),
+ * and closes the current hierarchy history row and opens a new one (data.reason is recorded on it).
  */
 export const updateOffice = async (id, data = {}, actor) => {
   const existing = await getOfficeOrThrow(id, {
@@ -213,7 +221,7 @@ export const updateOffice = async (id, data = {}, actor) => {
 
   let officeType = existing.officeType;
   if (data.officeTypeId !== undefined) {
-    const typeId = parseIntId(data.officeTypeId, 'officeTypeId');
+    const typeId = parseUuid(data.officeTypeId, 'officeTypeId');
     officeType = await prisma.officeType.findUnique({ where: { id: typeId } });
     if (!officeType) throw badRequest('Office type not found');
     update.officeTypeId = typeId;
@@ -253,12 +261,38 @@ export const updateOffice = async (id, data = {}, actor) => {
     update.isActive = isActive;
   }
 
+  const canAssignKpi = parseBoolean(data.canAssignKpi, 'canAssignKpi');
+  if (canAssignKpi !== undefined) update.canAssignKpi = canAssignKpi;
+
   if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
 
   const { officeType: _type, parent: _parent, children: _children, ...before } = existing;
-  const updated = await prisma.office.update({ where: { id }, data: update });
-  await auditAction(actor, { action: 'OFFICE_UPDATED', entityType: 'office', entityId: id, oldValues: before, newValues: updated });
+  const reason = optionalString(data.reason, 'reason') ?? null;
+  const updated = await prisma.$transaction(async (tx) => {
+    if (update.parentOfficeId !== undefined) {
+      const today = startOfTodayUtc();
+      await tx.officeHierarchyHistory.updateMany({ where: { officeId: id, validTo: null }, data: { validTo: today } });
+      await tx.officeHierarchyHistory.create({
+        data: { officeId: id, parentOfficeId: update.parentOfficeId, validFrom: today, reason, changedByPersonId: actor.personId },
+      });
+    }
+    return tx.office.update({ where: { id }, data: update });
+  });
+  await auditAction(actor, { action: 'OFFICE_UPDATED', entityType: 'office', entityId: id, oldValues: before, newValues: updated, reason });
   return getOfficeById(id);
+};
+
+/**
+ * Parents this office has had, newest first.
+ */
+export const getOfficeHistory = async (id) => {
+  await getOfficeOrThrow(id);
+  const rows = await prisma.officeHierarchyHistory.findMany({
+    where: { officeId: id },
+    orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }],
+    include: { parent: { select: OFFICE_REF_SELECT }, changedBy: { select: PERSON_REF_SELECT } },
+  });
+  return rows.map(({ changedBy, ...row }) => ({ ...row, changedBy: changedBy ? personRef(changedBy) : null }));
 };
 
 /**
@@ -316,7 +350,7 @@ export const createPosition = async (officeId, { title, isHead } = {}, actor) =>
 // ===== Members (OfficePerson placements) =====
 
 const PLACEMENT_INCLUDE = {
-  person: { select: { ...PERSON_REF_SELECT, status: true } },
+  person: { select: { ...PERSON_REF_SELECT, isActive: true } },
   position: { select: { id: true, title: true, isHead: true } },
   roles: {
     where: activeOn('validFrom', 'validTo'),
@@ -330,7 +364,7 @@ const PLACEMENT_INCLUDE = {
   },
 };
 
-const formatPlacement = ({ person, ...placement }) => ({ ...placement, person: { ...personRef(person), status: person.status } });
+const formatPlacement = ({ person, ...placement }) => ({ ...placement, person: { ...personRef(person), isActive: person.isActive } });
 
 /**
  * Currently active placements in the office, heads first.
@@ -365,7 +399,7 @@ export const assignMember = async (officeId, { personId, positionId, startDate, 
 
   const person = await prisma.person.findUnique({ where: { id: personId } });
   if (!person) throw badRequest('Person not found');
-  if (person.status === 'archived') throw badRequest(`${fullName(person)} is archived and cannot be placed`);
+  if (!person.isActive) throw badRequest(`${fullName(person)} is inactive and cannot be placed`);
 
   const position = await prisma.position.findUnique({ where: { id: positionId } });
   if (!position || position.officeId !== officeId) throw badRequest('Position not found in this office');
@@ -411,6 +445,7 @@ export default {
   getOfficeById,
   createOffice,
   updateOffice,
+  getOfficeHistory,
   listPositions,
   createPosition,
   listMembers,

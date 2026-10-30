@@ -4,7 +4,10 @@
     {
       "name": "University Leadership",
       "description": "Institution-wide oversight: dashboards, scorecards and final review of office reports.",
-      "typicalPositions": ["President", "Vice President"],
+      "typicalPositions": [
+        "President",
+        "Vice President"
+      ],
       "typicalScope": "university",
       "permissions": [
         "dashboard:read",
@@ -20,7 +23,10 @@
     {
       "name": "Strategy Officer",
       "description": "Owns strategic planning: KPI catalog, fiscal years, institutional targets and evaluation cycles.",
-      "typicalPositions": ["Strategy & Planning Director", "Planning Officer"],
+      "typicalPositions": [
+        "Strategy & Planning Director",
+        "Planning Officer"
+      ],
       "typicalScope": "university",
       "permissions": [
         "kpi:*",
@@ -38,14 +44,25 @@
     {
       "name": "Access Administrator",
       "description": "Administers people, offices and role assignments without the Super Admin wildcard.",
-      "typicalPositions": ["ICT Director", "HR Officer"],
+      "typicalPositions": [
+        "ICT Director",
+        "HR Officer"
+      ],
       "typicalScope": "university",
-      "permissions": ["user:*", "office:*", "role:*", "audit:read"]
+      "permissions": [
+        "user:*",
+        "office:*",
+        "role:*",
+        "audit:read"
+      ]
     },
     {
       "name": "College Leadership",
       "description": "Leads a college or directorate: cascades targets, reviews and verifies its units' performance, assigns department roles.",
-      "typicalPositions": ["Dean", "Directorate Director"],
+      "typicalPositions": [
+        "Dean",
+        "Directorate Director"
+      ],
       "typicalScope": "office",
       "permissions": [
         "user:read",
@@ -67,7 +84,10 @@
     {
       "name": "Department Leadership",
       "description": "Leads a department or unit: assigns targets to staff, prepares and submits the office report.",
-      "typicalPositions": ["Department Head", "Unit Head"],
+      "typicalPositions": [
+        "Department Head",
+        "Unit Head"
+      ],
       "typicalScope": "office",
       "permissions": [
         "user:read",
@@ -88,7 +108,11 @@
     {
       "name": "Staff",
       "description": "Reports achievement on own targets and attaches evidence.",
-      "typicalPositions": ["Lecturer", "Officer", "Researcher"],
+      "typicalPositions": [
+        "Lecturer",
+        "Officer",
+        "Researcher"
+      ],
       "typicalScope": "office",
       "permissions": [
         "target:read",
@@ -97,6 +121,24 @@
         "file:*",
         "document:create",
         "evidence:*"
+      ]
+    },
+    {
+      "name": "Auditor",
+      "description": "Read-only review of KPI information, historical performance, evidence and the audit trail.",
+      "typicalPositions": [
+        "Internal Auditor"
+      ],
+      "typicalScope": "university",
+      "permissions": [
+        "audit:read",
+        "dashboard:read",
+        "scorecard:read",
+        "target:read",
+        "report:read",
+        "evaluation:read",
+        "evidence:read",
+        "file:read"
       ]
     }
   ]

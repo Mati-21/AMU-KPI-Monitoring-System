@@ -30,6 +30,17 @@ export const parseIntId = (value, field, { required = true } = {}) => {
   return number;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const parseUuid = (value, field, { required = true } = {}) => {
+  if (value === undefined || value === null || value === '') {
+    if (required) throw badRequest(`${field} is required`);
+    return undefined;
+  }
+  if (typeof value !== 'string' || !UUID.test(value)) throw badRequest(`${field} must be a valid id`);
+  return value;
+};
+
 /**
  * Body boolean: must be a real boolean when provided.
  */
@@ -63,4 +74,4 @@ export const parseDate = (value, field, { required = true } = {}) => {
   return date;
 };
 
-export default { requireString, optionalString, parseIntId, parseBoolean, parseBooleanQuery, parseDate };
+export default { requireString, optionalString, parseIntId, parseUuid, parseBoolean, parseBooleanQuery, parseDate };

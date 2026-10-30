@@ -1,0 +1,65 @@
+{
+  "description": "Starting reference data, seeded by `npm run seed:reference` (also part of seed:admin). Only missing rows are created, so anything the university edits later stays as edited. The status thresholds and scales are examples from the SRS for the university to change; scale scoring starts unapproved.",
+  "currencies": [
+    { "code": "ETB", "name": "Ethiopian Birr", "symbol": "Br", "isReportingCurrency": true }
+  ],
+  "measurementUnits": [
+    { "name": "Count", "symbol": "#", "description": "A quantity of something" },
+    { "name": "Percent", "symbol": "%", "description": "A proportion out of 100" },
+    { "name": "Ratio", "symbol": ":", "description": "One quantity per another" },
+    { "name": "Birr", "symbol": "Br", "description": "Ethiopian Birr" }
+  ],
+  "reportingFrequencies": [
+    { "name": "Monthly", "intervalMonths": 1 },
+    { "name": "Quarterly", "intervalMonths": 3 },
+    { "name": "Semi-annual", "intervalMonths": 6 },
+    { "name": "Annual", "intervalMonths": 12 },
+    { "name": "Custom", "intervalMonths": null, "isCustom": true }
+  ],
+  "scales": [
+    {
+      "name": "Maturity Stages",
+      "scaleType": "STAGE",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Initial", "sortOrder": 1, "score": 1 },
+        { "name": "Developing", "sortOrder": 2, "score": 2 },
+        { "name": "Established", "sortOrder": 3, "score": 3 },
+        { "name": "Advanced", "sortOrder": 4, "score": 4 },
+        { "name": "Optimized", "sortOrder": 5, "score": 5 }
+      ]
+    },
+    {
+      "name": "Quality Rating",
+      "scaleType": "CATEGORY",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Poor", "sortOrder": 1, "score": 1 },
+        { "name": "Satisfactory", "sortOrder": 2, "score": 2 },
+        { "name": "Good", "sortOrder": 3, "score": 3 },
+        { "name": "Excellent", "sortOrder": 4, "score": 4 }
+      ]
+    },
+    {
+      "name": "Yes or No",
+      "scaleType": "CATEGORY",
+      "isOrdered": false,
+      "isBinary": true,
+      "levels": [
+        { "name": "No", "sortOrder": 1 },
+        { "name": "Yes", "sortOrder": 2 }
+      ]
+    }
+  ],
+  "statusThresholds": [
+    { "name": "Target Achieved", "minPercent": 100, "maxPercent": null, "color": "#16a34a", "sortOrder": 1 },
+    { "name": "Near Target", "minPercent": 80, "maxPercent": 99.99, "color": "#ca8a04", "sortOrder": 2 },
+    { "name": "Needs Improvement", "minPercent": 60, "maxPercent": 79.99, "color": "#ea580c", "sortOrder": 3 },
+    { "name": "Poor Performance", "minPercent": 0, "maxPercent": 59.99, "color": "#dc2626", "sortOrder": 4 }
+  ],
+  "documentTypes": [
+    { "name": "Performance Evidence", "description": "Supports a reported result", "allowedExtensions": "pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg", "maxSizeMb": 25 },
+    { "name": "Baseline Evidence", "description": "Supports an official baseline", "allowedExtensions": "pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg", "maxSizeMb": 25 },
+    { "name": "Change Request Evidence", "description": "Supports a baseline, target or weight change request", "allowedExtensions": "pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg", "maxSizeMb": 25 }
+  ]
+}

@@ -52,7 +52,7 @@ const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
  * Typed value of one setting, read from the database. For use by any module, e.g.
- * `await getSetting('kpi', 'rating_bands')`.
+ * `await getSetting('kpi', 'official_basis')`.
  */
 export const getSetting = async (group, key) => {
   const definition = getSettingDefinition(group, key);
@@ -116,7 +116,7 @@ export const getPublicSettings = async () => {
     );
   }
 
-  const activeFiscalYear = await prisma.fiscalYear.findFirst({ where: { status: 'active' }, select: { id: true, label: true } });
+  const activeFiscalYear = await prisma.fiscalYear.findFirst({ where: { status: 'ACTIVE' }, select: { id: true, name: true } });
   return { ...settings, activeFiscalYear };
 };
 
@@ -161,7 +161,7 @@ export const updateSettingsGroup = async (groupName, { settings } = {}, actor) =
 
   // File settings must point at an existing File
   for (const { definition, value } of updates) {
-    if (definition.type === 'file' && value && !(await prisma.file.findUnique({ where: { id: value }, select: { id: true } }))) {
+    if (definition.type === 'file' && value && !(await prisma.fileUpload.findUnique({ where: { id: value }, select: { id: true } }))) {
       errors.push(`${definition.key} references a file that does not exist`);
     }
   }

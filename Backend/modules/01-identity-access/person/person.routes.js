@@ -20,7 +20,7 @@ const router = Router();
  *     tags: [Persons]
  *     parameters:
  *       - { in: query, name: search, schema: { type: string }, description: Name, email, phone or username }
- *       - { in: query, name: status, schema: { type: string, example: active } }
+ *       - { in: query, name: isActive, schema: { type: boolean } }
  *       - { in: query, name: officeId, schema: { type: string, format: uuid } }
  *       - { in: query, name: hasAccount, schema: { type: boolean } }
  *       - { in: query, name: page, schema: { type: integer, default: 1 } }
@@ -38,11 +38,10 @@ const router = Router();
  *             type: object
  *             required: [firstName, lastName]
  *             properties:
+ *               staffNumber: { type: string, example: AMU-00123 }
  *               firstName: { type: string, example: Abebe }
  *               middleName: { type: string, example: Kebede }
  *               lastName: { type: string, example: Alemu }
- *               gender: { type: string, example: Male }
- *               birthDate: { type: string, format: date }
  *               email: { type: string, example: abebe.kebede@amu.edu.et }
  *               phone: { type: string, example: "0911223344" }
  *               account:
@@ -81,18 +80,17 @@ router.post('/persons', protect, requirePermission(PERMISSIONS.USER_CREATE), per
  *           schema:
  *             type: object
  *             properties:
+ *               staffNumber: { type: string }
  *               firstName: { type: string }
  *               middleName: { type: string }
  *               lastName: { type: string }
- *               gender: { type: string }
- *               birthDate: { type: string, format: date }
  *               email: { type: string }
  *               phone: { type: string }
- *               status: { type: string }
+ *               isActive: { type: boolean }
  *     responses:
  *       200: { description: Updated }
  *   delete:
- *     summary: Delete a person (archived instead when referenced by institutional records)
+ *     summary: Delete a person (deactivated instead when referenced by institutional records)
  *     tags: [Persons]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }

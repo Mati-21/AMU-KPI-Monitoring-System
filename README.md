@@ -21,7 +21,7 @@ cd Backend
 cp .env.example .env          # then set DATABASE_URL and JWT_SECRET
 npm install
 npm run db:deploy             # apply migrations (npm run db:migrate when changing schema.prisma)
-npm run seed:admin            # root office, permission catalog, settings, Super Admin (prints the temporary password)
+npm run seed:admin            # root office, permission catalog, settings, reference data, Super Admin (prints the temporary password)
 npm run dev                   # http://localhost:8058, API under /api/v1
 ```
 

@@ -32,6 +32,7 @@ const router = Router();
  *             required: [name]
  *             properties:
  *               name: { type: string, example: College }
+ *               description: { type: string }
  *               levelOrder: { type: integer, example: 2 }
  *     responses:
  *       201: { description: Created }
@@ -57,7 +58,7 @@ router.get('/offices/tree', protect, officeController.getOfficeTree);
  *     summary: Flat list of offices with filters
  *     tags: [Offices]
  *     parameters:
- *       - { in: query, name: officeTypeId, schema: { type: integer } }
+ *       - { in: query, name: officeTypeId, schema: { type: string, format: uuid } }
  *       - { in: query, name: parentOfficeId, schema: { type: string, format: uuid } }
  *       - { in: query, name: isActive, schema: { type: boolean } }
  *       - { in: query, name: search, schema: { type: string } }
@@ -76,7 +77,8 @@ router.get('/offices/tree', protect, officeController.getOfficeTree);
  *             properties:
  *               name: { type: string, example: College of Natural Sciences }
  *               code: { type: string, example: CNS }
- *               officeTypeId: { type: integer, example: 2 }
+ *               officeTypeId: { type: string, format: uuid }
+ *               canAssignKpi: { type: boolean, default: true }
  *               parentOfficeId: { type: string, format: uuid }
  *     responses:
  *       201: { description: Created }
@@ -107,7 +109,9 @@ router.post('/offices', protect, requirePermission(PERMISSIONS.OFFICE_CREATE), o
  *             properties:
  *               name: { type: string }
  *               code: { type: string }
- *               officeTypeId: { type: integer }
+ *               officeTypeId: { type: string, format: uuid }
+ *               canAssignKpi: { type: boolean }
+ *               reason: { type: string, description: Why the office moved (kept in its hierarchy history) }
  *               parentOfficeId: { type: string, format: uuid }
  *               isActive: { type: boolean }
  *     responses:
@@ -115,6 +119,20 @@ router.post('/offices', protect, requirePermission(PERMISSIONS.OFFICE_CREATE), o
  */
 router.get('/offices/:id', protect, officeController.getOfficeById);
 router.put('/offices/:id', protect, requirePermission(PERMISSIONS.OFFICE_UPDATE), officeController.updateOffice);
+
+/**
+ * @swagger
+ * /api/v1/offices/{id}/history:
+ *   get:
+ *     summary: Parents this office has had and when, newest first
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Hierarchy history rows }
+ *       404: { description: Office not found }
+ */
+router.get('/offices/:id/history', protect, officeController.getOfficeHistory);
 
 /**
  * @swagger

@@ -15,25 +15,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Validators for json settings. Each returns an error message, or null when valid.
  */
 const JSON_VALIDATORS = {
-  stringList: (value) =>
-    Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'string' && item.trim())
-      ? null
-      : 'must be a non-empty list of names',
   dayList: (value) =>
     Array.isArray(value) && value.every((day) => Number.isInteger(day) && day >= 1 && day <= 90) && new Set(value).size === value.length
       ? null
       : 'must be a list of distinct whole days between 1 and 90',
-  ratingBands: (value) => {
-    if (!Array.isArray(value) || value.length === 0) return 'must be a non-empty list of { min, label }';
-    for (const band of value) {
-      if (typeof band?.label !== 'string' || !band.label.trim()) return 'each band needs a label';
-      if (typeof band?.min !== 'number' || band.min < 0 || band.min > 200) return 'each band needs a min between 0 and 200';
-    }
-    for (let i = 1; i < value.length; i += 1) {
-      if (value[i].min >= value[i - 1].min) return 'bands must be ordered from highest min to lowest';
-    }
-    return value[value.length - 1].min === 0 ? null : 'the last band must start at 0';
-  },
 };
 
 /**

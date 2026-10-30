@@ -16,6 +16,7 @@
     "seed:admin:reset": "node scripts/seedAdmin.js --reset-admin",
     "seed:permissions": "node scripts/seedPermissions.js",
     "seed:settings": "node scripts/seedSettings.js",
+    "seed:reference": "node scripts/seedReference.js",
     "seed:roles": "node scripts/seedRoles.js",
     "seed:roles:sync": "node scripts/seedRoles.js --sync",
     "seed:kpis": "node scripts/seedKpis.js",

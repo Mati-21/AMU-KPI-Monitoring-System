@@ -19,9 +19,9 @@ const toJson = (value) => (value === undefined || value === null ? undefined : r
 
 /**
  * Logs an activity to the audit trail. Never throws: auditing must not break the business operation.
- * Schema model: AuditLog (actorPersonId, action, entityType, entityId, oldValues, newValues, ipAddress, userAgent)
+ * Schema model: AuditLog (actorPersonId, action, entityType, entityId, oldValues, newValues, reason, ipAddress, userAgent)
  */
-export const logActivity = async ({ actorPersonId, action, entityType, entityId, oldValues, newValues, ipAddress, userAgent }) => {
+export const logActivity = async ({ actorPersonId, action, entityType, entityId, oldValues, newValues, reason, ipAddress, userAgent }) => {
   try {
     return await prisma.auditLog.create({
       data: {
@@ -31,6 +31,7 @@ export const logActivity = async ({ actorPersonId, action, entityType, entityId,
         entityId: entityId ? String(entityId) : null,
         oldValues: toJson(oldValues),
         newValues: toJson(newValues),
+        reason: reason || null,
         ipAddress: ipAddress || null,
         userAgent: userAgent || null,
       },
@@ -44,7 +45,7 @@ export const logActivity = async ({ actorPersonId, action, entityType, entityId,
 /**
  * Shortcut for services: audit an action performed by the acting user (see utils/requestContext.js).
  */
-export const auditAction = (actor, { action, entityType, entityId, oldValues, newValues }) =>
+export const auditAction = (actor, { action, entityType, entityId, oldValues, newValues, reason }) =>
   logActivity({
     actorPersonId: actor?.personId,
     action,
@@ -52,6 +53,7 @@ export const auditAction = (actor, { action, entityType, entityId, oldValues, ne
     entityId,
     oldValues,
     newValues,
+    reason,
     ipAddress: actor?.ipAddress,
     userAgent: actor?.userAgent,
   });

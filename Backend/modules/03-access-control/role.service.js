@@ -3,7 +3,7 @@ import { PERMISSION_CATALOG, PERMISSION_CODES, PERMISSIONS, SUPER_ADMIN_PERMISSI
 import { auditAction } from '../../utils/auditLogger.js';
 import { activeOn, overlaps, startOfTodayUtc } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
-import { optionalString, parseDate, parseIntId, requireString } from '../../utils/validation.js';
+import { optionalString, parseDate, parseUuid, requireString } from '../../utils/validation.js';
 
 /**
  * Module 03 — Roles, permission sets and office-scoped role assignments.
@@ -23,12 +23,12 @@ const OFFICE_REF_SELECT = { id: true, name: true, code: true };
 // An assignment is in force when its own window and its placement's tenure both include today
 const activeAssignmentWhere = () => ({ ...activeOn('validFrom', 'validTo'), officePerson: activeOn('startDate', 'endDate') });
 
-const isSuperAdminRole = (role) => role.name === SUPER_ADMIN_ROLE;
+const isSuperAdminRole = (role) => role.isSystem;
 const roleCodes = (role) => role.permissions.map((link) => link.permission.code).sort();
 
 const getRoleOrThrow = async (id) => {
   const role = await prisma.role.findUnique({
-    where: { id: parseIntId(id, 'id') },
+    where: { id: parseUuid(id, 'id') },
     include: { permissions: { include: { permission: true } } },
   });
   if (!role) throw notFound('Role not found');
@@ -88,7 +88,7 @@ const formatRole = (role, activeAssignments) => ({
   id: role.id,
   name: role.name,
   description: role.description,
-  isSystem: isSuperAdminRole(role),
+  isSystem: role.isSystem,
   permissions: roleCodes(role).map((code) => ({ code, description: DESCRIPTIONS.get(code) || null })),
   activeAssignments,
 });
@@ -102,7 +102,6 @@ export const listRoles = async () => {
   });
   return roles.map(({ _count, ...role }) => ({
     ...role,
-    isSystem: isSuperAdminRole(role),
     permissionCount: _count.permissions,
     activeAssignments: _count.officePersonRoles,
   }));
@@ -280,7 +279,7 @@ export const assignRole = async (officePersonId, { roleId, scopeOfficeId, validF
   if (!placement) throw notFound('Office placement not found');
   if (placement.endDate && placement.endDate < startOfTodayUtc()) throw badRequest('This office placement has already ended');
 
-  const role = await getRoleOrThrow(parseIntId(roleId, 'roleId'));
+  const role = await getRoleOrThrow(parseUuid(roleId, 'roleId'));
 
   let scope = placement.officeId;
   if (scopeOfficeId === null) scope = null;

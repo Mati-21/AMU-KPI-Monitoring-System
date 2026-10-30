@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
+import { parseBoolean, parseBooleanQuery } from '../../../utils/validation.js';
 
 const ACCOUNT_SELECT = {
   id: true,
@@ -34,15 +35,14 @@ export const formatPerson = (person) => {
   const account = person.userAccount;
   return {
     id: person.id,
+    staffNumber: person.staffNumber,
     firstName: person.firstName,
     middleName: person.middleName,
     lastName: person.lastName,
     fullName: [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' '),
     email: person.email,
     phone: person.phone,
-    gender: person.gender,
-    birthDate: person.birthDate,
-    status: person.status,
+    isActive: person.isActive,
     hasAccount: Boolean(account),
     account: account || null,
     placements: person.officePersons || [],
@@ -63,6 +63,12 @@ const assertUsernameAvailable = async (username, exceptAccountId) => {
   if (existing && existing.id !== exceptAccountId) throw conflict(`Username "${username}" is already taken`);
 };
 
+const assertStaffNumberAvailable = async (staffNumber, exceptPersonId) => {
+  if (!staffNumber) return;
+  const existing = await prisma.person.findUnique({ where: { staffNumber } });
+  if (existing && existing.id !== exceptPersonId) throw conflict(`Staff number "${staffNumber}" is already registered`);
+};
+
 const getPersonOrThrow = async (id) => {
   const person = await prisma.person.findUnique({ where: { id }, include: { userAccount: true } });
   if (!person) throw notFound('Person not found');
@@ -72,12 +78,13 @@ const getPersonOrThrow = async (id) => {
 /**
  * List persons with pagination, search (name, email, phone, username) and filters.
  */
-export const listPersons = async ({ search = '', status, officeId, hasAccount, page = 1, limit = 20 } = {}) => {
+export const listPersons = async ({ search = '', isActive, officeId, hasAccount, page = 1, limit = 20 } = {}) => {
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20));
 
   const where = {};
-  if (status) where.status = status;
+  const active = parseBooleanQuery(isActive, 'isActive');
+  if (active !== undefined) where.isActive = active;
   if (officeId) where.officePersons = { some: { officeId } };
   if (hasAccount !== undefined && hasAccount !== '') {
     where.userAccount = String(hasAccount).toLowerCase() === 'true' ? { isNot: null } : { is: null };
@@ -90,6 +97,7 @@ export const listPersons = async ({ search = '', status, officeId, hasAccount, p
       { lastName: { contains: q, mode: 'insensitive' } },
       { email: { contains: q, mode: 'insensitive' } },
       { phone: { contains: q, mode: 'insensitive' } },
+      { staffNumber: { contains: q, mode: 'insensitive' } },
       { userAccount: { username: { contains: q, mode: 'insensitive' } } },
     ];
   }
@@ -120,11 +128,13 @@ export const getPersonById = async (id) => {
 /**
  * Create a Person, optionally with a login account ({ account: { username, temporaryPassword, ... } }).
  */
-export const createPerson = async ({ firstName, middleName, lastName, gender, birthDate, email, phone, status = 'active', account }) => {
+export const createPerson = async ({ staffNumber, firstName, middleName, lastName, email, phone, account }) => {
   if (!firstName?.trim() || !lastName?.trim()) throw badRequest('firstName and lastName are required');
 
   const cleanEmail = normalizeEmail(email);
   await assertEmailAvailable(cleanEmail);
+  const cleanStaffNumber = staffNumber?.trim() || null;
+  await assertStaffNumberAvailable(cleanStaffNumber);
 
   const username = account?.username?.trim();
   const temporaryPassword = account?.temporaryPassword;
@@ -137,14 +147,12 @@ export const createPerson = async ({ firstName, middleName, lastName, gender, bi
   const person = await prisma.$transaction(async (tx) => {
     const created = await tx.person.create({
       data: {
+        staffNumber: cleanStaffNumber,
         firstName: firstName.trim(),
         middleName: middleName?.trim() || null,
         lastName: lastName.trim(),
-        gender: gender || null,
-        birthDate: birthDate ? new Date(birthDate) : null,
         email: cleanEmail,
         phone: phone?.trim() || null,
-        status,
       },
     });
 
@@ -168,7 +176,7 @@ export const createPerson = async ({ firstName, middleName, lastName, gender, bi
 };
 
 /**
- * Update demographic details of a person.
+ * Update the details of a person.
  */
 export const updatePerson = async (id, data) => {
   const existing = await getPersonOrThrow(id);
@@ -183,10 +191,13 @@ export const updatePerson = async (id, data) => {
     update.lastName = String(data.lastName).trim();
   }
   if (data.middleName !== undefined) update.middleName = data.middleName?.trim() || null;
-  if (data.gender !== undefined) update.gender = data.gender || null;
-  if (data.birthDate !== undefined) update.birthDate = data.birthDate ? new Date(data.birthDate) : null;
   if (data.phone !== undefined) update.phone = data.phone?.trim() || null;
-  if (data.status !== undefined) update.status = data.status;
+  const isActive = parseBoolean(data.isActive, 'isActive');
+  if (isActive !== undefined) update.isActive = isActive;
+  if (data.staffNumber !== undefined) {
+    update.staffNumber = data.staffNumber?.trim() || null;
+    await assertStaffNumberAvailable(update.staffNumber, existing.id);
+  }
   if (data.email !== undefined) {
     update.email = normalizeEmail(data.email);
     await assertEmailAvailable(update.email, existing.id);
@@ -197,20 +208,20 @@ export const updatePerson = async (id, data) => {
 };
 
 /**
- * Delete a person; if they are referenced by institutional records, archive them instead.
+ * Delete a person; if they are referenced by institutional records, deactivate them instead.
  */
 export const deletePerson = async (id) => {
   await getPersonOrThrow(id);
   try {
     await prisma.person.delete({ where: { id } });
-    return { archived: false, message: 'Person deleted successfully' };
+    return { deactivated: false, message: 'Person deleted successfully' };
   } catch (error) {
     if (error.code !== 'P2003') throw error;
     await prisma.$transaction([
-      prisma.person.update({ where: { id }, data: { status: 'archived' } }),
+      prisma.person.update({ where: { id }, data: { isActive: false } }),
       prisma.userAccount.updateMany({ where: { personId: id }, data: { isActive: false } }),
     ]);
-    return { archived: true, message: 'Person is referenced by institutional records and was archived instead' };
+    return { deactivated: true, message: 'Person is referenced by institutional records and was deactivated instead' };
   }
 };
 

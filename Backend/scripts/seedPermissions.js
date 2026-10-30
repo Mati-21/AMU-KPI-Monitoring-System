@@ -2,7 +2,7 @@ import 'dotenv/config';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { prisma } from '../config/database.js';
-import { PERMISSION_CATALOG, PERMISSION_CODES, SUPER_ADMIN_ROLE } from '../config/permissions.js';
+import { PERMISSION_CATALOG, PERMISSION_CODES, SUPER_ADMIN_PERMISSION, SUPER_ADMIN_ROLE } from '../config/permissions.js';
 
 /**
  * Sync the `permission` table with config/permissions.json:
@@ -23,6 +23,19 @@ export const seedPermissions = async ({ quiet = false } = {}) => {
   const missing = PERMISSION_CODES.filter((code) => !existing.has(code));
   if (missing.length > 0) {
     await prisma.permission.createMany({ data: missing.map((code) => ({ code })), skipDuplicates: true });
+  }
+
+  // Keep name, module and description in step with the catalog (only rows that differ)
+  const rows = await prisma.permission.findMany();
+  const metadata = new Map([
+    [SUPER_ADMIN_PERMISSION, { name: 'All permissions', module: null, description: PERMISSION_CATALOG.superAdmin.description }],
+    ...PERMISSION_CATALOG.entries.map((entry) => [entry.code, { name: `${entry.label}: ${entry.action}`, module: entry.moduleName, description: entry.description }]),
+  ]);
+  for (const row of rows) {
+    const wanted = metadata.get(row.code);
+    if (wanted && (row.name !== wanted.name || row.module !== wanted.module || row.description !== wanted.description)) {
+      await prisma.permission.update({ where: { id: row.id }, data: wanted });
+    }
   }
 
   const stale = await prisma.permission.deleteMany({ where: { code: { notIn: [...PERMISSION_CODES] } } });

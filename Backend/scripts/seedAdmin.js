@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { seedPermissions } from './seedPermissions.js';
 import { seedSettings } from './seedSettings.js';
+import { seedReference } from './seedReference.js';
+import { startOfTodayUtc } from '../utils/dates.js';
 import { SUPER_ADMIN_ROLE } from '../config/permissions.js';
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'mati@gmail.com').trim().toLowerCase();
@@ -46,6 +48,9 @@ export const seedAdmin = async () => {
           isActive: true,
         },
       });
+      await prisma.officeHierarchyHistory.create({
+        data: { officeId: rootOffice.id, parentOfficeId: null, validFrom: startOfTodayUtc(), reason: 'Root office created' },
+      });
     }
 
     // 3. Position: System Administrator
@@ -76,6 +81,7 @@ export const seedAdmin = async () => {
         data: {
           name: SUPER_ADMIN_ROLE,
           description: 'Full institutional authority, user registration, and platform governance',
+          isSystem: true,
         },
       });
     }
@@ -85,6 +91,9 @@ export const seedAdmin = async () => {
 
     // 5b. System settings (config/settings.json) with their defaults
     await seedSettings();
+
+    // 5c. Reference data (config/reference.json): currency, units, frequencies, scales, thresholds, document types
+    await seedReference();
 
     // 6. Super Admin Person Record
     console.log(`👤 Creating/Upserting Super Admin Person (${ADMIN_EMAIL})...`);
@@ -100,8 +109,6 @@ export const seedAdmin = async () => {
           lastName: ADMIN_GRANDFATHER_NAME,
           email: ADMIN_EMAIL,
           phone: ADMIN_PHONE,
-          gender: 'Male',
-          status: 'active',
         },
       });
     }
