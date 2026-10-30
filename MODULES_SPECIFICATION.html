@@ -917,7 +917,7 @@
             <span class="stat-label">Prisma Database Models</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #34d399;">135</span>
+            <span class="stat-val" style="color: #34d399;">136</span>
             <span class="stat-label">REST API Routes to Build</span>
           </div>
           <div class="stat-card">
@@ -1621,116 +1621,17 @@
       },
       {
         id: "mod-06",
-        slug: "cycles-reports",
+        slug: "reporting-periods",
         number: "06",
         category: "kpi-ops",
-        title: "Evaluation Cycles & Office Report Dossiers",
-        tagline: "Quarterly Periods & Formal Office Report Submission",
+        title: "Reporting Periods",
+        tagline: "Period Dates, Deadlines & the Year-End Period",
         accent: "var(--acc-amber)",
         icon: "🗓️",
-        overview: "Coordinates institutional reporting cadence (e.g., Q1, Mid-Year, Annual). Manages formal office submission dossiers (CycleReport). One report per office per cycle tracks draft preparation, submission by office head, review notes, approval, or rejection.",
-        tables: [
-          {
-            name: "EvalCycle",
-            map: "eval_cycle",
-            description: "Evaluation timeline window (Q1, Q2, Semi-Annual, Annual) within a FiscalYear.",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Cycle ID" },
-              { name: "fiscalYearId", type: "Int", map: "fiscal_year_id", constraints: "FK -> FiscalYear", desc: "Parent fiscal year" },
-              { name: "name", type: "String", map: "name", constraints: "Required", desc: "Period name (e.g. 2025/2026 Q1)" },
-              { name: "periodStart", type: "DateTime", map: "period_start", constraints: "@db.Date", desc: "Cycle start date" },
-              { name: "periodEnd", type: "DateTime", map: "period_end", constraints: "@db.Date", desc: "Cycle end date" },
-              { name: "dueDate", type: "DateTime?", map: "due_date", constraints: "@db.Date, Optional", desc: "Reporting deadline" },
-              { name: "status", type: "String", map: "status", constraints: "@default('planned')", desc: "planned, open, in_review, closed" }
-            ],
-            relations: "Belongs to FiscalYear; Has many CycleReport, KpiEvaluation."
-          },
-          {
-            name: "CycleReport",
-            map: "cycle_report",
-            description: "Official submission dossier submitted by an Office for an EvalCycle.",
-            fields: [
-              { name: "id", type: "Uuid", map: "-", constraints: "@id @default(uuid())", desc: "Report ID" },
-              { name: "evalCycleId", type: "Uuid", map: "eval_cycle_id", constraints: "FK -> EvalCycle", desc: "Associated cycle" },
-              { name: "officeId", type: "Uuid", map: "office_id", constraints: "FK -> Office", desc: "Reporting office" },
-              { name: "submittedByPersonId", type: "Uuid?", map: "submitted_by_person_id", constraints: "FK -> Person, Optional", desc: "Submitting officer (ReportSubmitter)" },
-              { name: "reviewedByPersonId", type: "Uuid?", map: "reviewed_by_person_id", constraints: "FK -> Person, Optional", desc: "Reviewing evaluator (ReportReviewer)" },
-              { name: "status", type: "String", map: "status", constraints: "@default('draft')", desc: "draft, submitted, approved, rejected, reopened" },
-              { name: "submissionType", type: "String?", map: "submission_type", constraints: "@default('normal')", desc: "normal or late submission" },
-              { name: "autoFilledCount", type: "Int", map: "auto_filled_count", constraints: "@default(0)", desc: "Count of auto-computed indicators" },
-              { name: "reviewNote", type: "String?", map: "review_note", constraints: "Optional", desc: "Evaluator feedback or rejection reason" },
-              { name: "submittedAt", type: "DateTime?", map: "submitted_at", constraints: "@db.Timestamptz(6)", desc: "Submission timestamp" },
-              { name: "reviewedAt", type: "DateTime?", map: "reviewed_at", constraints: "@db.Timestamptz(6)", desc: "Review timestamp" },
-              { name: "createdAt", type: "DateTime", map: "created_at", constraints: "@default(now())", desc: "Creation timestamp" }
-            ],
-            relations: "Unique on [evalCycleId, officeId]; Belongs to EvalCycle, Office, Person; Has many KpiEvaluation."
-          }
-        ],
-        routes: [
-          {
-            method: "GET",
-            path: "/api/v1/eval-cycles",
-            ctrl: "CycleController.getCycles",
-            perm: "Authenticated",
-            desc: "List evaluation cycles with status, start/end dates, and submission progress.",
-            reqBody: "Query: ?fiscalYearId=1",
-            resBody: '[{ "id": "cyc-1", "name": "Q1 2025/2026", "status": "open", "dueDate": "2025-11-30" }]'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/eval-cycles",
-            ctrl: "CycleController.createCycle",
-            perm: "cycle:manage",
-            desc: "Schedule a new evaluation period with deadline.",
-            reqBody: '{\n  "fiscalYearId": 1,\n  "name": "Q2 Mid-Year Review",\n  "periodStart": "2025-12-01",\n  "periodEnd": "2026-02-28",\n  "dueDate": "2026-03-07"\n}',
-            resBody: '{\n  "id": "cyc-2",\n  "name": "Q2 Mid-Year Review",\n  "status": "planned"\n}'
-          },
-          {
-            method: "PATCH",
-            path: "/api/v1/eval-cycles/:id/status",
-            ctrl: "CycleController.transitionCycleStatus",
-            perm: "cycle:manage",
-            desc: "Transitions cycle between planned, open, in_review, and closed.",
-            reqBody: '{\n  "status": "open"\n}',
-            resBody: '{\n  "message": "Cycle status updated to OPEN"\n}'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/cycle-reports/initiate",
-            ctrl: "CycleReportController.initiateReport",
-            perm: "report:create",
-            desc: "Initializes a draft report dossier for an office in an open cycle.",
-            reqBody: '{\n  "evalCycleId": "cyc-1",\n  "officeId": "dept-cs-uuid"\n}',
-            resBody: '{\n  "id": "rep-uuid",\n  "status": "draft",\n  "message": "Dossier initialized"\n}'
-          },
-          {
-            method: "GET",
-            path: "/api/v1/cycle-reports/:id",
-            ctrl: "CycleReportController.getReportDossier",
-            perm: "report:read",
-            desc: "Fetches full report dossier including all attached KPI evaluations, progress figures, and review history.",
-            reqBody: "Param: id (UUID)",
-            resBody: '{\n  "id": "rep-uuid",\n  "office": { "name": "Department of CS" },\n  "evaluations": [...],\n  "status": "submitted"\n}'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/cycle-reports/:id/submit",
-            ctrl: "CycleReportController.submitReport",
-            perm: "report:submit",
-            desc: "Locks draft evaluations and formally submits office report dossier for review.",
-            reqBody: "{}",
-            resBody: '{\n  "message": "Report submitted successfully",\n  "submittedAt": "2026-10-26T11:00:00Z"\n}'
-          },
-          {
-            method: "POST",
-            path: "/api/v1/cycle-reports/:id/review",
-            ctrl: "CycleReportController.reviewReport",
-            perm: "report:review",
-            desc: "Evaluator approves, rejects, or requests changes on an office submission with feedback note.",
-            reqBody: '{\n  "decision": "approved",\n  "reviewNote": "Outstanding research achievements verified."\n}',
-            resBody: '{\n  "message": "Report approved"\n}'
-          }
-        ]
+        overview: "Sets when offices report. Periods belong to a fiscal year and a frequency, and can be generated or created by hand. Each has a submission deadline and a calculated phase. The year-end period takes the final report, where shorter periods roll up.",
+        tables: [{"name": "ReportingPeriod", "map": "reporting_period", "description": "When offices report, per fiscal year and frequency. The isYearEnd period takes the final report.", "fields": [{"name": "id", "type": "String", "map": "-", "constraints": "@id @default(uuid()) @db.Uuid", "desc": "Id"}, {"name": "fiscalYearId", "type": "String", "map": "fiscal_year_id", "constraints": "@db.Uuid", "desc": "Fiscal year id"}, {"name": "frequencyId", "type": "String", "map": "frequency_id", "constraints": "@db.Uuid", "desc": "Frequency id"}, {"name": "name", "type": "String", "map": "-", "constraints": "Required", "desc": "Name"}, {"name": "startDate", "type": "DateTime", "map": "start_date", "constraints": "@db.Date", "desc": "Start date"}, {"name": "endDate", "type": "DateTime", "map": "end_date", "constraints": "@db.Date", "desc": "End date"}, {"name": "submissionDeadline", "type": "DateTime?", "map": "submission_deadline", "constraints": "@db.Date", "desc": "Submission deadline"}, {"name": "isYearEnd", "type": "Boolean", "map": "is_year_end", "constraints": "@default(false)", "desc": "Is year end"}, {"name": "isClosed", "type": "Boolean", "map": "is_closed", "constraints": "@default(false)", "desc": "Is closed"}], "relations": "Belongs to FiscalYear, ReportingFrequency; has many PerformanceReport, KpiAchievement, ContractScore."}],
+        routes: [{"method": "GET", "path": "/api/v1/reporting-periods", "ctrl": "PeriodController.listPeriods", "perm": "Authenticated", "desc": "Periods, earliest first, each with its calculated phase.", "reqBody": "Query: ?fiscalYearId=&frequencyId=&isClosed=", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/reporting-periods", "ctrl": "PeriodController.createPeriod", "perm": "period:manage", "desc": "Create one period by hand. The deadline defaults to the end date plus reporting.submission_window_days.", "reqBody": "{\n  \"fiscalYearId\": \"uuid\",\n  \"frequencyId\": \"uuid\",\n  \"name\": \"Accreditation window\",\n  \"startDate\": \"2026-09-01\",\n  \"endDate\": \"2026-10-31\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "POST", "path": "/api/v1/fiscal-years/:id/reporting-periods/generate", "ctrl": "PeriodController.generatePeriods", "perm": "period:manage", "desc": "Create all periods of a frequency for a year. Annual generates the year-end period.", "reqBody": "{\n  \"frequencyId\": \"uuid\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "GET", "path": "/api/v1/reporting-periods/:id", "ctrl": "PeriodController.getPeriodById", "perm": "Authenticated", "desc": "One reporting period.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PUT", "path": "/api/v1/reporting-periods/:id", "ctrl": "PeriodController.updatePeriod", "perm": "period:manage", "desc": "Change a period. Once reports or results depend on it, only the deadline can change.", "reqBody": "{\n  \"submissionDeadline\": \"2026-11-15\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "DELETE", "path": "/api/v1/reporting-periods/:id", "ctrl": "PeriodController.deletePeriod", "perm": "period:manage", "desc": "Delete a period that nothing depends on.", "reqBody": "-", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/reporting-periods/:id/close", "ctrl": "PeriodController.closePeriod", "perm": "period:manage", "desc": "Close a period so it stops taking submissions.", "reqBody": "{\n  \"reason\": \"Q1 reports complete\"\n}", "resBody": "{ \"data\": { ... } }"}, {"method": "PATCH", "path": "/api/v1/reporting-periods/:id/reopen", "ctrl": "PeriodController.reopenPeriod", "perm": "period:manage", "desc": "Reopen a closed period, with a reason.", "reqBody": "{\n  \"reason\": \"Late correction\"\n}", "resBody": "{ \"data\": { ... } }"}]
+        
       },
       {
         id: "mod-07",

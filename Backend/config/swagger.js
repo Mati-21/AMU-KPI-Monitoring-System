@@ -54,7 +54,7 @@ const TAG_ORDER = [
   'Access Control',
   'KPI Catalog',
   'Contracts & Cascading',
-  'Evaluation Cycles',
+  'Reporting Periods',
   'Performance Scoring',
   'Evidence & Documents',
   'Notifications',

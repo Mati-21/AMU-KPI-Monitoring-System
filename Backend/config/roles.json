@@ -32,7 +32,7 @@
       "permissions": [
         "contract:*",
         "kpi:*",
-        "cycle:manage",
+        "period:manage",
         "report:read",
         "evaluation:read",
         "scorecard:read",

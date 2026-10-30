@@ -94,16 +94,22 @@
     },
     {
       "module": "06",
-      "name": "Evaluation Cycles & Reports",
+      "name": "Reporting Periods",
       "resources": [
         {
-          "resource": "cycle",
-          "label": "Evaluation cycles",
-          "covers": ["EvalCycle"],
+          "resource": "period",
+          "label": "Reporting periods",
+          "covers": ["ReportingPeriod"],
           "permissions": [
-            { "action": "manage", "description": "Schedule evaluation cycles and move them through planned, open, in_review and closed" }
+            { "action": "manage", "description": "Create, generate, change, close and reopen reporting periods" }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "module": "07",
+      "name": "Performance Scoring",
+      "resources": [
         {
           "resource": "report",
           "label": "Office report dossiers",
@@ -114,13 +120,7 @@
             { "action": "submit", "description": "Submit an office report for review (locks its evaluations)" },
             { "action": "review", "description": "Approve, reject or request changes on submitted reports" }
           ]
-        }
-      ]
-    },
-    {
-      "module": "07",
-      "name": "Performance Scoring",
-      "resources": [
+        },
         {
           "resource": "evaluation",
           "label": "KPI achievement entries",

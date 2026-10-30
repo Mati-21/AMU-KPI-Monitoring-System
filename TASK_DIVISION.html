@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (135 REST routes under <code>/api/v1</code>, 41 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (136 REST routes under <code>/api/v1</code>, 40 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -797,11 +797,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">50</div>
+            <div class="dev-stat-value">51</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">37%</div>
+            <div class="dev-stat-value">38%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -1400,34 +1400,34 @@
     </div>
 
     <!-- MODULE 06 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="cycle period quarter report dossier submit review approve">
+    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="period quarter deadline year end frequency generate">
       <div class="module-card-header">
         <div class="module-title-box">
-          <div class="module-index">Module 06 &bull; Backend/modules/06-evaluation-cycles</div>
-          <div class="module-title">🗓️ Evaluation Cycles &amp; Office Report Dossiers</div>
-          <div class="module-desc">Coordinates institutional reporting cadence (e.g., Q1, Mid-Year, Annual). Manages formal office submission dossiers (CycleReport). One report per office per cycle tracks draft preparation, submission by office head, review notes, approval, or rejection.</div>
+          <div class="module-index">Module 06 &bull; Backend/modules/06-reporting-periods</div>
+          <div class="module-title">🗓️ Reporting Periods</div>
+          <div class="module-desc">Sets when offices report. Periods belong to a fiscal year and a frequency, and can be generated or created by hand. Each has a submission deadline and a calculated phase. The year-end period takes the final report, where shorter periods roll up.</div>
         </div>
         <span class="assigned-badge badge-dev-b">Developer B</span>
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (7)</div>
+          <div class="section-title">Backend Endpoints (8)</div>
           <div class="chip-list">
-            <span class="chip chip-endpoint">GET /api/v1/eval-cycles · Authenticated</span>
-            <span class="chip chip-endpoint">POST /api/v1/eval-cycles · cycle:manage</span>
-            <span class="chip chip-endpoint">PATCH /api/v1/eval-cycles/:id/status · cycle:manage</span>
-            <span class="chip chip-endpoint">POST /api/v1/cycle-reports/initiate · report:create</span>
-            <span class="chip chip-endpoint">GET /api/v1/cycle-reports/:id · report:read</span>
-            <span class="chip chip-endpoint">POST /api/v1/cycle-reports/:id/submit · report:submit</span>
-            <span class="chip chip-endpoint">POST /api/v1/cycle-reports/:id/review · report:review</span>
+            <span class="chip chip-endpoint">GET /api/v1/reporting-periods · Authenticated</span>
+            <span class="chip chip-endpoint">POST /api/v1/reporting-periods · period:manage</span>
+            <span class="chip chip-endpoint">POST /api/v1/fiscal-years/:id/reporting-periods/generate · period:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/reporting-periods/:id · Authenticated</span>
+            <span class="chip chip-endpoint">PUT /api/v1/reporting-periods/:id · period:manage</span>
+            <span class="chip chip-endpoint">DELETE /api/v1/reporting-periods/:id · period:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/reporting-periods/:id/close · period:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/reporting-periods/:id/reopen · period:manage</span>
           </div>
         </div>
 
         <div>
           <div class="section-title">Prisma Models</div>
           <div class="chip-list">
-            <span class="chip chip-model">EvalCycle</span>
-            <span class="chip chip-model">CycleReport</span>
+            <span class="chip chip-model">ReportingPeriod</span>
           </div>
         </div>
 
@@ -1435,8 +1435,6 @@
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
             <span class="chip chip-fe">Pages/Admin/Configuration/CycleManagement.jsx</span>
-            <span class="chip chip-fe">Pages/Strategic/OfficeReport.jsx</span>
-            <span class="chip chip-fe">Pages/KPI/KpiApprovalsPage.jsx</span>
           </div>
         </div>
 
@@ -1445,23 +1443,18 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>Routes, Swagger docs and permission guards wired (cycle:manage, report:*)</span>
+              <span>Periods per fiscal year and frequency: generated or created by hand, with overlap checks</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Cycle lifecycle planned → open → in_review → closed</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Deadlines from the submission window setting, calculated phase, one year-end period per year</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Report dossier initiate / submit (locks evaluations) / review (approve, reject, request changes)</span>
-              <span class="task-status-pill status-todo">Planned</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Due-date handling: auto-fill / lock missing submissions when a cycle closes</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Close and reopen; definition fixed once reports depend on a period</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1469,7 +1462,7 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Interlinks with:</strong> Groups the KPI evaluations of module 07 into one office dossier per cycle.
+            <strong>Interlinks with:</strong> Module 07 reports are submitted against these periods.
           </div>
         </div>
       </div>
@@ -1712,7 +1705,7 @@
       </div>
       <div style="display: flex; gap: 0.75rem;">
         <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
-        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 50 Endpoints</span>
+        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 51 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1777,12 +1770,12 @@
             <td>Needs offices (02), scoped access (03) and KPIs / fiscal years (04).</td>
           </tr>
           <tr>
-            <td><strong>06. Evaluation Cycles &amp; Office Report Dossiers</strong></td>
+            <td><strong>06. Reporting Periods</strong></td>
             <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
-            <td><code>modules/06-evaluation-cycles</code></td>
-            <td>EvalCycle, CycleReport</td>
-            <td>7</td>
-            <td>Groups the KPI evaluations of module 07 into one office dossier per cycle.</td>
+            <td><code>modules/06-reporting-periods</code></td>
+            <td>ReportingPeriod</td>
+            <td>8</td>
+            <td>Module 07 reports are submitted against these periods.</td>
           </tr>
           <tr>
             <td><strong>07. KPI Performance Evaluation &amp; Scoring Engine</strong></td>

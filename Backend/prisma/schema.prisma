@@ -623,7 +623,7 @@ model FiscalYear {
   @@map("fiscal_year")
 }
 
-// is_year_end marks the period whose report is the year's final report:
+// is_year_end marks the period whose report is the year's final report (at most one per year, see the migration):
 // results of shorter periods roll up into it using kpi.period_rollup_method.
 model ReportingPeriod {
   id                 String    @id @default(uuid()) @db.Uuid

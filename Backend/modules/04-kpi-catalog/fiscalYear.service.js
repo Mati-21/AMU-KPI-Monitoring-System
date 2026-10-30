@@ -73,6 +73,11 @@ export const updateFiscalYear = async (id, data = {}, actor) => {
   if (data.endDate !== undefined) update.endDate = parseDate(data.endDate, 'endDate');
   if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
 
+  if (update.startDate || update.endDate) {
+    const periods = await prisma.reportingPeriod.count({ where: { fiscalYearId: existing.id } });
+    if (periods > 0) throw conflict('This year already has reporting periods, so its dates cannot change. Delete the periods first');
+  }
+
   const start = update.startDate ?? existing.startDate;
   const end = update.endDate ?? existing.endDate;
   if (end <= start) throw badRequest('endDate must be after startDate');
