@@ -1,0 +1,103 @@
+{
+  "description": "Baseline roles seeded by `npm run seed:roles`. Roles are named after the access they give, not after job titles (a Position such as \"Dean\" is the job; a Role such as \"College Leadership\" is what that job may do in the system). Permission codes come from config/permissions.json; \"<resource>:*\" expands to every action of that resource. The Super Admin role is managed by seed:admin and is not listed here.",
+  "roles": [
+    {
+      "name": "University Leadership",
+      "description": "Institution-wide oversight: dashboards, scorecards and final review of office reports.",
+      "typicalPositions": ["President", "Vice President"],
+      "typicalScope": "university",
+      "permissions": [
+        "dashboard:read",
+        "scorecard:read",
+        "target:read",
+        "report:read",
+        "report:review",
+        "evaluation:read",
+        "evidence:read",
+        "file:read"
+      ]
+    },
+    {
+      "name": "Strategy Officer",
+      "description": "Owns strategic planning: KPI catalog, fiscal years, institutional targets and evaluation cycles.",
+      "typicalPositions": ["Strategy & Planning Director", "Planning Officer"],
+      "typicalScope": "university",
+      "permissions": [
+        "kpi:*",
+        "target:*",
+        "cycle:manage",
+        "report:read",
+        "evaluation:read",
+        "scorecard:read",
+        "dashboard:read",
+        "evidence:read",
+        "file:read",
+        "notification:send"
+      ]
+    },
+    {
+      "name": "Access Administrator",
+      "description": "Administers people, offices and role assignments without the Super Admin wildcard.",
+      "typicalPositions": ["ICT Director", "HR Officer"],
+      "typicalScope": "university",
+      "permissions": ["user:*", "office:*", "role:*", "audit:read"]
+    },
+    {
+      "name": "College Leadership",
+      "description": "Leads a college or directorate: cascades targets, reviews and verifies its units' performance, assigns department roles.",
+      "typicalPositions": ["Dean", "Directorate Director"],
+      "typicalScope": "office",
+      "permissions": [
+        "user:read",
+        "office:assign",
+        "role:read",
+        "role:assign",
+        "target:read",
+        "target:assign",
+        "target:cascade",
+        "report:*",
+        "evaluation:*",
+        "scorecard:read",
+        "evidence:*",
+        "file:*",
+        "document:create",
+        "notification:send"
+      ]
+    },
+    {
+      "name": "Department Leadership",
+      "description": "Leads a department or unit: assigns targets to staff, prepares and submits the office report.",
+      "typicalPositions": ["Department Head", "Unit Head"],
+      "typicalScope": "office",
+      "permissions": [
+        "user:read",
+        "target:read",
+        "target:assign",
+        "target:cascade",
+        "report:create",
+        "report:read",
+        "report:submit",
+        "evaluation:read",
+        "evaluation:write",
+        "scorecard:read",
+        "evidence:*",
+        "file:*",
+        "document:create"
+      ]
+    },
+    {
+      "name": "Staff",
+      "description": "Reports achievement on own targets and attaches evidence.",
+      "typicalPositions": ["Lecturer", "Officer", "Researcher"],
+      "typicalScope": "office",
+      "permissions": [
+        "target:read",
+        "evaluation:read",
+        "evaluation:write",
+        "file:*",
+        "document:create",
+        "evidence:*"
+      ]
+    }
+  ]
+}

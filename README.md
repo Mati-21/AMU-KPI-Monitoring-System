@@ -21,10 +21,11 @@ cd Backend
 cp .env.example .env          # then set DATABASE_URL and JWT_SECRET
 npm install
 npm run db:deploy             # apply migrations (npm run db:migrate when changing schema.prisma)
-npm run seed:admin            # root office, permission catalog, Super Admin (prints the temporary password)
+npm run seed:admin            # root office, permission catalog, settings, Super Admin (prints the temporary password)
 npm run dev                   # http://localhost:8058, API under /api/v1
 ```
 
 - First login with the Super Admin forces a password change and TOTP MFA setup.
 - `npm run seed:admin` is safe to re-run; it only resets the admin credentials with `npm run seed:admin:reset`.
+- Every server start syncs the permission catalog (`config/permissions.json`) and system settings (`config/settings.json`) into the database: missing entries are created, settings already saved keep their values. `npm run seed:permissions` / `npm run seed:settings` do the same on demand.
 - `npm run test:auth` runs the full cookie/MFA flow against a running server — it **resets the Super Admin's password and MFA**, so use it only on a development database.

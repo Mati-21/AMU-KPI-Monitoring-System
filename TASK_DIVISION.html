@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (92 REST routes under <code>/api/v1</code>, 26 Prisma models).
+          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (93 REST routes under <code>/api/v1</code>, 26 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -768,11 +768,11 @@
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">60</div>
+            <div class="dev-stat-value">61</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">65%</div>
+            <div class="dev-stat-value">66%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -801,7 +801,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">35%</div>
+            <div class="dev-stat-value">34%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -1194,7 +1194,7 @@
     </div>
 
     <!-- MODULE 10 (Dev A) -->
-    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="settings configuration branding audit log governance public">
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="settings configuration branding audit log governance public maintenance deadline reporting">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 10 &bull; Backend/modules/10-system-governance</div>
@@ -1205,12 +1205,13 @@
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (5)</div>
+          <div class="section-title">Backend Endpoints (6)</div>
           <div class="chip-list">
             <span class="chip chip-endpoint">GET /api/v1/settings/public · Public</span>
             <span class="chip chip-endpoint">GET /api/v1/settings · settings:manage</span>
             <span class="chip chip-endpoint">PUT /api/v1/settings/:groupName · settings:manage</span>
             <span class="chip chip-endpoint">GET /api/v1/audit-logs · audit:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/audit-logs/filters · audit:read</span>
             <span class="chip chip-endpoint">GET /api/v1/audit-logs/:id · audit:read</span>
           </div>
         </div>
@@ -1236,23 +1237,23 @@
           <ul class="task-list">
             <li class="task-item">
               <span class="task-icon">✅</span>
-              <span>utils/auditLogger.js logActivity() helper for the AuditLog table</span>
+              <span>Settings registry (config/settings.json): branding, general, KPI scoring, reporting deadlines, system status</span>
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Public settings endpoint (university name, active fiscal year, logo)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Typed, validated batch updates per group with reset-to-default and change-only auditing; getSetting() helper with cache</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Grouped settings read and batch upsert per group</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Maintenance mode: API answers 503 to everyone except university-wide settings managers</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
-              <span>Audit log query with filters, pagination and detail view</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-icon">✅</span>
+              <span>Audit trail queries: filters, pagination, field diff, filter values; secrets redacted from audit entries</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1653,7 +1654,7 @@
         </p>
       </div>
       <div style="display: flex; gap: 0.75rem;">
-        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 60 Endpoints</span>
+        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 61 Endpoints</span>
         <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 32 Endpoints</span>
       </div>
     </div>
@@ -1707,7 +1708,7 @@
             <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
             <td><code>modules/10-system-governance</code></td>
             <td>SystemSetting, AuditLog</td>
-            <td>5</td>
+            <td>6</td>
             <td>Both developers call logActivity() from their services so every state change lands in the audit trail.</td>
           </tr>
           <tr>

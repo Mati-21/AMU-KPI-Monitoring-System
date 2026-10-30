@@ -1,0 +1,221 @@
+{
+  "description": "Permission catalog of the AMU KPI Monitoring System. Single source of truth: route guards (config/permissions.js) and the seed (npm run seed:admin) read this file. A permission code is \"<resource>:<action>\". Every code here is enforced by at least one route; add a code here only together with the route or service check that uses it.",
+  "superAdmin": {
+    "code": "*",
+    "description": "Wildcard: every permission, university-wide. Held only by the Super Admin role."
+  },
+  "modules": [
+    {
+      "module": "01",
+      "name": "Identity & Authentication",
+      "resources": [
+        {
+          "resource": "user",
+          "label": "Persons & login accounts",
+          "covers": ["Person", "UserAccount", "UserSession (admin view)"],
+          "permissions": [
+            { "action": "read", "description": "View the person directory and person profiles" },
+            { "action": "create", "description": "Register new persons (optionally with a login account)" },
+            { "action": "update", "description": "Edit person demographic and contact details" },
+            { "action": "delete", "description": "Delete persons (archived instead when referenced by records)" },
+            { "action": "manage", "description": "Provision accounts, activate/deactivate logins, reset passwords, view and revoke a user's sessions" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "02",
+      "name": "Organizational Hierarchy",
+      "resources": [
+        {
+          "resource": "office",
+          "label": "Offices, office types, positions & placements",
+          "covers": ["Office", "OfficeType", "Position", "OfficePerson"],
+          "permissions": [
+            { "action": "create", "description": "Create offices under an office in scope" },
+            { "action": "update", "description": "Rename, re-code, move or deactivate offices in scope" },
+            { "action": "manage", "description": "Define office types (university-wide only) and positions of offices in scope" },
+            { "action": "assign", "description": "Place persons into office positions (tenure, primary placement)" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "03",
+      "name": "Access Control",
+      "resources": [
+        {
+          "resource": "role",
+          "label": "Roles, permissions & scoped role assignments",
+          "covers": ["Role", "Permission", "RolePermission", "OfficePersonRole"],
+          "permissions": [
+            { "action": "read", "description": "View roles, their permissions and the permission catalog" },
+            { "action": "create", "description": "Create roles" },
+            { "action": "update", "description": "Rename roles and change their permission set" },
+            { "action": "delete", "description": "Delete roles that have no active assignments" },
+            { "action": "assign", "description": "Grant or revoke office-scoped roles to office members" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "04",
+      "name": "Strategic KPI Catalog",
+      "resources": [
+        {
+          "resource": "kpi",
+          "label": "Fiscal years, strategic themes & master KPIs",
+          "covers": ["FiscalYear", "KpiTheme", "Kpi"],
+          "permissions": [
+            { "action": "create", "description": "Register master KPIs" },
+            { "action": "update", "description": "Edit or retire master KPIs" },
+            { "action": "manage", "description": "Manage fiscal years (create, activate) and strategic themes" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "05",
+      "name": "Target Cascading",
+      "resources": [
+        {
+          "resource": "target",
+          "label": "KPI targets and their cascade tree",
+          "covers": ["KpiTarget"],
+          "permissions": [
+            { "action": "read", "description": "View targets and the target decomposition tree" },
+            { "action": "create", "description": "Set top-level institutional targets" },
+            { "action": "update", "description": "Edit draft target values, baselines and weights" },
+            { "action": "assign", "description": "Move targets through their status workflow (draft, assigned, accepted)" },
+            { "action": "cascade", "description": "Split a parent target into child targets for sub-offices or persons" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "06",
+      "name": "Evaluation Cycles & Reports",
+      "resources": [
+        {
+          "resource": "cycle",
+          "label": "Evaluation cycles",
+          "covers": ["EvalCycle"],
+          "permissions": [
+            { "action": "manage", "description": "Schedule evaluation cycles and move them through planned, open, in_review and closed" }
+          ]
+        },
+        {
+          "resource": "report",
+          "label": "Office report dossiers",
+          "covers": ["CycleReport"],
+          "permissions": [
+            { "action": "create", "description": "Start the draft report of an office for an open cycle" },
+            { "action": "read", "description": "View report dossiers and their review history" },
+            { "action": "submit", "description": "Submit an office report for review (locks its evaluations)" },
+            { "action": "review", "description": "Approve, reject or request changes on submitted reports" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "07",
+      "name": "Performance Scoring",
+      "resources": [
+        {
+          "resource": "evaluation",
+          "label": "KPI achievement entries",
+          "covers": ["KpiEvaluation"],
+          "permissions": [
+            { "action": "read", "description": "View reported and verified achievement values" },
+            { "action": "write", "description": "Enter or update reported values for targets in an open cycle" },
+            { "action": "verify", "description": "Confirm actual values and finalize scores" }
+          ]
+        },
+        {
+          "resource": "scorecard",
+          "label": "Office scorecards",
+          "covers": ["Weighted office scorecard"],
+          "permissions": [
+            { "action": "read", "description": "View weighted office scorecards and theme scores" }
+          ]
+        },
+        {
+          "resource": "dashboard",
+          "label": "Institution dashboard",
+          "covers": ["University-wide analytics"],
+          "permissions": [
+            { "action": "read", "description": "View the university-wide performance dashboard" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "08",
+      "name": "Evidence & Documents",
+      "resources": [
+        {
+          "resource": "file",
+          "label": "Stored files",
+          "covers": ["File"],
+          "permissions": [
+            { "action": "upload", "description": "Upload files" },
+            { "action": "read", "description": "Download files (subject to confidentiality checks)" }
+          ]
+        },
+        {
+          "resource": "document",
+          "label": "Documents",
+          "covers": ["Document", "DocumentType"],
+          "permissions": [
+            { "action": "create", "description": "Register document metadata for uploaded files" }
+          ]
+        },
+        {
+          "resource": "evidence",
+          "label": "Evidence links",
+          "covers": ["DocumentLink"],
+          "permissions": [
+            { "action": "link", "description": "Attach documents as evidence to evaluations, reports or targets, and remove links" },
+            { "action": "read", "description": "View evidence attached to an entity" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "09",
+      "name": "Notifications",
+      "resources": [
+        {
+          "resource": "notification",
+          "label": "Notifications",
+          "covers": ["Notification", "NotificationRecipient"],
+          "permissions": [
+            { "action": "send", "description": "Dispatch notifications to offices (optionally sub-offices) or permission groups" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "10",
+      "name": "System Governance",
+      "resources": [
+        {
+          "resource": "settings",
+          "label": "System settings",
+          "covers": ["SystemSetting"],
+          "permissions": [
+            { "action": "manage", "description": "View and change system settings" }
+          ]
+        },
+        {
+          "resource": "audit",
+          "label": "Audit trail",
+          "covers": ["AuditLog"],
+          "permissions": [
+            { "action": "read", "description": "Query the audit trail" }
+          ]
+        }
+      ]
+    }
+  ]
+}

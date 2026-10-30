@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { maintenanceGuard } from '../middleware/maintenanceMiddleware.js';
+import devRoutes, { isDevEnvironment } from './00-dev/dev.routes.js';
 import authRoutes from './01-identity-access/auth/auth.routes.js';
 import personRoutes from './01-identity-access/person/person.routes.js';
 import officeRoutes from './02-office-hierarchy/office.routes.js';
@@ -17,6 +19,15 @@ import systemRoutes from './10-system-governance/system.routes.js';
  * MODULES_SPECIFICATION.html (e.g. /persons, /kpi-targets, /cycle-reports), so they are all mounted at the root.
  */
 const router = Router();
+
+// Development-only helpers (quick Super Admin login). Never mounted outside NODE_ENV=development.
+if (isDevEnvironment()) {
+  console.warn('⚠️  Dev routes enabled: POST /api/v1/dev/login (Super Admin without password/MFA)');
+  router.use(devRoutes);
+}
+
+// Maintenance mode (setting system.maintenance_mode): 503 for everyone but university-wide settings managers
+router.use(maintenanceGuard);
 
 router.use(authRoutes); // 01 /auth/*
 router.use(personRoutes); // 01 /persons, /users/:id/*

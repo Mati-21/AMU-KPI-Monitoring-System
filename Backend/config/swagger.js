@@ -11,23 +11,6 @@ const swaggerDefinition = {
   info: {
     title: 'Arba Minch University — KPI Monitoring System API',
     version: '2.0.0',
-    description: `
-### AMU KPI Monitoring System REST API Documentation
-
-Interactive OpenAPI / Swagger documentation parsed directly from inline JSDoc annotations in every module route file.
-All routes are served under **/api/v1** and follow MODULES_SPECIFICATION.html.
-
-#### Authentication Instructions:
-1. Go to **Auth** -> **POST /api/v1/auth/login**.
-2. Click **Try it out**, enter credentials, and execute.
-3. Complete any REQUIRE_PASSWORD_CHANGE / REQUIRE_MFA_* step the response asks for.
-4. The server sets HTTP-only **token** and **refresh_token** cookies; protected endpoints authenticate via the cookie.
-5. Endpoints guarded by a permission code return 403 unless one of your roles grants it.
-    `,
-    contact: {
-      name: 'AMU KPI System Administration',
-      email: 'admin@amu.edu.et',
-    },
   },
   servers: [
     {
@@ -61,6 +44,34 @@ const options = {
 };
 
 const swaggerSpec = swaggerJSDoc(options);
+
+// Swagger UI lists tags in the order of this array: show them module by module (Dev first)
+const TAG_ORDER = [
+  'Dev',
+  'Auth',
+  'Persons',
+  'Offices',
+  'Access Control',
+  'KPI Catalog',
+  'Target Cascading',
+  'Evaluation Cycles',
+  'Performance Scoring',
+  'Evidence & Documents',
+  'Notifications',
+  'System Governance',
+];
+const tagRank = (name) => (TAG_ORDER.includes(name) ? TAG_ORDER.indexOf(name) : TAG_ORDER.length);
+swaggerSpec.tags = [...new Map((swaggerSpec.tags || []).map((tag) => [tag.name, tag])).values()].sort(
+  (a, b) => tagRank(a.name) - tagRank(b.name)
+);
+
+// Dev-only routes (modules/00-dev) are documented only when they are actually mounted
+if (process.env.NODE_ENV !== 'development') {
+  for (const route of Object.keys(swaggerSpec.paths || {})) {
+    if (route.startsWith('/api/v1/dev/')) delete swaggerSpec.paths[route];
+  }
+  swaggerSpec.tags = swaggerSpec.tags.filter((tag) => tag.name !== 'Dev');
+}
 
 const swaggerUiOptions = {
   customSiteTitle: 'AMU KPI Monitoring — API Docs',

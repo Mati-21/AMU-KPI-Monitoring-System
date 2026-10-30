@@ -31,10 +31,12 @@ const router = Router();
  *             type: object
  *             required: [name]
  *             properties:
- *               name: { type: string, example: Dean }
+ *               name: { type: string, example: College Leadership, description: Name roles after the access they give, not after job titles }
  *               description: { type: string }
+ *               permissionCodes: { type: array, items: { type: string }, example: ["target:read", "target:cascade"] }
  *     responses:
  *       201: { description: Created }
+ *       403: { description: Includes permissions you do not hold yourself }
  */
 router.get('/roles', protect, requirePermission(PERMISSIONS.ROLE_READ), roleController.listRoles);
 router.post('/roles', protect, requirePermission(PERMISSIONS.ROLE_CREATE), roleController.createRole);
@@ -102,7 +104,7 @@ router.post('/roles/:id/permissions', protect, requirePermission(PERMISSIONS.ROL
  * @swagger
  * /api/v1/permissions:
  *   get:
- *     summary: All registered atomic permission codes
+ *     summary: Permission catalog (config/permissions.json) grouped by module and resource, with descriptions and ids
  *     tags: [Access Control]
  *     responses:
  *       200: { description: Permissions }
@@ -123,14 +125,20 @@ router.get('/permissions', protect, requirePermission(PERMISSIONS.ROLE_READ), ro
  *         application/json:
  *           schema:
  *             type: object
- *             required: [roleId, validFrom]
+ *             required: [roleId]
  *             properties:
  *               roleId: { type: integer }
- *               scopeOfficeId: { type: string, format: uuid, description: Omit for university-wide scope }
- *               validFrom: { type: string, format: date }
- *               validTo: { type: string, format: date }
+ *               scopeOfficeId:
+ *                 type: string
+ *                 format: uuid
+ *                 nullable: true
+ *                 description: Omit = the placement's own office; null = university-wide; otherwise that office and its sub-offices
+ *               validFrom: { type: string, format: date, description: Defaults to today }
+ *               validTo: { type: string, format: date, description: Omit for open-ended }
  *     responses:
  *       201: { description: Assigned }
+ *       403: { description: Scope or permissions you do not hold yourself (anti-escalation) }
+ *       409: { description: Same role and scope already assigned for an overlapping period }
  */
 router.post('/office-persons/:officePersonId/roles', protect, requirePermission(PERMISSIONS.ROLE_ASSIGN), roleController.assignRole);
 
@@ -138,7 +146,7 @@ router.post('/office-persons/:officePersonId/roles', protect, requirePermission(
  * @swagger
  * /api/v1/office-person-roles/{id}:
  *   delete:
- *     summary: Revoke a scoped role assignment
+ *     summary: Revoke a scoped role assignment (the last active Super Admin assignment cannot be revoked)
  *     tags: [Access Control]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }

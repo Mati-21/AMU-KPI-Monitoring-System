@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database.js';
 import { SUPER_ADMIN_PERMISSION } from '../../config/permissions.js';
+import { activeOn } from '../../utils/dates.js';
 
 /**
  * Scoped RBAC resolution.
@@ -9,26 +10,15 @@ import { SUPER_ADMIN_PERMISSION } from '../../config/permissions.js';
  * otherwise the permission applies only to that office and its descendants.
  */
 
-const startOfTodayUtc = () => {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-};
-
-const activeWindow = (fromField, toField, today) => ({
-  [fromField]: { lte: today },
-  OR: [{ [toField]: null }, { [toField]: { gte: today } }],
-});
-
 /**
  * Load every currently-valid permission grant for a person.
  * @returns {Promise<Array<{ code: string, scopeOfficeId: string|null, roleId: number, roleName: string }>>}
  */
 export const getActiveGrants = async (personId) => {
-  const today = startOfTodayUtc();
   const assignments = await prisma.officePersonRole.findMany({
     where: {
-      ...activeWindow('validFrom', 'validTo', today),
-      officePerson: { personId, ...activeWindow('startDate', 'endDate', today) },
+      ...activeOn('validFrom', 'validTo'),
+      officePerson: { personId, ...activeOn('startDate', 'endDate') },
     },
     select: {
       scopeOfficeId: true,
@@ -84,8 +74,15 @@ export const hasPermission = async (grants, code, targetOfficeId) => {
 };
 
 /**
+ * True only for a university-wide grant (scopeOfficeId = null) of the code, or the Super Admin wildcard.
+ * Use for actions that are not tied to one office (e.g. defining office types, creating the root office).
+ */
+export const hasGlobalPermission = (grants, code) =>
+  grants.some((grant) => (grant.code === code || grant.code === SUPER_ADMIN_PERMISSION) && grant.scopeOfficeId === null);
+
+/**
  * Distinct permission codes a person currently holds (any scope).
  */
 export const getPermissionCodes = (grants) => [...new Set(grants.map((grant) => grant.code))].sort();
 
-export default { getActiveGrants, getOfficeAncestorIds, isSuperAdmin, hasPermission, getPermissionCodes };
+export default { getActiveGrants, getOfficeAncestorIds, isSuperAdmin, hasPermission, hasGlobalPermission, getPermissionCodes };

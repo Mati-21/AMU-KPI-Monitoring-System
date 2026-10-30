@@ -1,62 +1,50 @@
-/**
- * Canonical atomic permission catalog (MODULES_SPECIFICATION.html).
- * scripts/seedAdmin.js syncs this list into the `permission` table; route guards reference these codes.
- */
-export const SUPER_ADMIN_PERMISSION = '*';
+import { readFileSync } from 'fs';
 
-export const PERMISSIONS = Object.freeze({
-  // 01 Identity
-  USER_READ: 'user:read',
-  USER_CREATE: 'user:create',
-  USER_UPDATE: 'user:update',
-  USER_DELETE: 'user:delete',
-  USER_MANAGE: 'user:manage',
-  // 02 Offices
-  OFFICE_CREATE: 'office:create',
-  OFFICE_UPDATE: 'office:update',
-  OFFICE_MANAGE: 'office:manage',
-  OFFICE_ASSIGN: 'office:assign',
-  // 03 Roles
-  ROLE_READ: 'role:read',
-  ROLE_CREATE: 'role:create',
-  ROLE_UPDATE: 'role:update',
-  ROLE_DELETE: 'role:delete',
-  ROLE_ASSIGN: 'role:assign',
-  // 04 KPI catalog
-  KPI_CREATE: 'kpi:create',
-  KPI_UPDATE: 'kpi:update',
-  KPI_MANAGE: 'kpi:manage',
-  // 05 Targets
-  TARGET_READ: 'target:read',
-  TARGET_CREATE: 'target:create',
-  TARGET_UPDATE: 'target:update',
-  TARGET_ASSIGN: 'target:assign',
-  TARGET_CASCADE: 'target:cascade',
-  // 06 Cycles & reports
-  CYCLE_MANAGE: 'cycle:manage',
-  REPORT_CREATE: 'report:create',
-  REPORT_READ: 'report:read',
-  REPORT_SUBMIT: 'report:submit',
-  REPORT_REVIEW: 'report:review',
-  // 07 Evaluations
-  EVALUATION_READ: 'evaluation:read',
-  EVALUATION_WRITE: 'evaluation:write',
-  EVALUATION_VERIFY: 'evaluation:verify',
-  SCORECARD_READ: 'scorecard:read',
-  DASHBOARD_READ: 'dashboard:read',
-  // 08 Files & evidence
-  FILE_UPLOAD: 'file:upload',
-  FILE_READ: 'file:read',
-  DOCUMENT_CREATE: 'document:create',
-  EVIDENCE_LINK: 'evidence:link',
-  EVIDENCE_READ: 'evidence:read',
-  // 09 Notifications
-  NOTIFICATION_SEND: 'notification:send',
-  // 10 Governance
-  SETTINGS_MANAGE: 'settings:manage',
-  AUDIT_READ: 'audit:read',
+/**
+ * Permission catalog, loaded from config/permissions.json (the single source of truth).
+ * Route guards use PERMISSIONS.<RESOURCE>_<ACTION>; scripts/seedAdmin.js syncs PERMISSION_CODES into the database.
+ */
+const catalog = JSON.parse(readFileSync(new URL('./permissions.json', import.meta.url), 'utf8'));
+
+const CODE_PART = /^[a-z][a-z_]*$/;
+
+/**
+ * Flatten modules -> resources -> permissions into one list, validating names and uniqueness at startup.
+ */
+const buildEntries = () => {
+  const seen = new Set();
+  return catalog.modules.flatMap((module) =>
+    module.resources.flatMap(({ resource, label, permissions }) =>
+      permissions.map(({ action, description }) => {
+        if (!CODE_PART.test(resource) || !CODE_PART.test(action)) {
+          throw new Error(`config/permissions.json: invalid permission "${resource}:${action}" (use lower-case letters and _)`);
+        }
+        const code = `${resource}:${action}`;
+        if (seen.has(code)) throw new Error(`config/permissions.json: duplicate permission "${code}"`);
+        seen.add(code);
+        return { code, key: `${resource}_${action}`.toUpperCase(), resource, action, description, label, module: module.module, moduleName: module.name };
+      })
+    )
+  );
+};
+
+const ENTRIES = buildEntries();
+
+export const SUPER_ADMIN_PERMISSION = catalog.superAdmin.code;
+
+/** Name of the built-in role that holds the wildcard; protected from rename, deletion and losing '*'. */
+export const SUPER_ADMIN_ROLE = 'Super Admin';
+
+/** e.g. PERMISSIONS.OFFICE_CREATE === 'office:create' */
+export const PERMISSIONS = Object.freeze(Object.fromEntries(ENTRIES.map((entry) => [entry.key, entry.code])));
+
+export const PERMISSION_CODES = Object.freeze([SUPER_ADMIN_PERMISSION, ...ENTRIES.map((entry) => entry.code)]);
+
+/** Full catalog with descriptions, grouped as in the JSON (for GET /permissions and documentation). */
+export const PERMISSION_CATALOG = Object.freeze({
+  superAdmin: catalog.superAdmin,
+  modules: catalog.modules,
+  entries: ENTRIES,
 });
 
-export const PERMISSION_CODES = Object.freeze([SUPER_ADMIN_PERMISSION, ...Object.values(PERMISSIONS)]);
-
-export default { SUPER_ADMIN_PERMISSION, PERMISSIONS, PERMISSION_CODES };
+export default { SUPER_ADMIN_PERMISSION, SUPER_ADMIN_ROLE, PERMISSIONS, PERMISSION_CODES, PERMISSION_CATALOG };

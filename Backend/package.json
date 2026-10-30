@@ -14,6 +14,10 @@
     "seed": "node scripts/seedAdmin.js",
     "seed:admin": "node scripts/seedAdmin.js",
     "seed:admin:reset": "node scripts/seedAdmin.js --reset-admin",
+    "seed:permissions": "node scripts/seedPermissions.js",
+    "seed:settings": "node scripts/seedSettings.js",
+    "seed:roles": "node scripts/seedRoles.js",
+    "seed:roles:sync": "node scripts/seedRoles.js --sync",
     "seed:kpis": "node scripts/seedKpis.js",
     "test:auth": "node scripts/testAuthFlow.js"
   },

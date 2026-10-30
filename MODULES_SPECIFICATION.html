@@ -917,7 +917,7 @@
             <span class="stat-label">Prisma Database Models</span>
           </div>
           <div class="stat-card">
-            <span class="stat-val" style="color: #34d399;">92</span>
+            <span class="stat-val" style="color: #34d399;">93</span>
             <span class="stat-label">REST API Routes to Build</span>
           </div>
           <div class="stat-card">
@@ -2324,9 +2324,9 @@
             path: "/api/v1/settings/:groupName",
             ctrl: "SettingController.updateSettingsGroup",
             perm: "settings:manage",
-            desc: "Batch updates key-value settings within a category group.",
-            reqBody: '{\n  "settings": [\n    { "key": "allow_over_allocation", "value": "true" },\n    { "key": "max_over_allocation_cap", "value": "15.0" }\n  ]\n}',
-            resBody: '{\n  "message": "Settings updated for group kpi_rules"\n}'
+            desc: "Batch updates settings of one group (branding, general, kpi, reporting, system). Only keys declared in config/settings.json are accepted; values are typed and validated, null resets a key to its default. Turning system.maintenance_mode on makes the API answer 503 to everyone except university-wide settings managers.",
+            reqBody: '{\n  "settings": [\n    { "key": "submission_window_days", "value": 20 },\n    { "key": "reminder_days_before_deadline", "value": [10, 3, 1] }\n  ]\n}',
+            resBody: '{\n  "message": "2 setting(s) changed",\n  "data": { "group": "reporting", "changedKeys": ["submission_window_days", "reminder_days_before_deadline"] }\n}'
           },
           {
             method: "GET",
@@ -2336,6 +2336,15 @@
             desc: "Queries audit log trail with actor, action, entityType, date range filters, and pagination.",
             reqBody: "Query: ?action=CASCADE&entityType=kpi_target&page=1",
             resBody: '{\n  "total": 128,\n  "logs": [{\n    "id": "log-1",\n    "action": "CASCADE",\n    "entityType": "kpi_target",\n    "actor": { "firstName": "Mati" },\n    "createdAt": "..."\n  }]\n}'
+          },
+          {
+            method: "GET",
+            path: "/api/v1/audit-logs/filters",
+            ctrl: "AuditLogController.getAuditFilters",
+            perm: "audit:read",
+            desc: "Distinct actions, entity types and actors present in the audit trail, for filter dropdowns.",
+            reqBody: "{}",
+            resBody: '{\n  "actions": ["OFFICE_CREATED", "SETTINGS_UPDATED"],\n  "entityTypes": ["office", "system_setting"],\n  "actors": [{ "id": "uuid", "fullName": "Mati Admin User" }]\n}'
           },
           {
             method: "GET",

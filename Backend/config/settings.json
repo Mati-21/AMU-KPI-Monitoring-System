@@ -1,0 +1,75 @@
+{
+  "description": "Settings registry of the AMU KPI Monitoring System. Only settings declared here can be stored or read. Every setting is stored in the system_setting table: scripts/seedSettings.js (npm run seed:settings, also run on every server start) creates missing rows with `default`; saved values are never overwritten. `public: true` settings are returned without login by GET /api/v1/settings/public. Types: text, email, number (min, max, integer), boolean, enum (options), json (validator), file (a File id), datetime.",
+  "groups": [
+    {
+      "group": "branding",
+      "label": "Branding",
+      "description": "Institution identity shown on the login page, header and reports.",
+      "settings": [
+        { "key": "university_name", "label": "University name", "type": "text", "default": "Arba Minch University", "public": true, "maxLength": 150, "description": "Full institution name" },
+        { "key": "university_short_name", "label": "Short name", "type": "text", "default": "AMU", "public": true, "maxLength": 20, "description": "Abbreviation used in compact layouts" },
+        { "key": "system_name", "label": "System name", "type": "text", "default": "KPI Monitoring System", "public": true, "maxLength": 100, "description": "Product name shown in the browser title and header" },
+        { "key": "logo", "label": "Logo", "type": "file", "default": null, "public": true, "description": "Uploaded logo image (File id from POST /api/v1/files/upload)" }
+      ]
+    },
+    {
+      "group": "general",
+      "label": "General",
+      "description": "Institution-wide defaults.",
+      "settings": [
+        { "key": "contact_email", "label": "Support contact email", "type": "email", "default": null, "public": true, "description": "Shown to users who need help (e.g. on the login page)" },
+        { "key": "timezone", "label": "Time zone", "type": "enum", "default": "Africa/Addis_Ababa", "options": ["Africa/Addis_Ababa", "UTC"], "public": false, "description": "Time zone used for deadlines and reminders" },
+        { "key": "calendar", "label": "Display calendar", "type": "enum", "default": "gregorian", "options": ["gregorian", "ethiopian"], "public": true, "description": "Calendar used to display dates in the UI" },
+        { "key": "fiscal_year_start_month", "label": "Fiscal year start month", "type": "number", "default": 7, "min": 1, "max": 12, "integer": true, "public": false, "description": "Gregorian month in which a new fiscal year normally starts (7 = July, Ethiopian fiscal year)" }
+      ]
+    },
+    {
+      "group": "kpi",
+      "label": "KPI & Scoring",
+      "description": "Defaults for KPI planning and performance scoring.",
+      "settings": [
+        { "key": "default_cycle_names", "label": "Default evaluation cycles", "type": "json", "validator": "stringList", "default": ["Q1", "Q2", "Q3", "Q4"], "public": false, "description": "Cycle names suggested when scheduling evaluation cycles for a fiscal year" },
+        {
+          "key": "rating_bands",
+          "label": "Performance rating bands",
+          "type": "json",
+          "validator": "ratingBands",
+          "default": [
+            { "min": 90, "label": "Excellent" },
+            { "min": 75, "label": "Very Good" },
+            { "min": 60, "label": "Good" },
+            { "min": 50, "label": "Satisfactory" },
+            { "min": 0, "label": "Needs Improvement" }
+          ],
+          "public": false,
+          "description": "Score thresholds (percent) and labels used to grade KPIs, offices and scorecards; highest band first, last band starts at 0"
+        },
+        { "key": "max_score_percent", "label": "Maximum score", "type": "number", "default": 120, "min": 100, "max": 200, "integer": true, "public": false, "description": "Cap on an achievement score when actuals exceed the target" },
+        { "key": "default_max_over_allocation_percent", "label": "Default over-allocation cap", "type": "number", "default": 10, "min": 0, "max": 100, "public": false, "description": "Default maxOverAllocationPercent for new KPIs when cascading targets" }
+      ]
+    },
+    {
+      "group": "reporting",
+      "label": "Reporting & Deadlines",
+      "description": "Rules for submitting KPI reports in evaluation cycles.",
+      "settings": [
+        { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a cycle's period end until the report submission deadline (used when a cycle has no explicit due date)" },
+        { "key": "reminder_days_before_deadline", "label": "Deadline reminders", "type": "json", "validator": "dayList", "default": [7, 3, 1], "public": false, "description": "Days before the deadline on which offices with unsubmitted reports are reminded" },
+        { "key": "allow_late_submission", "label": "Allow late submission", "type": "boolean", "default": true, "public": false, "description": "Whether offices may still submit after the deadline (within the grace period)" },
+        { "key": "late_submission_grace_days", "label": "Late submission grace period", "type": "number", "default": 5, "min": 0, "max": 60, "integer": true, "public": false, "description": "Days after the deadline during which late submissions are accepted and flagged as late" },
+        { "key": "auto_lock_after_deadline", "label": "Lock reports after deadline", "type": "boolean", "default": true, "public": false, "description": "Automatically lock unsubmitted reports once the deadline (plus grace period) has passed" },
+        { "key": "require_evidence", "label": "Require evidence", "type": "boolean", "default": false, "public": false, "description": "Require at least one evidence document on each evaluation before a report can be submitted" }
+      ]
+    },
+    {
+      "group": "system",
+      "label": "System Status",
+      "description": "Availability of the system. In maintenance mode only university-wide settings managers can use the API.",
+      "settings": [
+        { "key": "maintenance_mode", "label": "Maintenance mode", "type": "boolean", "default": false, "public": true, "description": "Take the system offline for everyone except university-wide settings managers" },
+        { "key": "maintenance_message", "label": "Maintenance message", "type": "text", "default": "The system is under maintenance. Please try again later.", "public": true, "maxLength": 500, "description": "Message shown to users while maintenance mode is on" },
+        { "key": "maintenance_ends_at", "label": "Expected end of maintenance", "type": "datetime", "default": null, "public": true, "description": "Optional estimated end time shown to users (ISO date-time)" }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,9 @@ import 'dotenv/config';
 import { prisma } from '../config/database.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { PERMISSION_CODES } from '../config/permissions.js';
+import { seedPermissions } from './seedPermissions.js';
+import { seedSettings } from './seedSettings.js';
+import { SUPER_ADMIN_ROLE } from '../config/permissions.js';
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'mati@gmail.com').trim().toLowerCase();
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'mati.admin').trim().toLowerCase();
@@ -67,31 +69,22 @@ export const seedAdmin = async () => {
     // 4. Role: Super Admin
     console.log('🛡️ Creating/Upserting Super Admin Role...');
     let superAdminRole = await prisma.role.findUnique({
-      where: { name: 'Super Admin' },
+      where: { name: SUPER_ADMIN_ROLE },
     });
     if (!superAdminRole) {
       superAdminRole = await prisma.role.create({
         data: {
-          name: 'Super Admin',
+          name: SUPER_ADMIN_ROLE,
           description: 'Full institutional authority, user registration, and platform governance',
         },
       });
     }
 
-    // 5. Atomic Permissions Catalog (single source: config/permissions.js)
-    console.log(`🔑 Syncing ${PERMISSION_CODES.length} permission codes...`);
-    for (const code of PERMISSION_CODES) {
-      const perm = await prisma.permission.upsert({ where: { code }, update: {}, create: { code } });
-      await prisma.rolePermission.upsert({
-        where: { roleId_permissionId: { roleId: superAdminRole.id, permissionId: perm.id } },
-        update: {},
-        create: { roleId: superAdminRole.id, permissionId: perm.id },
-      });
-    }
+    // 5. Atomic Permissions Catalog (config/permissions.json), granted to Super Admin
+    await seedPermissions();
 
-    // Remove codes that are no longer part of the catalog (role links cascade)
-    const stale = await prisma.permission.deleteMany({ where: { code: { notIn: [...PERMISSION_CODES] } } });
-    if (stale.count > 0) console.log(`🧹 Removed ${stale.count} stale permission code(s)`);
+    // 5b. System settings (config/settings.json) with their defaults
+    await seedSettings();
 
     // 6. Super Admin Person Record
     console.log(`👤 Creating/Upserting Super Admin Person (${ADMIN_EMAIL})...`);

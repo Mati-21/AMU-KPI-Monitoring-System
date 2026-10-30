@@ -17,7 +17,7 @@ const clearAuthCookies = (res) => {
   res.clearCookie('refresh_token', { path: REFRESH_COOKIE.path });
 };
 
-const setSessionCookies = (res, { token, refreshToken }) => {
+export const setSessionCookies = (res, { token, refreshToken }) => {
   res.cookie('token', token, SESSION_COOKIE);
   res.cookie('refresh_token', refreshToken, REFRESH_COOKIE);
   res.clearCookie('auth_stage', { path: STAGE_COOKIE.path });

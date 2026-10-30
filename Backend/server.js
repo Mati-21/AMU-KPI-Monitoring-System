@@ -17,6 +17,8 @@ import errorHandler from './middleware/errorMiddleware.js';
 import { initSocket } from './realtime/socket.js';
 import { swaggerSpec, swaggerUi, swaggerUiOptions } from './config/swagger.js';
 import apiV1Routes from './modules/index.js';
+import { seedPermissions } from './scripts/seedPermissions.js';
+import { seedSettings } from './scripts/seedSettings.js';
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'dev').toLowerCase();
@@ -114,6 +116,14 @@ const PORT = process.env.PORT || 8058;
 const startServer = async () => {
   try {
     await connectDB();
+
+    // Keep the permission catalog and system settings in step with config/*.json
+    const permissions = await seedPermissions({ quiet: true });
+    const settings = await seedSettings({ quiet: true });
+    console.log(
+      `Registries synced: permissions +${permissions.added}/-${permissions.removed}, ` +
+        `settings +${settings.added}/~${settings.updated}/-${settings.removed}`
+    );
 
     const server = http.createServer(app);
     initSocket(server, { allowedOrigins });
