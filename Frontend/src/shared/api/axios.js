@@ -1,49 +1,58 @@
-// services/api.js
 import axios from 'axios';
 import { store } from '../../app/store';
 import { queryClient } from '../../app/queryClient';
 import { logout } from '../../features/01-identity/store/authSlice';
 
-export const BASE_URL = 'http://localhost:8058';
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8058';
 
 export const api = axios.create({
-  baseURL: `${BASE_URL}/api`,
+  baseURL: `${BASE_URL}/api/v1`,
   withCredentials: true,
-  timeout: 60000, // 60 seconds default timeout
+  timeout: 60000,
 });
 
+// These answer 401 for a wrong password or code, or an expired login step. A refresh would not help.
+const NO_REFRESH_PATHS = ['/auth/login', '/auth/logout', '/auth/refresh-token', '/auth/change-password-first-login', '/auth/mfa/verify', '/auth/mfa/verify-setup', '/auth/mfa/setup'];
+
+let refreshing = null;
+
+// Requests that fail together share one refresh, because a refresh token can only be used once
+const refreshSession = () => {
+  refreshing ??= api.post('/auth/refresh-token').finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+};
+
+const endSession = () => {
+  store.dispatch(logout());
+  queryClient.clear();
+};
+
 api.interceptors.request.use((config) => {
-  // Cookie-based auth is the primary and only mechanism.
-  // withCredentials: true ensures cookies are sent automatically.
-
-  // Increase timeout for file uploads (FormData)
   if (config.data instanceof FormData) {
-    config.timeout = 120000; // 120 seconds for evidence/file uploads
+    config.timeout = 120000;
   }
-
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const status = error?.response?.status;
-    const message = String(error?.response?.data?.message || '').toLowerCase();
-    const requestUrl = String(error?.config?.url || '').toLowerCase();
+  async (error) => {
+    const { config, response } = error;
+    const status = response?.status;
 
-    // Only auto-logout on real authentication/session failures.
-    // Avoid auto-logout on the login page itself (401 for wrong password).
-    const isLoginPage = window.location.pathname === '/signin';
-
-    if (status === 401 && !isLoginPage) {
-      store.dispatch(logout());
-      queryClient.clear();
+    if (status === 401 && config && !config.retriedAfterRefresh && !NO_REFRESH_PATHS.includes(config.url)) {
+      config.retriedAfterRefresh = true;
+      try {
+        await refreshSession();
+        return api(config);
+      } catch {
+        endSession();
+      }
     }
 
-    const isStatusCheck = requestUrl.includes('/settings/status');
-    const isMaintenancePage = window.location.pathname === '/maintenance';
-
-    if (status === 503 && error?.response?.data?.maintenance && !isStatusCheck && !isMaintenancePage) {
+    if (status === 503 && response.data?.code === 'MAINTENANCE' && window.location.pathname !== '/maintenance') {
       window.location.href = '/maintenance';
     }
 

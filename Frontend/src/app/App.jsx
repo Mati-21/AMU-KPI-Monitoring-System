@@ -6,6 +6,7 @@ import KpiAllocationPage from '../features/05-contracts/pages/KpiAllocationPage'
 import SignIn from '../features/01-identity/pages/LoginPage';
 import NotFoundPage from '../shared/pages/PageNotFound';
 import UserManagment from '../features/01-identity/pages/users/UserManagment';
+import UserDetail from '../features/01-identity/pages/users/UserDetail';
 import KpiManagement from '../features/04-kpi-catalog/pages/Kpi';
 import RoleManagement from '../features/03-access-control/pages/roles/RoleManagement';
 import Configuration from '../features/10-system/pages/configuration/Configuration';
@@ -14,9 +15,9 @@ import PermissionManagement from '../features/03-access-control/pages/permission
 import SystemLogs from '../features/10-system/pages/SystemLogs';
 import Maintenance from '../features/10-system/pages/Maintenance';
 import UserProfile from '../features/01-identity/pages/UserProfile';
-import ContactAdmin from '../features/01-identity/pages/ContactAdmin';
-import ContactMessages from '../features/12-messaging/pages/ContactMessages';
-import DirectMessageView from '../features/12-messaging/pages/DirectMessageView';
+import ContactAdmin from '../features/12-support/pages/ContactAdmin';
+import SupportRequests from '../features/12-support/pages/SupportRequests';
+import DirectMessageView from '../features/13-messaging/pages/DirectMessageView';
 
 import DashboardHome from '../features/11-dashboards/pages/DashboardHome';
 import OfficeReport from '../features/07-performance/pages/OfficeReport';
@@ -129,36 +130,13 @@ function App() {
                       <Route path="/kpi" element={<KpiManagement />} />
                     </Route>
 
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Personal Profile')} />}>
-                      <Route path="/profile" element={<UserProfile />} />
+                    <Route path="/profile" element={<UserProfile />} />
+
+                    <Route element={<RequirePermission permission="user:read" />}>
+                      <Route path="/users/:personId" element={<UserDetail />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'Personal Profile'),
-                            permissionUtils.permissionKey('view', 'User Management'),
-                            permissionUtils.permissionKey('manage', 'Users'),
-                            permissionUtils.permissionKey('edit', 'User Management'),
-                          ]}
-                        />
-                      }
-                    >
-                      <Route path="/profile/:userId" element={<UserProfile />} />
-                    </Route>
-
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'User Management'),
-                            permissionUtils.permissionKey('manage', 'Users'),
-                            permissionUtils.permissionKey('create', 'Child Office Accounts'),
-                          ]}
-                        />
-                      }
-                    >
+                    <Route element={<RequirePermission permissions={['user:read', 'user:create']} />}>
                       <Route path="/user-management" element={<UserManagment />} />
                     </Route>
 
@@ -201,7 +179,10 @@ function App() {
                     <Route element={<RequirePermission permissions={[permissionUtils.permissionKey('view', 'System Logs')]} />}>
                       <Route path="/system-logs" element={<SystemLogs />} />
                     </Route>
-                    <Route path="/contact-messages" element={<ContactMessages />} />
+                    <Route element={<RequirePermission permission="support:manage" />}>
+                      <Route path="/support-requests" element={<SupportRequests />} />
+                    </Route>
+                    <Route path="/contact-messages" element={<Navigate to="/support-requests" replace />} />
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Direct Messages')} />}>
                       <Route path="/direct-messages" element={<DirectMessageView />} />
                     </Route>

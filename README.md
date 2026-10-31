@@ -15,6 +15,16 @@ https://github.com/MentosMkt/AMU-KPI-Monitoring-System
 - [Docs/CLASS_DIAGRAM.md](Docs/CLASS_DIAGRAM.md) — class diagram of `Backend/prisma/schema.prisma`
 - Swagger UI at `http://localhost:8058/api-docs` while the backend runs
 
+## Frontend setup
+
+```bash
+cd Frontend
+npm install
+npm run dev                   # http://localhost:5174
+```
+
+The frontend calls `http://localhost:8058` by default. Set `VITE_API_URL` to use another backend address.
+
 ## Backend setup
 
 ```bash

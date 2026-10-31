@@ -91,7 +91,12 @@ export const flattenPermissions = (permissions) => {
 };
 
 export const hasPermission = (permissions, requiredPermission) => {
-  if (!requiredPermission) {
+  if (!requiredPermission || (Array.isArray(requiredPermission) && requiredPermission.length === 0)) {
+    return true;
+  }
+
+  // Super Admin
+  if (Array.isArray(permissions) && permissions.includes('*')) {
     return true;
   }
 

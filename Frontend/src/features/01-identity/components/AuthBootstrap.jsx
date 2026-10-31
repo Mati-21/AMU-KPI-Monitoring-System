@@ -66,26 +66,27 @@ export const AuthBootstrap = ({ children }) => {
         // Parallel fetch for session and comprehensive system status
         const [authRes, systemRes] = await Promise.allSettled([
           api.get('/auth/me'),
-          api.get('/settings/status')
+          api.get('/settings/public')
         ]);
 
         if (!mounted) return;
 
         // 1. Sync branding and maintenance state
         if (systemRes.status === 'fulfilled') {
-          const { maintenanceMode, displayName, orgName, systemLogo, system_logo } = systemRes.value.data;
-          dispatch(setMaintenance(maintenanceMode));
-          dispatch(setSystemSettings({ 
-            displayName, 
-            orgName, 
-            systemLogo: systemLogo || system_logo 
+          const { system, branding, general } = systemRes.value.data.data;
+          dispatch(setMaintenance(Boolean(system?.maintenance_mode)));
+          dispatch(setSystemSettings({
+            displayName: branding?.system_name,
+            orgName: branding?.university_name,
+            systemLogo: branding?.logo ? `/api/v1/files/${branding.logo}/public` : null,
+            supportEmail: general?.contact_email ?? null,
           }));
         }
 
         // 2. Handle Auth Session
         if (authRes.status === 'fulfilled') {
           hasLoggedOutRef.current = false;
-          dispatch(setUser(normalizeAuthUser(authRes.value.data.user, authRes.value.data.role)));
+          dispatch(setUser(normalizeAuthUser(authRes.value.data.data)));
         } else {
           // session check failed (401)
           dispatch(logout());
@@ -125,7 +126,7 @@ export const AuthBootstrap = ({ children }) => {
 
       idleTimerRef.current = window.setTimeout(() => {
         clearSession({
-          message: 'You were signed out after 1 hour of inactivity.',
+          message: 'You were signed out after 30 minutes of inactivity.',
           shouldNotify: true,
         });
       }, IDLE_TIMEOUT_MS);

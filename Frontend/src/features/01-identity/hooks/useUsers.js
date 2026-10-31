@@ -1,139 +1,53 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import { api } from '../../../shared/api/axios';
 import { queryKeys } from '../../../shared/config/queryKeys';
 
-/**
- * Hook for fetching all users
- */
-export const useUsersQuery = (params = {}, options = {}) => {
-  return useQuery({
+const useRefreshPeople = () => {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+};
+
+const useAccountAction = (send) => {
+  const refreshPeople = useRefreshPeople();
+  return useMutation({ mutationFn: send, onSuccess: refreshPeople });
+};
+
+export const usePersons = (params) =>
+  useQuery({
     queryKey: queryKeys.users.list(params),
-    queryFn: async () => {
-      const response = await api.get('/users', { params });
-      return response.data?.data || [];
-    },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 30, // 30 minutes
-    ...options,
+    queryFn: () => api.get('/persons', { params }).then(({ data }) => data),
+    placeholderData: keepPreviousData,
   });
-};
+
+export const usePerson = (personId) =>
+  useQuery({
+    queryKey: queryKeys.users.detail(personId),
+    queryFn: () => api.get(`/persons/${personId}`).then(({ data }) => data.data),
+  });
+
+export const useCreatePerson = () => useAccountAction((values) => api.post('/persons', values));
+export const useUpdatePerson = () => useAccountAction(({ personId, values }) => api.put(`/persons/${personId}`, values));
+export const useDeletePerson = () => useAccountAction((personId) => api.delete(`/persons/${personId}`).then(({ data }) => data));
+export const useSaveAccount = () => useAccountAction(({ personId, values }) => api.post(`/persons/${personId}/account`, values));
+export const useSetAccountActive = () => useAccountAction(({ accountId, isActive }) => api.patch(`/users/${accountId}/toggle-active`, { isActive }));
+export const useResetPassword = () => useAccountAction(({ accountId, temporaryPassword }) => api.post(`/users/${accountId}/reset-password`, { temporaryPassword }));
+export const useEnforceMfa = () => useAccountAction(({ accountId, enforced }) => api.patch(`/auth/users/${accountId}/enforce-mfa`, { enforced }));
+
+export const useAccountSessions = (accountId) =>
+  useQuery({
+    queryKey: [...queryKeys.users.all, 'sessions', accountId],
+    queryFn: () => api.get(`/users/${accountId}/sessions`).then(({ data }) => data.data),
+    enabled: Boolean(accountId),
+  });
+
+export const useRevokeAccountSessions = () => useAccountAction((accountId) => api.post(`/users/${accountId}/sessions/revoke-all`));
 
 /**
- * Hook for fetching a single user by ID
+ * Still used by the KPI allocation page. That route no longer exists; it goes when Module 05 is connected.
  */
-export const useUserQuery = (userId, options = {}) => {
-  return useQuery({
-    queryKey: queryKeys.users.detail(userId),
-    queryFn: async () => {
-      if (!userId) return null;
-      const response = await api.get(`/users/${userId}`);
-      return response.data?.data;
-    },
-    enabled: !!userId,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
-    ...options,
-  });
-};
-
-/**
- * Hook for fetching user roles
- */
-export const useUserRolesQuery = (params = {}) => {
-  return useQuery({
+export const useUserRolesQuery = (params = {}) =>
+  useQuery({
     queryKey: ['user-roles', params],
-    queryFn: async () => {
-      const response = await api.get('/user-roles', { params });
-      return response.data?.data || [];
-    },
+    queryFn: () => api.get('/user-roles', { params }).then(({ data }) => data.data ?? data),
   });
-};
-
-
-/**
- * Hook for updating a user
- */
-export const useUpdateUserMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ userId, data }) => {
-      const response = await api.put(`/users/${userId}`, data);
-      return response.data?.data;
-    },
-    onSuccess: (data, variables) => {
-      // Invalidate both the list and the specific user detail
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-      queryClient.setQueryData(queryKeys.users.detail(variables.userId), data);
-    },
-  });
-};
-
-/**
- * Hook for updating user profile picture
- */
-export const useUpdateProfilePictureMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ userId, formData }) => {
-      const response = await api.post(`/users/${userId}/profile`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return response.data;
-    },
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-    },
-  });
-};
-
-/**
- * Hook for deleting a user
- */
-export const useDeleteUserMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (userId) => {
-      await api.delete(`/users/${userId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-    },
-  });
-};
-
-/**
- * Hook for registering a new user
- */
-export const useRegisterUserMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (userData) => {
-      const response = await api.post('/auth/register', userData);
-      return response.data?.user;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-    },
-  });
-};
-
-/**
- * Hook for assigning a role to a user
- */
-export const useAssignUserRoleMutation = () => {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ UserId, RoleId }) => {
-      await api.post('/user-roles', { UserId, RoleId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-    },
-  });
-};
-

@@ -1,33 +1,23 @@
 import { useSelector } from 'react-redux';
-import { useDashboardPermission } from '../hooks/useDashboardPermission';
-import permissionUtils from '../../03-access-control/lib/permissionUtils';
-import UnifiedDashboard from './UnifiedDashboard';
-import LegacyAdminDashboard from './LegacyAdminDashboard';
+import { Link } from 'react-router-dom';
 
+/**
+ * A simple start page until Module 11 connects the dashboards to the new backend.
+ */
 const DashboardHome = () => {
-  const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
-  const { canViewDashboard } = useDashboardPermission();
+  const user = useSelector((state) => state.auth.user);
 
-  // Check if dashboard view permission is enabled
-  if (!canViewDashboard) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-2">Access Denied</h2>
-          <p className="text-muted-foreground">You do not have permission to access the dashboard.</p>
-          <p className="text-sm text-muted-foreground mt-4">Please contact your administrator to grant you dashboard access.</p>
-        </div>
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="max-w-md text-center space-y-3">
+        <h1 className="text-2xl font-bold text-foreground">Welcome, {user?.fullName}</h1>
+        <p className="text-sm text-muted-foreground">Your dashboard will appear here once the performance dashboards are connected.</p>
+        <Link to="/profile" className="inline-block text-sm font-medium text-primary hover:underline underline-offset-4">
+          Go to my profile
+        </Link>
       </div>
-    );
-  }
-
-  const canUseAdminDashboard = permissionUtils.hasPermission(userPermissions, 'admin_dashboard');
-
-  if (canUseAdminDashboard) {
-    return <LegacyAdminDashboard />;
-  }
-
-  return <UnifiedDashboard />;
+    </div>
+  );
 };
 
 export default DashboardHome;

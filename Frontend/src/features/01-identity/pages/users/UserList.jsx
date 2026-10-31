@@ -1,248 +1,157 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Edit, Eye, Trash2, UserPlus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Eye, Trash2, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
 
 import Button from '../../../../shared/components/ui/Button';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell, TablePagination } from '../../../../shared/components/ui/Table';
-import SearchInput from '../../../../shared/components/ui/SearchInput';
+import { Badge } from '../../../../shared/components/ui/Badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/components/ui/dialog';
-import { api } from '../../../../shared/api/axios';
+import SearchInput from '../../../../shared/components/ui/SearchInput';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../../shared/components/ui/Table';
+import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import { useCan } from '../../../03-access-control/hooks/useCan';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
-import permissionUtils from '../../../03-access-control/lib/permissionUtils';
-import { getFileUrl } from '../../../../shared/lib/utils';
-import { useUsersQuery, useDeleteUserMutation } from '../../hooks/useUsers';
+import PersonAvatar from '../../components/PersonAvatar';
+import { useDeletePerson, usePersons } from '../../hooks/useUsers';
 
-const sanitizeNamePart = (value) => {
-  const normalized = String(value || '').trim();
-  if (!normalized || normalized === '-' || normalized.toLowerCase() === 'null' || normalized.toLowerCase() === 'undefined') {
-    return '';
-  }
+const PAGE_SIZE = 10;
+const SEARCH_DELAY_MS = 300;
+const COLUMN_COUNT = 6;
 
-  return normalized;
+const AccountBadge = ({ account }) => {
+  if (!account) return <Badge variant="outline">No login</Badge>;
+  return account.isActive ? (
+    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+      Active
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30">
+      Deactivated
+    </Badge>
+  );
 };
 
-function UserList({ setActiveTab }) {
+const officesOf = (person) => person.placements.map((placement) => placement.office.name).join(', ') || 'Not placed';
+const rolesOf = (person) => [...new Set(person.placements.flatMap((placement) => placement.roles.map((assignment) => assignment.role.name)))].join(', ') || 'None';
+
+function UserList({ onAdd }) {
   const navigate = useNavigate();
-  const authUser = useSelector((state) => state.auth.user);
-  const userPermissions = authUser?.permissions || [];
-  const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
-  const canManageUsers =
-    isSystemAdmin ||
-    permissionUtils.hasPermission(userPermissions, [
-      permissionUtils.permissionKey('create', 'User Management'),
-      permissionUtils.permissionKey('edit', 'User Management'),
-      permissionUtils.permissionKey('delete', 'User Management'),
-      permissionUtils.permissionKey('manage', 'Users'),
-    ]);
-  const canCreateChildAccounts =
-    isSystemAdmin || permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'Child Office Accounts'));
-  const canAddUser =
-    canManageUsers ||
-    canCreateChildAccounts ||
-    permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('create', 'User Management'));
-  const [currentPage, setCurrentPage] = useState(1);
-  const [internalSearch, setInternalSearch] = useState('');
-  const [deletingUser, setDeletingUser] = useState(null);
-
-  const { data: usersRaw = [], isLoading: loading, error: queryError } = useUsersQuery();
-  const deleteMutation = useDeleteUserMutation();
-  const itemsPerPage = 10;
   const { notify } = useNotification();
+  const can = useCan();
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState(null);
+  const deletePerson = useDeletePerson();
+  const { data, isLoading, error } = usePersons({ search: appliedSearch, page, limit: PAGE_SIZE });
+  const people = data?.data ?? [];
 
-  const error = queryError?.response?.data?.message || queryError?.message || '';
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAppliedSearch(search.trim());
+      setPage(1);
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-
-
-  const users = useMemo(
-    () =>
-      usersRaw.map((u) => {
-        const activeRole = u?.UserRoles?.[0]?.Role;
-        const firstName = sanitizeNamePart(u.FirstName);
-        const fatherName = sanitizeNamePart(u.FatherName);
-        const grandFatherName = sanitizeNamePart(u.GrandFatherName);
-        const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(' ').trim();
-
-        return {
-          id: u.Id,
-          fullName: fullName || u.UserName || 'Unknown User',
-          initials: `${firstName?.[0] || ''}${fatherName?.[0] || ''}`.toUpperCase() || 'U',
-          email: u.Email || '-',
-          userName: u.UserName || '-',
-          phone: u.Phone || '-',
-          role: activeRole?.RoleName || 'Unassigned',
-          roleCategory: activeRole?.RoleCategory?.CategoryName || 'No Category',
-          officeLevel: activeRole?.RoleName || '-',
-          joinedDate: u.CreatedAt ? new Date(u.CreatedAt).toISOString().slice(0, 10) : '-',
-          profilePicture: u.ProfilePicture,
-        };
-      }),
-    [usersRaw]
-  );
-
-  const effectiveSearch = internalSearch.toLowerCase();
-
-  const handleDeleteUser = async (user) => {
-    const authId = String(authUser?.id || authUser?.Id || '');
-    if (authId && String(user.id) === authId) {
-      notify('You cannot delete your own account from this table.', 'warning');
-      return;
-    }
-
-    setDeletingUser(user);
-  };
-
-  const confirmDeleteUser = async () => {
-    if (!deletingUser?.id) return;
-
-    deleteMutation.mutate(deletingUser.id, {
-      onSuccess: () => {
-        notify(`User "${deletingUser.fullName}" archived successfully.`, 'success');
-        setDeletingUser(null);
+  const confirmDelete = () =>
+    deletePerson.mutate(deleting.id, {
+      onSuccess: (result) => {
+        setDeleting(null);
+        notify(result.message, result.deactivated ? 'warning' : 'success');
       },
-      onError: (err) => {
-        notify(err?.response?.data?.message || 'Failed to delete user.', 'error');
-      }
+      onError: (failure) => notify(apiErrorMessage(failure, 'Could not delete this person.'), 'error'),
     });
-  };
-
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch = `${u.fullName} ${u.email} ${u.userName}`.toLowerCase().includes(effectiveSearch);
-    return matchesSearch;
-  });
-
-  const totalItems = filteredUsers.length;
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h2 className="text-base font-semibold text-foreground">Registered Users</h2>
-        {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <p className="text-xs text-muted-foreground">Total registered users: {users.length}</p>
-
-          <div className="flex items-center gap-3">
-            <div className="w-80">
-              <SearchInput value={internalSearch} onChange={setInternalSearch} placeholder="Search users..." />
-            </div>
-
-            {canAddUser ? (
-              <button
-                onClick={() => setActiveTab('add')}
-                className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-all duration-200 hover:bg-primary/90 shadow-soft"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>{canManageUsers ? 'Add User' : 'Create Child Office Account'}</span>
-              </button>
-            ) : null}
-          </div>
+      <div className="rounded-lg border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, staff number..." className="max-w-sm" />
+          {onAdd && (
+            <Button onClick={onAdd} className="gap-2">
+              <UserPlus className="h-4 w-4" />
+              Add User
+            </Button>
+          )}
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+        {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load people.')}</p>}
+
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Full Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Role Category</TableHead>
-                <TableHead>Office Level</TableHead>
-                <TableHead>Joined Date</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Offices</TableHead>
+                <TableHead>Roles</TableHead>
+                <TableHead>Login</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
-
             <TableBody>
-              {loading ? (
+              {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7}>Loading users...</TableCell>
-                </TableRow>
-              ) : paginatedUsers.length ? (
-                paginatedUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary overflow-hidden border border-border/50">
-                         {user.profilePicture ? (
-                           <img src={getFileUrl(user.profilePicture)} alt={user.fullName} className="h-full w-full object-cover" />
-                         ) : (
-                           user.initials
-                         )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground">{user.phone || 'No phone yet'}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role}</TableCell>
-                    <TableCell>{user.roleCategory}</TableCell>
-                    <TableCell>{user.officeLevel}</TableCell>
-                    <TableCell>{user.joinedDate}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {canManageUsers ? (
-                          <button
-                            onClick={() => navigate(`/profile/${user.id}`, { state: { startEditing: true } })}
-                            className="rounded p-1 text-foreground hover:bg-muted"
-                            title="Edit user"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                        ) : null}
-
-                        {canManageUsers ? (
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className="rounded p-1 text-destructive hover:bg-destructive/10"
-                            title="Delete user"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        ) : null}
-
-                        <button
-                          onClick={() => navigate(`/profile/${user.id}`)}
-                          className="rounded p-1 text-primary hover:bg-primary/10"
-                          title="View profile"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7}>No users found in the database.</TableCell>
+                  <TableCell colSpan={COLUMN_COUNT}>Loading people...</TableCell>
                 </TableRow>
               )}
+              {!isLoading && people.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={COLUMN_COUNT}>No people found.</TableCell>
+                </TableRow>
+              )}
+              {people.map((person) => (
+                <TableRow key={person.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <PersonAvatar personId={person.id} fileId={person.profilePictureFileId} fullName={person.fullName} className="h-9 w-9 shrink-0 text-xs" />
+                      <div>
+                        <p className="font-medium text-foreground">{person.fullName}</p>
+                        <p className="text-xs text-muted-foreground">{person.email || 'No email yet'}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{person.account?.username ?? '-'}</TableCell>
+                  <TableCell>{officesOf(person)}</TableCell>
+                  <TableCell>{rolesOf(person)}</TableCell>
+                  <TableCell>
+                    <AccountBadge account={person.account} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => navigate(`/users/${person.id}`)} className="rounded p-1 text-primary hover:bg-primary/10" title="Open" aria-label={`Open ${person.fullName}`}>
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      {can('user:delete') && (
+                        <button onClick={() => setDeleting(person)} className="rounded p-1 text-destructive hover:bg-destructive/10" title="Delete" aria-label={`Delete ${person.fullName}`}>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
 
-        <TablePagination currentPage={currentPage} totalItems={totalItems} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+        <TablePagination currentPage={page} totalItems={data?.pagination?.total ?? 0} itemsPerPage={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
-      <Dialog open={Boolean(deletingUser)} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeletingUser(null)}>
+      <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && !deletePerson.isPending && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete User</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <span className="font-semibold">{deletingUser?.fullName}</span>? This action will archive the account.
+              Delete <span className="font-semibold">{deleting?.fullName}</span>? Someone referenced by institutional records is deactivated instead, so their history stays.
             </DialogDescription>
           </DialogHeader>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingUser(null)} disabled={deleteMutation.isPending}>
+            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deletePerson.isPending}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteUser} disabled={deleteMutation.isPending}>
-              {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+            <Button variant="destructive" onClick={confirmDelete} disabled={deletePerson.isPending}>
+              {deletePerson.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

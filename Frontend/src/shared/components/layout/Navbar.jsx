@@ -6,6 +6,7 @@ import useTheme from '../../hooks/useTheme';
 
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../ui/DropDown';
 import { logout } from '../../../features/01-identity/store/authSlice';
+import PersonAvatar from '../../../features/01-identity/components/PersonAvatar';
 import { api } from '../../api/axios';
 import { useNotification } from '../../../features/09-notifications/context/NotificationContext';
 import { useSocket } from '../../context/SocketContext';
@@ -447,16 +448,7 @@ const Navbar = () => {
                   ) : null}
                 </p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm overflow-hidden">
-                {user?.ProfilePicture ? (
-                  <img src={getFileUrl(user.ProfilePicture)} alt={displayName} className="h-full w-full object-cover" />
-                ) : (
-                  displayName
-                    ?.split(' ')
-                    .map((segment) => segment[0])
-                    .join('') || 'U'
-                )}
-              </div>
+              <PersonAvatar personId={user?.personId} fileId={user?.profilePictureFileId} fullName={displayName} className="w-9 h-9 text-xs" />
             </div>
           }
         >

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { useSelector } from 'react-redux';
 import { Mail, User, MessageSquare, Send, ShieldCheck, Clock, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
 import Navbar from '../../../shared/components/layout/Navbar';
+import { api } from '../../../shared/api/axios';
+import { apiErrorMessage } from '../../../shared/lib/apiError';
 
 const ContactAdmin = () => {
   const navigate = useNavigate();
+  const supportEmail = useSelector((state) => state.auth.systemSettings?.supportEmail);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -21,20 +24,20 @@ const ContactAdmin = () => {
     setSubmitStatus(null);
 
     try {
-      await axios.post('http://localhost:6000/api/contact-messages', {
-        username: formData.username,
+      await api.post('/support-requests', {
+        name: formData.username,
         email: formData.email,
         message: formData.message,
       });
 
       setSubmitStatus('success');
-      setSubmitMessage('Message sent successfully! We will get back to you soon.');
+      setSubmitMessage('Your message was sent. An administrator will reply by email.');
       setFormData({ username: '', email: '', message: '' });
 
       setTimeout(() => navigate('/signin'), 2500);
     } catch (err) {
       setSubmitStatus('error');
-      setSubmitMessage(err?.response?.data?.message || 'Failed to send message. Please try again.');
+      setSubmitMessage(apiErrorMessage(err, 'Failed to send message. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -65,11 +68,12 @@ const ContactAdmin = () => {
                 <div className="space-y-2.5">
                   <label className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider ml-1">
                     <User className="w-3.5 h-3.5" />
-                    Username
+                    Your Name
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. john.doe"
+                    placeholder="e.g. Abebe Kebede"
+                    maxLength={100}
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     className="w-full h-10 px-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-sm placeholder:text-muted-foreground/50"
@@ -135,8 +139,7 @@ const ContactAdmin = () => {
                 {/* Footer Actions */}
                 <div className="pt-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-6">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>Typical response time:</span>
-                    <span className="font-bold text-foreground">within 24 hours</span>
+                    <span>An administrator will reply by email.</span>
                   </div>
                   <button
                     type="submit"
@@ -172,9 +175,9 @@ const ContactAdmin = () => {
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">Secure Channel</h3>
+                  <h3 className="text-sm font-bold text-foreground">Goes to Administrators</h3>
                   <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                    Your message is encrypted and routed only to authorized administrators.
+                    Only people who handle support requests can read your message.
                   </p>
                 </div>
               </div>
@@ -184,8 +187,8 @@ const ContactAdmin = () => {
                   <Clock className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">Fast Response</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Most inquiries are answered within one business day.</p>
+                  <h3 className="text-sm font-bold text-foreground">Reply by Email</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Check that your email address is correct, so the reply reaches you.</p>
                 </div>
               </div>
 
@@ -194,8 +197,8 @@ const ContactAdmin = () => {
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">Tracked Tickets</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Every submission gets a reference ID for follow-up.</p>
+                  <h3 className="text-sm font-bold text-foreground">Tracked Until Resolved</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Administrators track every message until it is resolved.</p>
                 </div>
               </div>
             </div>
@@ -204,8 +207,7 @@ const ContactAdmin = () => {
             <div className="bg-primary/5 rounded-2xl border border-primary/10 p-6 space-y-3 shadow-sm">
               <div className="space-y-0.5">
                 <p className="text-[9px] font-bold text-primary uppercase tracking-widest">Direct Contact</p>
-                <p className="text-base font-bold text-foreground truncate">admin@university.edu</p>
-                <p className="text-xs text-muted-foreground font-medium">Mon – Fri, 8:00 AM – 5:00 PM</p>
+                <p className="text-base font-bold text-foreground truncate">{supportEmail || 'Use the form on this page'}</p>
               </div>
             </div>
           </div>
