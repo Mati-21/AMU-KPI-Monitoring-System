@@ -4,10 +4,10 @@ import { Provider } from 'react-redux';
 import { QueryClientProvider } from '@tanstack/react-query';
 
 import './index.css';
-import App from './App.jsx';
+import App from './app/App.jsx';
 import { store } from './app/store.js';
 import { queryClient } from './app/queryClient.js';
-import { ThemeProvider } from './Context/ThemeContext.jsx';
+import { ThemeProvider } from './shared/context/ThemeContext.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
