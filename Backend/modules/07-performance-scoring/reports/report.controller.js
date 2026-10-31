@@ -13,4 +13,5 @@ export const createReport = async (req, res) => send(res, await reportService.cr
 export const saveValues = async (req, res) => send(res, await reportValueService.saveValues(req.params.id, req.body || {}, actorOf(req)));
 export const submitReport = async (req, res) => send(res, await reportService.submitReport(req.params.id, actorOf(req)));
 export const startReview = async (req, res) => send(res, await reportService.startReview(req.params.id, actorOf(req)));
+export const reopenReport = async (req, res) => send(res, await reportService.reopenReport(req.params.id, req.body || {}, actorOf(req)));
 export const reviewReport = async (req, res) => send(res, await reportService.reviewReport(req.params.id, req.body || {}, actorOf(req)));

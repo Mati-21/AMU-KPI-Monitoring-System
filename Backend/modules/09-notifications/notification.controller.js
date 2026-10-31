@@ -1,36 +1,14 @@
-import * as notificationService from './notification.service.js';
+import * as inboxService from './inbox.service.js';
+import * as dispatchService from './dispatch.service.js';
 import { actorOf } from '../../utils/requestContext.js';
+
+const send = (res, data, status = 200) => res.status(status).json({ status: 'success', data });
 
 export const listMyNotifications = async (req, res) => {
   const { unreadOnly, page, limit } = req.query;
-  const result = await notificationService.listMyNotifications(req.user.personId, { unreadOnly, page, limit });
-  res.json({ status: 'success', ...result });
+  res.json({ status: 'success', ...(await inboxService.listMyNotifications(req.user.personId, { unreadOnly, page, limit })) });
 };
-
-export const countUnread = async (req, res) => {
-  const count = await notificationService.countUnread(req.user.personId);
-  res.json({ status: 'success', data: { count } });
-};
-
-export const markAsRead = async (req, res) => {
-  const receipt = await notificationService.markAsRead(req.params.id, req.user.personId);
-  res.json({ status: 'success', data: receipt });
-};
-
-export const markAllAsRead = async (req, res) => {
-  const result = await notificationService.markAllAsRead(req.user.personId);
-  res.json({ status: 'success', data: result });
-};
-
-export const dispatchNotification = async (req, res) => {
-  const notification = await notificationService.dispatchNotification(req.body || {}, actorOf(req));
-  res.status(201).json({ status: 'success', data: notification });
-};
-
-export default {
-  listMyNotifications,
-  countUnread,
-  markAsRead,
-  markAllAsRead,
-  dispatchNotification,
-};
+export const countUnread = async (req, res) => send(res, { count: await inboxService.countUnread(req.user.personId) });
+export const markAsRead = async (req, res) => send(res, await inboxService.markAsRead(req.params.id, req.user.personId));
+export const markAllAsRead = async (req, res) => send(res, await inboxService.markAllAsRead(req.user.personId));
+export const dispatchNotification = async (req, res) => send(res, await dispatchService.dispatchNotification(req.body || {}, actorOf(req)), 201);

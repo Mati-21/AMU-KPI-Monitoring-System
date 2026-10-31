@@ -14,6 +14,7 @@ import { swaggerSpec, swaggerUi, swaggerUiOptions } from './config/swagger.js';
 import apiV1Routes from './modules/index.js';
 import { seedPermissions } from './scripts/seedPermissions.js';
 import { seedSettings } from './scripts/seedSettings.js';
+import { startReminderJob } from './modules/09-notifications/reminder.job.js';
 
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'dev').toLowerCase();
@@ -142,6 +143,7 @@ const startServer = async () => {
 
     server.listen(PORT, () => {
       console.log(`🚀 API running on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
+      startReminderJob();
     });
   } catch (error) {
     console.error('Failed to start server:', error);

@@ -8,8 +8,9 @@ import { assertFiscalYearOpen } from '../../04-kpi-catalog/fiscalYear.service.js
 import { assertAuthorityFromAbove, assertSeparateApprover, requireComment } from '../../05-contract-cascading/contract.shared.js';
 import { assertPeriodOpen } from '../../06-reporting-periods/period.service.js';
 import { addDays } from '../../06-reporting-periods/period.rules.js';
+import { lowPerformance, reportReopened, reportReviewed, reportSubmitted } from '../../09-notifications/notification.events.js';
 import { getSetting } from '../../10-system-governance/system.service.js';
-import { previewLines, recalculateReport } from '../scoring/scoring.service.js';
+import { findLowResults, previewLines, recalculateReport } from '../scoring/scoring.service.js';
 import { dueAssignments, isDirectEntry } from '../scoring/result.service.js';
 import { assertCanSeeReport, assertOfficeAuthority, canSeeReport } from './report.access.js';
 import { EDITABLE_STATUSES } from './reportValue.service.js';
@@ -208,6 +209,7 @@ export const submitReport = async (id, actor) => {
   await prisma.performanceReport.update({ where: { id: report.id }, data: { status: 'SUBMITTED', submittedByPersonId: actor.personId, submittedAt: new Date() } });
   await auditAction(actor, { action: 'REPORT_SUBMITTED', entityType: 'performance_report', entityId: report.id, oldValues: { status: report.status }, newValues: { status: 'SUBMITTED', isLate } });
   await recalculateReport(report.id, actor);
+  await reportSubmitted(report, actor);
   return { ...(await getReportOrThrow(id)), isLate };
 };
 
@@ -260,8 +262,36 @@ export const reviewReport = async (id, { decision, comment } = {}, actor) => {
     reason: cleanComment ?? undefined,
   });
 
-  if (outcome === 'APPROVED') await recalculateReport(report.id, actor);
+  await reportReviewed(report, outcome, cleanComment, actor);
+  if (outcome === 'APPROVED') {
+    await recalculateReport(report.id, actor);
+    await lowPerformance(report, await findLowResults(report.id), actor);
+  }
   return getReportOrThrow(id);
 };
 
-export default { listReports, getReportById, createReport, submitReport, startReview, reviewReport };
+/**
+ * Super Admin only: reopen an approved report to correct a mistake found later. The reason is required and kept.
+ * Its results stop counting as official, and everything that depended on them is recalculated straight away.
+ */
+export const reopenReport = async (id, { reason } = {}, actor) => {
+  const report = await getReportOrThrow(id);
+  await assertPeriodOpen(report.reportingPeriodId);
+  if (report.status !== 'APPROVED') throw conflict(`Only an approved report can be reopened; this one is ${report.status}`);
+  const cleanReason = requireComment(reason);
+
+  await prisma.performanceReport.update({ where: { id: report.id }, data: { status: 'REVISION_REQUIRED' } });
+  await auditAction(actor, {
+    action: 'REPORT_REOPENED',
+    entityType: 'performance_report',
+    entityId: report.id,
+    oldValues: { status: report.status },
+    newValues: { status: 'REVISION_REQUIRED' },
+    reason: cleanReason,
+  });
+  await recalculateReport(report.id, actor);
+  await reportReopened(report, cleanReason, actor);
+  return getReportOrThrow(id);
+};
+
+export default { listReports, getReportById, createReport, submitReport, startReview, reviewReport, reopenReport };

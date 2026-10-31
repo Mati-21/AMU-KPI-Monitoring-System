@@ -83,7 +83,6 @@ router.patch('/notifications/:id/mark-read', protect, notificationController.mar
  *               requiredPermissionCode: { type: string, example: "report:submit" }
  *               entityType: { type: string }
  *               entityId: { type: string, format: uuid }
- *               channel: { type: string, default: in_app }
  *     responses:
  *       201: { description: Dispatched }
  */

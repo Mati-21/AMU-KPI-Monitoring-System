@@ -44,6 +44,7 @@
       "description": "Rules for submitting KPI reports in reporting periods.",
       "settings": [
         { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a reporting period ends until the report is due (used when a period has no explicit deadline)" },
+        { "key": "low_performance_alert_percent", "label": "Low performance alert", "type": "number", "default": 60, "min": 0, "max": 100, "public": false, "description": "When an approved result is below this achievement, the office above is alerted. 0 turns the alert off" },
         { "key": "reminder_days_before_deadline", "label": "Deadline reminders", "type": "json", "validator": "dayList", "default": [7, 3, 1], "public": false, "description": "Days before the deadline on which offices with unsubmitted reports are reminded" },
         { "key": "allow_late_submission", "label": "Allow late submission", "type": "boolean", "default": true, "public": false, "description": "Whether offices may still submit after the deadline (within the grace period)" },
         { "key": "late_submission_grace_days", "label": "Late submission grace period", "type": "number", "default": 5, "min": 0, "max": 60, "integer": true, "public": false, "description": "Days after the deadline during which late submissions are accepted and flagged as late" },

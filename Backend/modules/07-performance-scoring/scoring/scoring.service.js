@@ -202,4 +202,24 @@ export const recalculateReport = async (reportId, actor, visited = new Set()) =>
  */
 export const previewLines = async (report) => buildLines(report, await loadScoringSettings());
 
-export default { buildLines, recalculateReport, previewLines };
+/**
+ * Approved results below the university's alert level. Judged on the KPI's own scoring method.
+ * Running totals are left out: part-way through the year a low figure is normal.
+ */
+export const findLowResults = async (reportId) => {
+  const alertPercent = await getSetting('reporting', 'low_performance_alert_percent');
+  if (!alertPercent) return [];
+  const rows = await prisma.kpiAchievement.findMany({
+    where: { reportingPeriod: { reports: { some: { id: reportId } } }, assignment: { contract: { reports: { some: { id: reportId } } } } },
+    include: { assignment: { select: { kpi: { select: { code: true, scoringMethod: true, periodRollupMethod: true } } } }, reportingPeriod: { select: { isYearEnd: true } } },
+  });
+  return rows
+    .filter(({ assignment, reportingPeriod }) => reportingPeriod.isYearEnd || assignment.kpi.periodRollupMethod !== 'SUM')
+    .map((row) => ({
+      kpiCode: row.assignment.kpi.code,
+      percent: toNumber(row.assignment.kpi.scoringMethod === 'IMPROVEMENT' ? (row.improvementAchievementCapped ?? row.targetAchievementCapped) : row.targetAchievementCapped),
+    }))
+    .filter((row) => row.percent !== null && row.percent < alertPercent);
+};
+
+export default { buildLines, recalculateReport, previewLines, findLowResults };

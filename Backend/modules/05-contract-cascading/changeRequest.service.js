@@ -4,6 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseEnum, parseUuid, requireString } from '../../utils/validation.js';
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { changeRequested, changeReviewed } from '../09-notifications/notification.events.js';
 import { refreshReconciliation } from './allocation.service.js';
 import { APPROVED_STATUSES, addVersion, assertAuthorityFromAbove, assertSeparateApprover, canSeeAssignment, getAssignmentOrThrow, requireComment } from './contract.shared.js';
 import { parseBaseline, parseTarget, parseWeight } from './measurement.js';
@@ -89,6 +90,7 @@ export const createChangeRequest = async (assignmentId, { requestType, reason, p
     include: REQUEST_INCLUDE,
   });
   await auditAction(actor, { action: 'CHANGE_REQUESTED', entityType: 'assignment_change_request', entityId: request.id, newValues: { assignmentId: assignment.id, requestType: type, proposal }, reason: cleanReason });
+  await changeRequested(request, assignment, actor);
   return request;
 };
 
@@ -182,6 +184,7 @@ export const reviewChangeRequest = async (id, { decision, comment, effectiveFrom
     newValues: { status: outcome, proposal },
     reason: reviewComment ?? undefined,
   });
+  await changeReviewed(updated, actor);
   return updated;
 };
 

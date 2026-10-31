@@ -4,6 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, notFound } from '../../utils/httpError.js';
 import { optionalString, parseDate, parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assignmentApproved, assignmentRejected, assignmentSubmitted } from '../09-notifications/notification.events.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import {
   APPROVED_STATUSES,
@@ -223,7 +224,9 @@ export const submitAssignment = async (id, actor) => {
   await assertEditableYear(assignment);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract);
   assertStatus(assignment, 'DRAFT');
-  return setStatus(assignment, 'SUBMITTED', {}, actor, 'ASSIGNMENT_SUBMITTED');
+  const submitted = await setStatus(assignment, 'SUBMITTED', {}, actor, 'ASSIGNMENT_SUBMITTED');
+  await assignmentSubmitted(assignment, actor);
+  return submitted;
 };
 
 /**
@@ -250,6 +253,7 @@ export const approveAssignment = async (id, actor) => {
     return tx.kpiAssignment.update({ where: { id: assignment.id }, data: { status: 'APPROVED', approvedByPersonId: actor.personId, approvedAt: now, reviewComment: null }, include: ASSIGNMENT_INCLUDE });
   });
   await audit(actor, assignment, 'ASSIGNMENT_APPROVED', 'APPROVED');
+  await assignmentApproved(assignment, actor);
   return formatAssignment(updated);
 };
 
@@ -259,7 +263,9 @@ export const rejectAssignment = async (id, { comment } = {}, actor) => {
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_APPROVE, assignment.contract);
   assertStatus(assignment, 'SUBMITTED');
   const reason = requireComment(comment);
-  return setStatus(assignment, 'REJECTED', { reviewComment: reason }, actor, 'ASSIGNMENT_REJECTED', reason);
+  const rejected = await setStatus(assignment, 'REJECTED', { reviewComment: reason }, actor, 'ASSIGNMENT_REJECTED', reason);
+  await assignmentRejected(assignment, reason, actor);
+  return rejected;
 };
 
 export const acknowledgeAssignment = async (id, actor) => {

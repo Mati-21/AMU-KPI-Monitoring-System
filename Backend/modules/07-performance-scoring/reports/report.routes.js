@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as reportController from './report.controller.js';
-import { protect, requirePermission } from '../../../middleware/authMiddleware.js';
+import { protect, requirePermission, requireSuperAdmin } from '../../../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../../../config/permissions.js';
 
 const router = Router();
@@ -125,5 +125,26 @@ router.put('/reports/:id/values', protect, canCreate, reportController.saveValue
 router.patch('/reports/:id/submit', protect, requirePermission(PERMISSIONS.REPORT_SUBMIT), reportController.submitReport);
 router.patch('/reports/:id/start-review', protect, canReview, reportController.startReview);
 router.patch('/reports/:id/review', protect, canReview, reportController.reviewReport);
+
+/**
+ * @swagger
+ * /api/v1/reports/{id}/reopen:
+ *   patch:
+ *     summary: Reopen an approved report to correct a mistake (Super Admin only)
+ *     description: The report returns to REVISION_REQUIRED. Its results stop being official and everything that depended on them is recalculated. The reason is audited.
+ *     tags: [Performance Scoring]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [reason], properties: { reason: { type: string } } }
+ *     responses:
+ *       200: { description: Reopened }
+ *       403: { description: Not a Super Admin }
+ *       409: { description: "Not approved, or the period or year is closed" }
+ */
+router.patch('/reports/:id/reopen', protect, requireSuperAdmin, reportController.reopenReport);
 
 export default router;
