@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 10-module blueprint in MODULES_SPECIFICATION.html (151 REST routes under <code>/api/v1</code>, 45 Prisma models).
+          aligned with the 11-module blueprint in MODULES_SPECIFICATION.html (154 REST routes under <code>/api/v1</code>, 45 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -764,15 +764,15 @@
         </div>
         <div class="dev-stats-row">
           <div>
-            <div class="dev-stat-value">5</div>
+            <div class="dev-stat-value">6</div>
             <div class="dev-stat-label">Modules</div>
           </div>
           <div>
-            <div class="dev-stat-value">85</div>
+            <div class="dev-stat-value">88</div>
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">56%</div>
+            <div class="dev-stat-value">57%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -801,7 +801,7 @@
             <div class="dev-stat-label">Endpoints</div>
           </div>
           <div>
-            <div class="dev-stat-value">44%</div>
+            <div class="dev-stat-value">43%</div>
             <div class="dev-stat-label">Endpoint Share</div>
           </div>
         </div>
@@ -813,10 +813,10 @@
   <div class="controls-bar">
     <div class="filter-tabs">
       <button class="filter-btn active" onclick="filterModules('all', this)">
-        🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(10)</span>
+        🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(11)</span>
       </button>
       <button class="filter-btn filter-dev-a" onclick="filterModules('dev-a', this)">
-        🟣 Developer A Only <span style="opacity: 0.6; font-size: 0.75rem;">(5)</span>
+        🟣 Developer A Only <span style="opacity: 0.6; font-size: 0.75rem;">(6)</span>
       </button>
       <button class="filter-btn filter-dev-b" onclick="filterModules('dev-b', this)">
         🟢 Developer B Only <span style="opacity: 0.6; font-size: 0.75rem;">(5)</span>
@@ -1298,6 +1298,76 @@
       </div>
     </div>
 
+    <!-- MODULE 11 (Dev A) -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="dashboard university parent office subordinate comparison trend history performance view">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 11 &bull; Backend/modules/11-dashboards</div>
+          <div class="module-title">📊 Dashboards &amp; Performance Views</div>
+          <div class="module-desc">Read-only views over the results saved by Module 07, with no tables of its own. Only approved reports count as official; missing, pending, returned and rejected results are always shown apart, and a missing result is never treated as zero. A summed KPI before year end shows as in progress. Every view is filtered by fiscal year and optionally by period, and follows the same office scope as the rest of the system.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Developer A</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints (3)</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/university · dashboard:read over the top office</span>
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId · dashboard:read, checked by scope</span>
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId/subordinates · dashboard:read, checked by scope</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models</div>
+          <div class="chip-list">
+
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope (integration phase)</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Components/Dashboard/PerformanceDashboard.jsx</span>
+            <span class="chip chip-fe">Components/Dashboard/SubComponents/*</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>University dashboard: official score, KPI counts, trend, history, by strategic objective and by office type</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Parent office dashboard: own KPIs, responsibilities, subordinates compared, pending reports and reports awaiting review</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Own office dashboard: baselines, targets, results, deadlines, evidence status, feedback and history</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Only approved reports are official; draft figures stay with the office; every view filters by fiscal year and period</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Depends on:</strong> Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- MODULE 05 (Dev B) -->
     <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="contract assignment cascade baseline target weight allocation reconciliation change request">
       <div class="module-card-header">
@@ -1719,7 +1789,7 @@
         </p>
       </div>
       <div style="display: flex; gap: 0.75rem;">
-        <span class="assigned-badge badge-dev-a">Dev A: 5 Modules / 85 Endpoints</span>
+        <span class="assigned-badge badge-dev-a">Dev A: 6 Modules / 88 Endpoints</span>
         <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 66 Endpoints</span>
       </div>
     </div>
@@ -1775,6 +1845,14 @@
             <td>SystemSetting, AuditLog</td>
             <td>6</td>
             <td>Both developers call logActivity() from their services so every state change lands in the audit trail.</td>
+          </tr>
+          <tr>
+            <td><strong>11. Dashboards &amp; Performance Views</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><code>modules/11-dashboards</code></td>
+            <td></td>
+            <td>3</td>
+            <td>Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.</td>
           </tr>
           <tr>
             <td><strong>05. Contracts &amp; KPI Cascading</strong></td>

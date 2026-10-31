@@ -13,6 +13,7 @@ import performanceRoutes from './07-performance-scoring/performance.routes.js';
 import evidenceRoutes from './08-evidence-documents/evidence.routes.js';
 import notificationRoutes from './09-notifications/notification.routes.js';
 import systemRoutes from './10-system-governance/system.routes.js';
+import dashboardRoutes from './11-dashboards/dashboard.routes.js';
 
 /**
  * API v1 router. Each module router declares its own resource paths exactly as listed in
@@ -40,5 +41,6 @@ router.use(performanceRoutes); // 07 /reports, /scorecards, /performance-thresho
 router.use(evidenceRoutes); // 08 /files, /document-types, /documents, /performance-values, /performance-evidence
 router.use(notificationRoutes); // 09 /notifications
 router.use(systemRoutes); // 10 /settings, /audit-logs
+router.use(dashboardRoutes); // 11 /dashboards
 
 export default router;

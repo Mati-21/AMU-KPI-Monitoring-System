@@ -129,14 +129,6 @@
             { "action": "read", "description": "View scorecards, performance and KPI history of offices in scope" },
             { "action": "manage", "description": "Manage the university's performance bands" }
           ]
-        },
-        {
-          "resource": "dashboard",
-          "label": "Dashboards",
-          "covers": [],
-          "permissions": [
-            { "action": "read", "description": "View dashboards" }
-          ]
         }
       ]
     },
@@ -205,6 +197,20 @@
           "covers": ["AuditLog"],
           "permissions": [
             { "action": "read", "description": "Query the audit trail" }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "11",
+      "name": "Dashboards",
+      "resources": [
+        {
+          "resource": "dashboard",
+          "label": "Dashboards",
+          "covers": [],
+          "permissions": [
+            { "action": "read", "description": "View university, parent office and office dashboards in scope" }
           ]
         }
       ]

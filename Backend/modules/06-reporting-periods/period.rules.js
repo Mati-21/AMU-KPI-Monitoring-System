@@ -5,6 +5,12 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * True when a period measures the whole fiscal year.
+ */
+export const isFullYear = (period, fiscalYear) =>
+  period.isYearEnd || (period.startDate.getTime() === fiscalYear.startDate.getTime() && period.endDate.getTime() === fiscalYear.endDate.getTime());
+
 export const addDays = (date, days) => new Date(date.getTime() + days * DAY_MS);
 
 /**

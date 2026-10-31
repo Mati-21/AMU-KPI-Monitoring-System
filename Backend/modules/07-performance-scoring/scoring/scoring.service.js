@@ -1,6 +1,7 @@
 import { prisma } from '../../../config/database.js';
 import { auditAction } from '../../../utils/auditLogger.js';
 import { toNumber } from '../../05-contract-cascading/measurement.js';
+import { isFullYear } from '../../06-reporting-periods/period.rules.js';
 import { getSetting } from '../../10-system-governance/system.service.js';
 import { calculateAchievement, pickThreshold } from '../rules/achievement.rules.js';
 import { calculateContractScore } from '../rules/contractScore.rules.js';
@@ -29,9 +30,6 @@ const loadScoringSettings = async () => {
   return { capOverachievement, maxScorePercent, officialBasis, thresholds };
 };
 
-const isFullYear = (period) =>
-  period.isYearEnd || (period.startDate.getTime() === period.fiscalYear.startDate.getTime() && period.endDate.getTime() === period.fiscalYear.endDate.getTime());
-
 /**
  * Calculate every line of a report without saving anything.
  * Each line holds the assignment, its result and its achievement.
@@ -42,7 +40,7 @@ export const buildLines = async (report, settings) => {
   const directRows = await prisma.performanceValue.findMany({ where: { reportId: report.id, contributionType: 'DIRECT' } });
   const directByAssignment = new Map(directRows.map((row) => [row.assignmentId, row]));
   const isApproved = report.status === 'APPROVED';
-  const fullYear = isFullYear(period);
+  const fullYear = isFullYear(period, period.fiscalYear);
 
   return Promise.all(
     assignments.map(async (assignment) => {

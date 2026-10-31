@@ -930,10 +930,10 @@
       <!-- Category Filter Bar -->
       <div class="filter-bar">
         <div class="filter-chips">
-          <button class="filter-chip active" onclick="filterCategory('all', this)">All Modules (10)</button>
+          <button class="filter-chip active" onclick="filterCategory('all', this)">All Modules (11)</button>
           <button class="filter-chip" onclick="filterCategory('identity', this)">Identity & Hierarchy (2)</button>
           <button class="filter-chip" onclick="filterCategory('governance', this)">Roles & Strategy (2)</button>
-          <button class="filter-chip" onclick="filterCategory('kpi-ops', this)">KPI Allocation & Scoring (3)</button>
+          <button class="filter-chip" onclick="filterCategory('kpi-ops', this)">KPI Allocation & Scoring (4)</button>
           <button class="filter-chip" onclick="filterCategory('platform', this)">Files, Alerts & System (3)</button>
         </div>
         <div style="font-size: 0.85rem; color: var(--text-dim);">
@@ -1813,6 +1813,19 @@
             resBody: '{\n  "id": "log-1",\n  "oldValues": { "targetValue": "100" },\n  "newValues": { "targetValue": "150" }\n}'
           }
         ]
+      },
+      {
+        id: "mod-11",
+        slug: "dashboards",
+        number: "11",
+        category: "kpi-ops",
+        title: "Dashboards & Performance Views",
+        tagline: "University, Parent Office & Own Office Views",
+        accent: "var(--acc-teal)",
+        icon: "📊",
+        overview: "Read-only views over the results saved by Module 07, with no tables of its own. Only approved reports count as official; missing, pending, returned and rejected results are always shown apart, and a missing result is never treated as zero. A summed KPI before year end shows as in progress. Every view is filtered by fiscal year and optionally by period, and follows the same office scope as the rest of the system.",
+        tables: [],
+        routes: [{"method":"GET","path":"/api/v1/dashboards/university","ctrl":"DashboardController.getUniversityDashboard","perm":"dashboard:read over the top office","desc":"The whole university for a year: official score, KPI counts, trend, history, and performance by strategic objective and by office type. Office scores are never averaged.","reqBody":"Query: ?fiscalYearId=&reportingPeriodId=","resBody":"{ \"data\": { ... } }"},{"method":"GET","path":"/api/v1/dashboards/offices/:officeId","ctrl":"DashboardController.getOfficeDashboard","perm":"dashboard:read, checked by scope","desc":"One office: KPIs with baseline, target, required improvement and results; deadlines, evidence status, review feedback and history.","reqBody":"Query: ?fiscalYearId=&reportingPeriodId=","resBody":"{ \"data\": { ... } }"},{"method":"GET","path":"/api/v1/dashboards/offices/:officeId/subordinates","ctrl":"DashboardController.getParentOfficeDashboard","perm":"dashboard:read, checked by scope","desc":"A parent office: its own KPIs, retained and distributed responsibilities, direct subordinates compared, pending reports and reports awaiting review.","reqBody":"Query: ?fiscalYearId=&reportingPeriodId=","resBody":"{ \"data\": { ... } }"}]
       }
     ];
 

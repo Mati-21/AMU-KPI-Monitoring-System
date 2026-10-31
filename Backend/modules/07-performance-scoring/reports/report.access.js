@@ -11,7 +11,7 @@ const VISIBLE_TO_OFFICES_ABOVE = ['SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUIRE
 /**
  * True when the actor's own grant sits on this office rather than on an office above it.
  */
-const holdsOnThisOffice = (actor, code, officeId) => actor.access.grants.some((grant) => grant.code === code && grant.scopeOfficeId === officeId);
+export const holdsOnThisOffice = (actor, code, officeId) => actor.access.grants.some((grant) => grant.code === code && grant.scopeOfficeId === officeId);
 
 export const canSeeReport = async (actor, report) => {
   const { officeId } = report.contract;
@@ -29,4 +29,4 @@ export const assertOfficeAuthority = async (actor, code, officeId) => {
   if (!(await actor.access.can(code, officeId))) throw forbidden(`You need ${code} authority over the reporting office`);
 };
 
-export default { canSeeReport, assertCanSeeReport, assertOfficeAuthority };
+export default { holdsOnThisOffice, canSeeReport, assertCanSeeReport, assertOfficeAuthority };
