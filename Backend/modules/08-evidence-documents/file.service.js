@@ -4,8 +4,8 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, forbidden, notFound } from '../../utils/httpError.js';
 import { parseUuid } from '../../utils/validation.js';
 import { updateSettingsGroup } from '../10-system-governance/system.service.js';
-import { LOGO_EXTENSIONS, cleanFileName, extensionOf, matchesExtension } from './file.rules.js';
-import { absolutePathOf, checksumOf, fileExists, removeFile, saveFile } from './file.storage.js';
+import { IMAGE_EXTENSIONS, MIME_TYPES, cleanFileName, extensionOf, matchesExtension } from './file.rules.js';
+import { UPLOAD_FOLDERS, absolutePathOf, checksumOf, fileExists, removeFile, saveFile } from './file.storage.js';
 
 /**
  * Module 08 — Stored files. Every download goes through a check here; nothing under uploads/ is served directly.
@@ -27,12 +27,20 @@ export const storeFile = async (upload, folder, allowedExtensions, personId) => 
   const storedPath = await saveFile(folder, extension, upload.buffer);
   try {
     return await prisma.fileUpload.create({
-      data: { originalName, storedPath, mimeType: upload.mimetype, sizeBytes: upload.size, checksum: checksumOf(upload.buffer), uploadedByPersonId: personId },
+      data: { originalName, storedPath, mimeType: MIME_TYPES[extension], sizeBytes: upload.size, checksum: checksumOf(upload.buffer), uploadedByPersonId: personId },
     });
   } catch (error) {
     await removeFile(storedPath);
     throw error;
   }
+};
+
+/**
+ * Remove a file's record and its copy on disk.
+ */
+export const deleteStoredFile = async (file) => {
+  await prisma.fileUpload.delete({ where: { id: file.id } });
+  await removeFile(file.storedPath);
 };
 
 const getFileOrThrow = async (id) => {
@@ -73,7 +81,7 @@ const assertCanDownload = async (file, actor) => {
   throw forbidden('You do not have access to this file');
 };
 
-const toDownload = async (file, inline = false) => {
+export const toDownload = async (file, inline = false) => {
   if (!(await fileExists(file.storedPath))) throw notFound('The stored file is missing');
   return { absolutePath: absolutePathOf(file.storedPath), fileName: file.originalName, mimeType: file.mimeType, inline };
 };
@@ -104,7 +112,7 @@ export const uploadLogo = async (upload, actor) => {
   if (upload && upload.size > MAX_LOGO_BYTES) throw badRequest('The logo must be 5 MB or smaller');
 
   const previous = await prisma.systemSetting.findUnique({ where: { groupName_key: { groupName: 'branding', key: 'logo' } }, select: { file: true } });
-  const file = await storeFile(upload, 'system-assets', LOGO_EXTENSIONS, actor.personId);
+  const file = await storeFile(upload, UPLOAD_FOLDERS.SYSTEM_ASSETS, IMAGE_EXTENSIONS, actor.personId);
   try {
     await updateSettingsGroup('branding', { settings: [{ key: 'logo', value: file.id }] }, actor);
   } catch (error) {
@@ -120,4 +128,4 @@ export const uploadLogo = async (upload, actor) => {
   return { fileId: file.id, originalName: file.originalName, sizeBytes: Number(file.sizeBytes) };
 };
 
-export default { storeFile, getFileForDownload, getPublicFile, uploadLogo };
+export default { storeFile, deleteStoredFile, toDownload, getFileForDownload, getPublicFile, uploadLogo };

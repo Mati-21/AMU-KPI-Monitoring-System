@@ -51,6 +51,7 @@
       ],
       "typicalScope": "university",
       "permissions": [
+        "support:manage",
         "user:*",
         "office:*",
         "role:*",

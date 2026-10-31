@@ -4,7 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseBoolean, parseBooleanQuery, parseNumber, parseUuid, requireString } from '../../utils/validation.js';
 import { KNOWN_EXTENSIONS, parseExtensionList } from './file.rules.js';
-import { removeFile } from './file.storage.js';
+import { UPLOAD_FOLDERS, removeFile } from './file.storage.js';
 import { storeFile } from './file.service.js';
 
 /**
@@ -102,7 +102,7 @@ export const createDocument = async (upload, { documentTypeId, ownerOfficeId, ti
 
   const cleanTitle = requireString(title, 'title');
   const allowed = documentType.allowedExtensions ? parseExtensionList(documentType.allowedExtensions) : KNOWN_EXTENSIONS;
-  const file = await storeFile(upload, 'documents', allowed, actor.personId);
+  const file = await storeFile(upload, UPLOAD_FOLDERS.KPI_EVIDENCE, allowed, actor.personId);
 
   const document = await prisma.document.create({
     data: { documentTypeId: documentType.id, fileId: file.id, ownerOfficeId: officeId, title: cleanTitle, description: optionalString(description, 'description') ?? null, createdByPersonId: actor.personId },

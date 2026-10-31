@@ -214,6 +214,20 @@
           ]
         }
       ]
+    },
+    {
+      "module": "12",
+      "name": "Support",
+      "resources": [
+        {
+          "resource": "support",
+          "label": "Support requests",
+          "covers": ["SupportRequest"],
+          "permissions": [
+            { "action": "manage", "description": "Read and handle requests sent to the administrators" }
+          ]
+        }
+      ]
     }
   ]
 }

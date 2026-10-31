@@ -9,7 +9,7 @@ https://github.com/MentosMkt/AMU-KPI-Monitoring-System
 
 ## Documentation
 
-- [MODULES_SPECIFICATION.html](MODULES_SPECIFICATION.html) — the 11 modules, 46 Prisma models and every `/api/v1` route (source of truth)
+- [MODULES_SPECIFICATION.html](MODULES_SPECIFICATION.html) — the 12 modules, 47 Prisma models and every `/api/v1` route (source of truth)
 - [TASK_DIVISION.html](TASK_DIVISION.html) — module status and roadmap
 - [Docs/BACKEND_GUIDE.md](Docs/BACKEND_GUIDE.md) — how the backend is organised and how to work on it
 - [Docs/CLASS_DIAGRAM.md](Docs/CLASS_DIAGRAM.md) — class diagram of `Backend/prisma/schema.prisma`

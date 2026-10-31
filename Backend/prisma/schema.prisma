@@ -168,6 +168,12 @@ enum ReviewDecision {
   REVISION_REQUIRED
 }
 
+enum SupportRequestStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
+
 enum AchievementStatus {
   BELOW_TARGET
   AT_TARGET
@@ -180,19 +186,21 @@ enum AchievementStatus {
 // ===== Identity =====
 
 model Person {
-  id          String   @id @default(uuid()) @db.Uuid
-  staffNumber String?  @unique @map("staff_number")
-  firstName   String   @map("first_name")
-  middleName  String?  @map("middle_name")
-  lastName    String   @map("last_name")
-  email       String?  @unique
-  phone       String?
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String   @id @default(uuid()) @db.Uuid
+  staffNumber          String?  @unique @map("staff_number")
+  firstName            String   @map("first_name")
+  middleName           String?  @map("middle_name")
+  lastName             String   @map("last_name")
+  email                String?  @unique
+  phone                String?
+  profilePictureFileId String?  @unique @map("profile_picture_file_id") @db.Uuid
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  userAccount   UserAccount?
-  officePersons OfficePerson[]
+  profilePicture FileUpload?    @relation("PersonProfilePicture", fields: [profilePictureFileId], references: [id])
+  userAccount    UserAccount?
+  officePersons  OfficePerson[]
 
   officeMovesRecorded     OfficeHierarchyHistory[]
   scalesApproved          KpiScale[]
@@ -211,7 +219,9 @@ model Person {
   allocationsCreated      ResponsibilityAllocation[]
   changesRequested        AssignmentChangeRequest[]  @relation("ChangeRequester")
   changesReviewed         AssignmentChangeRequest[]  @relation("ChangeReviewer")
-  filesUploaded           FileUpload[]
+  filesUploaded           FileUpload[]               @relation("FileUploader")
+  supportRequests         SupportRequest[]           @relation("SupportRequester")
+  supportRequestsHandled  SupportRequest[]           @relation("SupportHandler")
   documentsCreated        Document[]
   reportsPrepared         PerformanceReport[]        @relation("ReportPreparer")
   reportsSubmitted        PerformanceReport[]        @relation("ReportSubmitter")
@@ -879,7 +889,8 @@ model FileUpload {
   uploadedByPersonId String?  @map("uploaded_by_person_id") @db.Uuid
   uploadedAt         DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
 
-  uploadedBy Person?         @relation(fields: [uploadedByPersonId], references: [id])
+  uploadedBy Person?         @relation("FileUploader", fields: [uploadedByPersonId], references: [id])
+  profileOf  Person?         @relation("PersonProfilePicture")
   documents  Document[]
   settings   SystemSetting[]
 
@@ -1177,6 +1188,27 @@ model NotificationRecipient {
   @@unique([notificationId, personId, channel])
   @@index([personId, isRead])
   @@map("notification_recipient")
+}
+
+model SupportRequest {
+  id                String               @id @default(uuid()) @db.Uuid
+  requesterName     String               @map("requester_name")
+  requesterEmail    String               @map("requester_email")
+  message           String
+  status            SupportRequestStatus @default(NEW)
+  personId          String?              @map("person_id") @db.Uuid
+  handledByPersonId String?              @map("handled_by_person_id") @db.Uuid
+  resolutionNote    String?              @map("resolution_note")
+  resolvedAt        DateTime?            @map("resolved_at") @db.Timestamptz(6)
+  ipAddress         String?              @map("ip_address")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  person    Person? @relation("SupportRequester", fields: [personId], references: [id], onDelete: SetNull)
+  handledBy Person? @relation("SupportHandler", fields: [handledByPersonId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("support_request")
 }
 
 model AuditLog {

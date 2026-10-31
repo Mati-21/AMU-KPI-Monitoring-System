@@ -21,6 +21,7 @@ How the backend in `Backend/` is organised and how to work on it.
 | 09 | `09-notifications` | Inbox, alerts, deadline reminders, live push |
 | 10 | `10-system-governance` | Settings and the audit trail |
 | 11 | `11-dashboards` | University, parent office and own office views |
+| 12 | `12-support` | Requests sent to the administrators, without needing an account |
 
 Later modules depend on earlier ones. Module 07 reads from 04, 05 and 06, and Module 11 only reads what Module 07 saved.
 
@@ -57,6 +58,18 @@ Read a setting with `getSetting(group, key)`.
 - **Separate measures:** improvement achievement and target achievement are always kept apart. Raw values are never altered, and capping is a separate column.
 - **Versions:** baselines, targets and weights are versioned, and each achievement records the versions it used.
 - **Locking:** KPIs and scales lock once in use. A closed year is read-only until a Super Admin reopens it.
+
+## Uploaded files
+
+Files live in `Backend/uploads/`, with one folder per kind of file, and are only ever served through permission-checked routes:
+
+| Folder | Holds |
+|---|---|
+| `profile-pictures/` | Profile pictures |
+| `kpi-evidence/` | Documents that prove KPI results |
+| `system-assets/` | The logo |
+
+Add a new kind of file to `UPLOAD_FOLDERS` in `modules/08-evidence-documents/file.storage.js`. The folders are created when the server starts.
 
 ## Login security
 

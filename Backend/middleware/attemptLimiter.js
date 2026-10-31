@@ -11,6 +11,7 @@ import { tooManyRequests } from '../utils/httpError.js';
 
 const MAX_TRACKED_KEYS = 10000;
 const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const attempts = new Map();
 
 const removeExpired = (now) => {
@@ -60,4 +61,19 @@ export const limitFailedAttempts = (scope, accountOf) => async (req, res, next) 
   next();
 };
 
-export default { limitFailedAttempts };
+/**
+ * Counts every request from an address, for public forms where a success is what is being limited.
+ */
+export const limitRequestsPerHour = (scope, settingKey) => async (req, res, next) => {
+  const maxRequests = await getSetting('security', settingKey);
+  const now = Date.now();
+  const entry = currentEntry(`${scope}|${req.ip}`, now, HOUR_MS);
+  if (entry.count >= maxRequests) {
+    res.set('Retry-After', String(Math.ceil((entry.resetAt - now) / 1000)));
+    throw tooManyRequests('Too many requests. Please try again later.');
+  }
+  entry.count += 1;
+  next();
+};
+
+export default { limitFailedAttempts, limitRequestsPerHour };

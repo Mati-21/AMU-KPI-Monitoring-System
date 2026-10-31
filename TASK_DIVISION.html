@@ -730,7 +730,7 @@
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
           Module status and roadmap,
-          aligned with the 11-module blueprint in MODULES_SPECIFICATION.html (154 REST routes under <code>/api/v1</code>, 46 Prisma models).
+          aligned with the 12-module blueprint in MODULES_SPECIFICATION.html (162 REST routes under <code>/api/v1</code>, 46 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -752,7 +752,7 @@
   <div class="controls-bar">
     <div class="filter-tabs">
       <button class="filter-btn active" onclick="filterModules('all', this)">
-        🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(11)</span>
+        🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(12)</span>
       </button>
     </div>
 
@@ -777,8 +777,12 @@
       </div>
       <div class="module-body">
         <div>
-          <div class="section-title">Backend Endpoints (25)</div>
+          <div class="section-title">Backend Endpoints (29)</div>
           <div class="chip-list">
+            <span class="chip chip-endpoint">PUT /api/v1/auth/me · Authenticated</span>
+            <span class="chip chip-endpoint">PUT /api/v1/auth/me/profile-picture · Authenticated</span>
+            <span class="chip chip-endpoint">DELETE /api/v1/auth/me/profile-picture · Authenticated</span>
+            <span class="chip chip-endpoint">GET /api/v1/persons/:id/profile-picture · Authenticated</span>
             <span class="chip chip-endpoint">POST /api/v1/auth/login · Public</span>
             <span class="chip chip-endpoint">POST /api/v1/auth/change-password-first-login · Cookie: auth_stage</span>
             <span class="chip chip-endpoint">POST /api/v1/auth/mfa/setup · Cookie: auth_stage or token</span>
@@ -819,10 +823,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/Authentication/LoginPage.jsx</span>
-            <span class="chip chip-fe">Components/Auth/*</span>
-            <span class="chip chip-fe">Pages/Profile/UserProfile.jsx</span>
-            <span class="chip chip-fe">Pages/Admin/User-Managment/*</span>
+            <span class="chip chip-fe">src/features/01-identity</span>
           </div>
         </div>
 
@@ -919,8 +920,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/SubUnit/SubUnitPage.jsx</span>
-            <span class="chip chip-fe">Components/KPI/ChildOfficesModal.jsx</span>
+            <span class="chip chip-fe">src/features/02-offices</span>
           </div>
         </div>
 
@@ -999,8 +999,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/Admin/RoleManagement/*</span>
-            <span class="chip chip-fe">Pages/Admin/Permissions/*</span>
+            <span class="chip chip-fe">src/features/03-access-control</span>
           </div>
         </div>
 
@@ -1112,9 +1111,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/Admin/KPI/*</span>
-            <span class="chip chip-fe">Pages/Strategic/RegisteredKpis.jsx</span>
-            <span class="chip chip-fe">Pages/Admin/Configuration/KpiSystemConfiguration.jsx</span>
+            <span class="chip chip-fe">src/features/04-kpi-catalog</span>
           </div>
         </div>
 
@@ -1218,9 +1215,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/KPI/KpiAllocationPage.jsx</span>
-            <span class="chip chip-fe">Pages/KPI/AssignedKpisPage.jsx</span>
-            <span class="chip chip-fe">Components/KPI/AssignedKpiList.jsx</span>
+            <span class="chip chip-fe">src/features/05-contracts</span>
           </div>
         </div>
 
@@ -1294,7 +1289,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/Admin/Configuration/CycleManagement.jsx</span>
+            <span class="chip chip-fe">src/features/06-reporting-periods</span>
           </div>
         </div>
 
@@ -1374,10 +1369,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Components/KPI/PerformanceSubmitModal.jsx</span>
-            <span class="chip chip-fe">Components/KPI/PerformanceDetailModal.jsx</span>
-            <span class="chip chip-fe">Components/Dashboard/*</span>
-            <span class="chip chip-fe">Pages/Common/UnifiedDashboard.jsx</span>
+            <span class="chip chip-fe">src/features/07-performance</span>
           </div>
         </div>
 
@@ -1460,7 +1452,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Components/KPI/PerformanceSubmitModal.jsx (attachments)</span>
+            <span class="chip chip-fe">src/features/08-evidence</span>
           </div>
         </div>
 
@@ -1532,9 +1524,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Context/NotificationContext.jsx</span>
-            <span class="chip chip-fe">Context/SocketContext.jsx</span>
-            <span class="chip chip-fe">Pages/Admin/Notification/AlertsNotification.jsx</span>
+            <span class="chip chip-fe">src/features/09-notifications</span>
           </div>
         </div>
 
@@ -1602,8 +1592,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Pages/Admin/Configuration/GeneralSystemSetting.jsx</span>
-            <span class="chip chip-fe">Pages/Admin/SystemLogs/SystemLogs.jsx</span>
+            <span class="chip chip-fe">src/features/10-system</span>
           </div>
         </div>
 
@@ -1672,8 +1661,7 @@
         <div>
           <div class="section-title">Frontend Scope (integration phase)</div>
           <div class="chip-list">
-            <span class="chip chip-fe">Components/Dashboard/PerformanceDashboard.jsx</span>
-            <span class="chip chip-fe">Components/Dashboard/SubComponents/*</span>
+            <span class="chip chip-fe">src/features/11-dashboards</span>
           </div>
         </div>
 
@@ -1711,6 +1699,66 @@
         </div>
       </div>
     </div>
+
+    <!-- MODULE 12 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="support contact admin help request message">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 12 &bull; Backend/modules/12-support</div>
+          <div class="module-title">🛟 Support Requests</div>
+          <div class="module-desc">Lets anyone write to the administrators, including someone who cannot log in. Requests are stored in PostgreSQL, limited per address, and notify everyone holding support:manage, who track each one from new to resolved. Replies are sent by email outside the system.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints (4)</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">POST /api/v1/support-requests · Public</span>
+            <span class="chip chip-endpoint">GET /api/v1/support-requests · support:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/support-requests/:id · support:manage</span>
+            <span class="chip chip-endpoint">PATCH /api/v1/support-requests/:id · support:manage</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models</div>
+          <div class="chip-list">
+
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope (integration phase)</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">src/features/12-support</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Public form with no login, limited per address, stored in PostgreSQL</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Managers are notified and track requests from new to resolved</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Depends on:</strong> Sends notifications through Module 09 and uses the limits in the security settings.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Work Breakdown & Responsibility Matrix Table -->
@@ -1723,7 +1771,7 @@
         </p>
       </div>
       <div style="display: flex; gap: 0.75rem;">
-        <span class="assigned-badge badge-dev-a">11 Modules / 154 Endpoints</span>
+        <span class="assigned-badge badge-dev-a">12 Modules / 162 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1744,7 +1792,7 @@
             <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/01-identity-access</code></td>
             <td>Person, UserAccount, UserSession</td>
-            <td>25</td>
+            <td>29</td>
             <td>Exports protect, requirePermission() and actorOf(req); every controller receives the acting personId from here.</td>
           </tr>
           <tr>
@@ -1827,6 +1875,14 @@
             <td>3</td>
             <td>Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.</td>
           </tr>
+          <tr>
+            <td><strong>12. Support Requests</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
+            <td><code>modules/12-support</code></td>
+            <td></td>
+            <td>4</td>
+            <td>Sends notifications through Module 09 and uses the limits in the security settings.</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -1839,7 +1895,7 @@
           <div style="font-size: 0.78rem; font-weight: 700; color: #10b981; text-transform: uppercase;">Done</div>
           <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Backend</div>
           <div style="font-size: 0.82rem; color: var(--text-muted);">
-            <div>All 11 modules, login security and audit logging, tested through the API.</div>
+            <div>All 12 modules, login security and audit logging, tested through the API.</div>
           </div>
         </div>
         <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">

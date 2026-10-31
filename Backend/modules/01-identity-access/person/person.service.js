@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
+import { deleteStoredFile } from '../../08-evidence-documents/file.service.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
 import { parseBoolean, parseBooleanQuery } from '../../../utils/validation.js';
 
@@ -43,6 +44,7 @@ export const formatPerson = (person) => {
     fullName: [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' '),
     email: person.email,
     phone: person.phone,
+    profilePictureFileId: person.profilePictureFileId,
     isActive: person.isActive,
     hasAccount: Boolean(account),
     account: account || null,
@@ -50,9 +52,9 @@ export const formatPerson = (person) => {
   };
 };
 
-const normalizeEmail = (email) => (email ? String(email).trim().toLowerCase() : null);
+export const normalizeEmail = (email) => (email ? String(email).trim().toLowerCase() : null);
 
-const assertEmailAvailable = async (email, exceptPersonId) => {
+export const assertEmailAvailable = async (email, exceptPersonId) => {
   if (!email) return;
   // Case-insensitive: older rows may not be stored lowercased
   const existing = await prisma.person.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
@@ -221,9 +223,11 @@ export const updatePerson = async (id, data, actor) => {
  */
 export const deletePerson = async (id, actor) => {
   const existing = await getPersonOrThrow(id);
+  const picture = existing.profilePictureFileId ? await prisma.fileUpload.findUnique({ where: { id: existing.profilePictureFileId } }) : null;
   const oldValues = { firstName: existing.firstName, lastName: existing.lastName, email: existing.email };
   try {
     await prisma.person.delete({ where: { id } });
+    if (picture) await deleteStoredFile(picture);
     await auditAction(actor, { action: 'PERSON_DELETED', entityType: 'person', entityId: id, oldValues });
     return { deactivated: false, message: 'Person deleted successfully' };
   } catch (error) {

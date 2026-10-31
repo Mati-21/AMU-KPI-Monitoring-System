@@ -17,6 +17,7 @@
       "label": "General",
       "description": "Institution-wide defaults.",
       "settings": [
+        { "key": "profile_picture_max_mb", "label": "Largest profile picture", "type": "number", "default": 5, "min": 1, "max": 20, "integer": true, "public": false, "description": "Largest profile picture a person can upload, in MB" },
         { "key": "contact_email", "label": "Support contact email", "type": "email", "default": null, "public": true, "description": "Shown to users who need help (e.g. on the login page)" },
         { "key": "timezone", "label": "Time zone", "type": "enum", "default": "Africa/Addis_Ababa", "options": ["Africa/Addis_Ababa", "UTC"], "public": false, "description": "Time zone used for deadlines and reminders" },
         { "key": "calendar", "label": "Display calendar", "type": "enum", "default": "gregorian", "options": ["gregorian", "ethiopian"], "public": true, "description": "Calendar used to display dates in the UI" },
@@ -54,11 +55,12 @@
     },
     {
       "group": "security",
-      "label": "Login Security",
-      "description": "Protection against password and verification code guessing.",
+      "label": "Login & Form Security",
+      "description": "Protection against password and code guessing, and against flooding the public support form.",
       "settings": [
         { "key": "max_failed_attempts", "label": "Failed attempts allowed", "type": "number", "default": 5, "min": 3, "max": 100, "integer": true, "public": false, "description": "Failed password or verification code attempts before that account is blocked from that address" },
-        { "key": "lockout_minutes", "label": "Lockout period", "type": "number", "default": 15, "min": 1, "max": 1440, "integer": true, "public": false, "description": "Minutes the failed attempts are remembered and the block lasts" }
+        { "key": "lockout_minutes", "label": "Lockout period", "type": "number", "default": 15, "min": 1, "max": 1440, "integer": true, "public": false, "description": "Minutes the failed attempts are remembered and the block lasts" },
+        { "key": "support_requests_per_hour", "label": "Support requests per hour", "type": "number", "default": 5, "min": 1, "max": 100, "integer": true, "public": false, "description": "Support requests one address can send in an hour" }
       ]
     },
     {

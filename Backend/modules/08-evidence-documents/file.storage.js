@@ -10,6 +10,18 @@ import { fileURLToPath } from 'url';
 
 const UPLOAD_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads');
 
+// One folder per kind of file
+export const UPLOAD_FOLDERS = Object.freeze({
+  PROFILE_PICTURES: 'profile-pictures',
+  KPI_EVIDENCE: 'kpi-evidence',
+  SYSTEM_ASSETS: 'system-assets',
+});
+
+/**
+ * Create the folders at startup, so they are there before the first upload.
+ */
+export const ensureUploadFolders = () => Promise.all(Object.values(UPLOAD_FOLDERS).map((folder) => fs.mkdir(path.join(UPLOAD_ROOT, folder), { recursive: true })));
+
 /**
  * Write a validated file. Returns the path relative to the upload root, which is what the database keeps.
  */
@@ -40,4 +52,4 @@ export const removeFile = (storedPath) => fs.rm(absolutePathOf(storedPath), { fo
 
 export const checksumOf = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 
-export default { saveFile, absolutePathOf, fileExists, removeFile, checksumOf };
+export default { UPLOAD_FOLDERS, ensureUploadFolders, saveFile, absolutePathOf, fileExists, removeFile, checksumOf };

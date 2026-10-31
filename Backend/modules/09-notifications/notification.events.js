@@ -26,6 +26,19 @@ const receivingOffice = (contract, code) => ({ targetOfficeId: contract.officeId
 const kpiLabel = (assignment) => `${assignment.kpi.code} ${assignment.kpi.name}`;
 const officeName = (contract) => contract.office?.name ?? 'An office';
 
+// ===== Support =====
+
+export const supportRequestReceived = quietly((request) =>
+  event({
+    title: 'New support request',
+    message: `${request.requesterName} sent a support request.`,
+    notificationType: 'SUPPORT_REQUEST',
+    entityType: 'support_request',
+    entityId: request.id,
+    requiredPermissionCode: PERMISSIONS.SUPPORT_MANAGE,
+  })
+);
+
 // ===== Assignments =====
 
 export const assignmentSubmitted = quietly((assignment, actor) =>

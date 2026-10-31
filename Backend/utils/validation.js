@@ -20,6 +20,15 @@ export const optionalString = (value, field) => {
   return value.trim() || null;
 };
 
+/**
+ * A trimmed, lower-case email address in a plausible format.
+ */
+export const parseEmail = (value, field = 'email') => {
+  const email = String(value ?? '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest(`${field} must be a valid email address`);
+  return email;
+};
+
 export const parseIntId = (value, field, { required = true } = {}) => {
   if (value === undefined || value === null || value === '') {
     if (required) throw badRequest(`${field} is required`);

@@ -103,6 +103,7 @@ const sanitizeAccount = (account) => ({
         lastName: account.person.lastName,
         email: account.person.email,
         phone: account.person.phone,
+        profilePictureFileId: account.person.profilePictureFileId,
       }
     : null,
 });

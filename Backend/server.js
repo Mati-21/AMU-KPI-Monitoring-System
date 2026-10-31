@@ -7,6 +7,7 @@ import { initSocket } from './realtime/socket.js';
 import { seedPermissions } from './scripts/seedPermissions.js';
 import { seedSettings } from './scripts/seedSettings.js';
 import { startReminderJob } from './modules/09-notifications/reminder.job.js';
+import { ensureUploadFolders } from './modules/08-evidence-documents/file.storage.js';
 
 /**
  * Runs the app built in app.js: connects to the database, syncs the registries, starts sockets, opens the port and
@@ -17,6 +18,7 @@ const PORT = process.env.PORT || 8058;
 const startServer = async () => {
   try {
     await connectDB();
+    await ensureUploadFolders();
 
     // Keep the permission catalog and system settings in step with config/*.json
     const permissions = await seedPermissions({ quiet: true });

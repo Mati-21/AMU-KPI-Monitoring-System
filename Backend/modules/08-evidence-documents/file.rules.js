@@ -31,8 +31,25 @@ const SIGNATURES = {
   txt: isPlainText,
 };
 
+// The type a file is stored and served as. It follows the checked extension, never what the browser claims.
+export const MIME_TYPES = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  doc: 'application/msword',
+  xls: 'application/vnd.ms-excel',
+  ppt: 'application/vnd.ms-powerpoint',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  txt: 'text/plain',
+};
+
 export const KNOWN_EXTENSIONS = Object.keys(SIGNATURES);
-export const LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp'];
 
 export const extensionOf = (fileName) => path.extname(fileName).slice(1).toLowerCase();
 
@@ -55,4 +72,4 @@ export const parseExtensionList = (text) =>
     .map((item) => item.trim().replace(/^\./, '').toLowerCase())
     .filter(Boolean);
 
-export default { KNOWN_EXTENSIONS, LOGO_EXTENSIONS, extensionOf, cleanFileName, matchesExtension, parseExtensionList };
+export default { MIME_TYPES, KNOWN_EXTENSIONS, IMAGE_EXTENSIONS, extensionOf, cleanFileName, matchesExtension, parseExtensionList };
