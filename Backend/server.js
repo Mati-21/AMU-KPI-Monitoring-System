@@ -19,6 +19,13 @@ import { startReminderJob } from './modules/09-notifications/reminder.job.js';
 const app = express();
 const httpLogMode = (process.env.HTTP_LOG_MODE || 'dev').toLowerCase();
 
+// How many reverse proxies stand in front of this server, so req.ip is the real client address. Off when not set.
+if (process.env.TRUST_PROXY) {
+  const proxyCount = Number(process.env.TRUST_PROXY);
+  if (!Number.isInteger(proxyCount) || proxyCount < 1) throw new Error('TRUST_PROXY must be a whole number of proxies, such as 1. Leave it out when there is no proxy.');
+  app.set('trust proxy', proxyCount);
+}
+
 const defaultAllowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
@@ -79,6 +86,7 @@ app.use(
   swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, swaggerUiOptions)
 );
+
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);

@@ -62,7 +62,7 @@ Read a setting with `getSetting(group, key)`.
 
 - Failed passwords and verification codes are limited per account and client address (`max_failed_attempts` and `lockout_minutes` in the `security` settings). See `middleware/attemptLimiter.js`.
 - Counts are held in memory. A restart clears them, and each server instance counts on its own.
-- Behind a reverse proxy, set Express `trust proxy` so the real client address is used. Otherwise all clients share one address, though counts stay separate per account.
+- Behind a reverse proxy, set `TRUST_PROXY` in `.env` to the number of proxies (1 for Nginx) so the real client address is used. Otherwise all clients share one address, though counts stay separate per account. Leave it out when there is no proxy, because clients could then fake their address.
 
 ## Commands
 
