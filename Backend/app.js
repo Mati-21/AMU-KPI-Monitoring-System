@@ -62,6 +62,8 @@ app.use(
       callback(new Error(`CORS blocked for origin: ${origin}`));
     },
     credentials: true,
+    // Lets the frontend say how long to wait after a 429
+    exposedHeaders: ['Retry-After'],
   })
 );
 

@@ -4,7 +4,8 @@ import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
 import { deleteStoredFile } from '../../08-evidence-documents/file.service.js';
-import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
+import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
+import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
 import { parseBoolean, parseBooleanQuery } from '../../../utils/validation.js';
 
 const ACCOUNT_SELECT = {
@@ -27,6 +28,15 @@ const PLACEMENT_INCLUDE = {
 const PERSON_INCLUDE = {
   userAccount: { select: ACCOUNT_SELECT },
   officePersons: { include: PLACEMENT_INCLUDE },
+};
+
+/**
+ * Only a Super Admin may change a Super Admin. Otherwise anyone able to reset passwords could take over the account
+ * and gain every permission.
+ */
+const assertCanChangePerson = async (personId, actor) => {
+  if (actor?.access?.isSuperAdmin) return;
+  if (isSuperAdmin(await getActiveGrants(personId))) throw forbidden('Only a Super Admin can change a Super Admin');
 };
 
 /**
@@ -184,6 +194,7 @@ export const createPerson = async ({ staffNumber, firstName, middleName, lastNam
  */
 export const updatePerson = async (id, data, actor) => {
   const existing = await getPersonOrThrow(id);
+  await assertCanChangePerson(id, actor);
 
   const update = {};
   if (data.firstName !== undefined) {
@@ -223,6 +234,8 @@ export const updatePerson = async (id, data, actor) => {
  */
 export const deletePerson = async (id, actor) => {
   const existing = await getPersonOrThrow(id);
+  if (id === actor?.personId) throw badRequest('You cannot delete yourself');
+  await assertCanChangePerson(id, actor);
   const picture = existing.profilePictureFileId ? await prisma.fileUpload.findUnique({ where: { id: existing.profilePictureFileId } }) : null;
   const oldValues = { firstName: existing.firstName, lastName: existing.lastName, email: existing.email };
   try {
@@ -246,6 +259,7 @@ export const deletePerson = async (id, actor) => {
  */
 export const upsertAccount = async (personId, { username, temporaryPassword, mustChangePassword = true, mfaEnforced = false, isActive = true }, actor) => {
   const person = await getPersonOrThrow(personId);
+  await assertCanChangePerson(personId, actor);
   const existing = person.userAccount;
 
   const cleanUsername = username?.trim();
@@ -287,6 +301,8 @@ const getAccountByAnyIdOrThrow = async (accountId) => {
 export const setAccountActive = async (accountId, isActive, actor) => {
   if (typeof isActive !== 'boolean') throw badRequest('isActive (boolean) is required');
   const account = await getAccountByAnyIdOrThrow(accountId);
+  if (account.personId === actor?.personId && !isActive) throw badRequest('You cannot deactivate yourself');
+  await assertCanChangePerson(account.personId, actor);
 
   const updated = await prisma.userAccount.update({
     where: { id: account.id },
@@ -305,6 +321,7 @@ export const setAccountActive = async (accountId, isActive, actor) => {
 export const resetPassword = async (accountId, temporaryPassword, actor) => {
   assertPasswordStrength(temporaryPassword);
   const account = await getAccountByAnyIdOrThrow(accountId);
+  await assertCanChangePerson(account.personId, actor);
 
   const updated = await prisma.userAccount.update({
     where: { id: account.id },
@@ -329,6 +346,7 @@ export const listAccountSessions = async (accountId, { includeRevoked } = {}) =>
  */
 export const revokeAccountSessions = async (accountId, actor) => {
   const account = await getAccountByAnyIdOrThrow(accountId);
+  await assertCanChangePerson(account.personId, actor);
   const result = await revokeAllSessions(account.id, REVOKE_REASONS.ADMIN_REVOKED);
   await auditAction(actor, { action: 'SESSIONS_REVOKED', entityType: 'user_account', entityId: account.id, newValues: { revokedCount: result.revokedCount } });
   return result;

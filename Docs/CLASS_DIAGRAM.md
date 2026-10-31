@@ -3,12 +3,13 @@
 ## Overview
 
 Class diagram of the **Arba Minch University (AMU) KPI Monitoring System**, generated from
-[Backend/prisma/schema.prisma](../Backend/prisma/schema.prisma) (46 models, 24 enums, PostgreSQL). Table names are shown in `<<brackets>>`.
+[Backend/prisma/schema.prisma](../Backend/prisma/schema.prisma) (47 models, 25 enums, PostgreSQL). Table names are shown in `<<brackets>>`.
 
 | Module | Models |
 |---|---|
 | 10 System Governance | `SystemSetting`, `AuditLog` |
 | 11 Dashboards | None: reads results saved by Module 07 |
+| 12 Support | `SupportRequest` |
 | 01 Identity & Authentication | `Person`, `UserAccount`, `UserSession` |
 | 02 Organizational Hierarchy | `OfficeType`, `Office`, `OfficeHierarchyHistory`, `Position`, `OfficePerson` |
 | 03 Scoped Access Control | `Role`, `Permission`, `RolePermission`, `OfficePersonRole` |
@@ -46,6 +47,9 @@ A `FileUpload` is a stored file, a `Document` describes it, and `PerformanceEvid
 
 ### Notifications and governance (Modules 09-10)
 `Notification` and `NotificationRecipient` hold in-app messages. `SystemSetting` stores configuration declared in `config/settings.json`, and `AuditLog` is the immutable trail.
+
+### Support (Module 12)
+`SupportRequest` holds messages sent to the administrators, from new to resolved. It needs no account, so it can link to a `Person` but does not have to.
 
 ### Dashboards (Module 11)
 Dashboards have no tables of their own. They read `KpiAchievement`, `ContractScore` and `PerformanceReport`.
@@ -88,6 +92,23 @@ package "10 System Governance" {
   }
 }
 
+package "12 Support" {
+  class SupportRequest <<support_request>> {
+    + id : String
+      requesterName : String
+      requesterEmail : String
+      message : String
+      status : SupportRequestStatus
+      personId : String?
+      handledByPersonId : String?
+      resolutionNote : String?
+      resolvedAt : DateTime?
+      ipAddress : String?
+      createdAt : DateTime
+      updatedAt : DateTime
+  }
+}
+
 package "01 Identity & Authentication" {
   class Person <<person>> {
     + id : String
@@ -97,6 +118,7 @@ package "01 Identity & Authentication" {
       lastName : String
       email : String?
       phone : String?
+      profilePictureFileId : String?
       isActive : Boolean
       createdAt : DateTime
       updatedAt : DateTime
@@ -609,6 +631,7 @@ package "09 Notifications" {
   }
 }
 
+FileUpload "0..1" -- "*" Person : profilePictureFileId
 Person "1" -- "*" UserAccount : personId
 UserAccount "1" -- "*" UserSession : userAccountId
 Office "0..1" -- "*" Office : parentOfficeId
@@ -718,6 +741,8 @@ Office "0..1" -- "*" Notification : targetOfficeId
 Permission "0..1" -- "*" Notification : requiredPermissionId
 Notification "1" -- "*" NotificationRecipient : notificationId
 Person "1" -- "*" NotificationRecipient : personId
+Person "0..1" -- "*" SupportRequest : personId
+Person "0..1" -- "*" SupportRequest : handledByPersonId
 Person "0..1" -- "*" AuditLog : actorPersonId
 
 enum MeasurementType {
@@ -854,6 +879,11 @@ enum ReviewDecision {
   REJECTED
   REVISION_REQUIRED
 }
+enum SupportRequestStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
 enum AchievementStatus {
   BELOW_TARGET
   AT_TARGET
@@ -890,5 +920,5 @@ enum AchievementStatus {
 - `ContractScore`: one row per `[contractId, reportingPeriodId]`
 - `SystemSetting`: one row per `[groupName, key]`
 - `NotificationRecipient`: one row per `[notificationId, personId, channel]`
-- Partial unique indexes in the migrations allow one current baseline, target and weight per assignment, one active fiscal year, one reporting currency, one retained allocation per assignment and one year-end period per fiscal year.
+- Partial unique indexes in the migrations allow one current baseline, target and weight per assignment, and one year-end period per fiscal year.
 - A closed fiscal year is read-only until a Super Admin reopens it.
