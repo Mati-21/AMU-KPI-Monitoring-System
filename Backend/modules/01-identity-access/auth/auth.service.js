@@ -5,7 +5,9 @@ import QRCode from 'qrcode';
 import { STAGE_TOKEN_TTL, TOKEN_TYPES, signToken, verifyToken } from '../../../config/jwt.js';
 import { getActiveGrants, getPermissionCodes } from '../../03-access-control/access.service.js';
 import { REVOKE_REASONS, createSession, revokeAllSessions } from './session.service.js';
+import { auditAction, logActivity } from '../../../utils/auditLogger.js';
 import { badRequest, forbidden, notFound, unauthorized } from '../../../utils/httpError.js';
+import { parseUuid } from '../../../utils/validation.js';
 
 export const MIN_PASSWORD_LENGTH = 8;
 
@@ -140,17 +142,25 @@ const nextLoginStep = async (account, context) => {
 const completeLogin = async (account, context) => {
   await prisma.userAccount.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });
   const { token, refreshToken } = await createSession(account, context);
+  await auditAccount(account, 'LOGIN_SUCCEEDED', context);
   return { status: 'SUCCESS', user: sanitizeAccount(account), token, refreshToken };
 };
 
 // ===== Flows =====
 
+/**
+ * Audit something an account did for itself. context ({ ipAddress, userAgent }) may be missing.
+ */
+const auditAccount = (account, action, context, values) =>
+  logActivity({ actorPersonId: account?.personId, action, entityType: 'user_account', entityId: account?.id, newValues: values, ipAddress: context?.ipAddress, userAgent: context?.userAgent });
+
 export const authenticate = async ({ identifier, password }, context) => {
-  if (!identifier || !password) throw badRequest('Username (or email) and password are required');
+  if (typeof identifier !== 'string' || typeof password !== 'string' || !identifier || !password) throw badRequest('Username (or email) and password are required');
 
   const account = await findAccountByIdentifier(identifier);
   // Same message for unknown user and wrong password to avoid account enumeration
   if (!account || !(await bcrypt.compare(password, account.passwordHash))) {
+    await auditAccount(account, 'LOGIN_FAILED', context, { identifier: identifier.slice(0, 100) });
     throw unauthorized('Invalid credentials');
   }
   if (!account.isActive) throw forbidden('User account is deactivated. Contact system administrator.');
@@ -172,13 +182,14 @@ export const changePasswordFirstLogin = async ({ stageToken, newPassword }, cont
     data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePassword: false },
     include: ACCOUNT_INCLUDE,
   });
+  await auditAccount(updated, 'PASSWORD_CHANGED', context);
   return nextLoginStep(updated, context);
 };
 
 /**
  * Change own password. Every other session of the account is signed out; the current one stays.
  */
-export const changePassword = async ({ accountId, sessionId, currentPassword, newPassword, code }) => {
+export const changePassword = async ({ accountId, sessionId, currentPassword, newPassword, code }, context) => {
   if (!currentPassword) throw badRequest('currentPassword is required');
   assertPasswordStrength(newPassword);
 
@@ -195,6 +206,7 @@ export const changePassword = async ({ accountId, sessionId, currentPassword, ne
     data: { passwordHash: await bcrypt.hash(newPassword, 10), mustChangePassword: false },
   });
   const { revokedCount } = await revokeAllSessions(accountId, REVOKE_REASONS.PASSWORD_CHANGED, { exceptSessionId: sessionId });
+  await auditAccount(account, 'PASSWORD_CHANGED', context, { otherSessionsSignedOut: revokedCount });
   return { status: 'SUCCESS', message: 'Password changed successfully.', otherSessionsSignedOut: revokedCount };
 };
 
@@ -230,6 +242,7 @@ export const verifyAndEnableMfa = async ({ accountId, code, startSession }, cont
     data: { mfaEnabled: true },
     include: ACCOUNT_INCLUDE,
   });
+  await auditAccount(updated, 'MFA_ENABLED', context);
   const message = 'Two-Factor Authentication has been successfully configured and activated.';
   if (!startSession) return { status: 'SUCCESS', message };
   return { ...(await completeLogin(updated, context)), message };
@@ -240,18 +253,20 @@ export const verifyMfaLogin = async ({ stageToken, code }, context) => {
   const account = await getAccountOrThrow(id);
   if (!account.mfaEnabled || !account.mfaSecret) throw badRequest('MFA is not configured for this account');
   if (!(await isValidTotp(code, account.mfaSecret))) {
+    await auditAccount(account, 'MFA_LOGIN_FAILED', context);
     throw unauthorized('Invalid MFA code. Please enter the current 6-digit code from your authenticator app.');
   }
   return completeLogin(account, context);
 };
 
-export const disableMfa = async ({ accountId, code }) => {
+export const disableMfa = async ({ accountId, code }, context) => {
   const account = await getAccountOrThrow(accountId);
   if (account.mfaEnforced) throw forbidden('MFA is enforced on your account by policy and cannot be disabled.');
   if (!account.mfaEnabled) throw badRequest('Two-Factor Authentication is not enabled');
   if (!(await isValidTotp(code, account.mfaSecret))) throw badRequest('Invalid verification code');
 
   await prisma.userAccount.update({ where: { id: accountId }, data: { mfaEnabled: false, mfaSecret: null } });
+  await auditAccount(account, 'MFA_DISABLED', context);
   return { message: 'Two-Factor Authentication disabled' };
 };
 
@@ -297,22 +312,24 @@ export const findAccountByAnyId = (idOrUsername) =>
       : { username: idOrUsername },
   });
 
-export const setMfaEnforced = async ({ accountId, enforced }) => {
+export const setMfaEnforced = async ({ accountId, enforced }, actor) => {
   const account = await findAccountByAnyId(accountId);
   if (!account) throw notFound('User account not found');
 
-  return prisma.userAccount.update({
+  const updated = await prisma.userAccount.update({
     where: { id: account.id },
     data: { mfaEnforced: Boolean(enforced) },
     select: { id: true, username: true, mfaEnforced: true, mfaEnabled: true },
   });
+  await auditAction(actor, { action: 'MFA_ENFORCEMENT_CHANGED', entityType: 'user_account', entityId: account.id, oldValues: { mfaEnforced: account.mfaEnforced }, newValues: { mfaEnforced: updated.mfaEnforced } });
+  return updated;
 };
 
-export const setMfaEnforcedForRole = async ({ roleName, roleId, enforced }) => {
+export const setMfaEnforcedForRole = async ({ roleName, roleId, enforced }, actor) => {
   if (!roleId && !roleName) throw badRequest('roleName or roleId is required');
 
   const role = await prisma.role.findFirst({
-    where: roleId ? { id: Number.parseInt(roleId, 10) } : { name: { equals: String(roleName).trim(), mode: 'insensitive' } },
+    where: roleId ? { id: parseUuid(roleId, 'roleId') } : { name: { equals: String(roleName).trim(), mode: 'insensitive' } },
     include: {
       officePersonRoles: {
         include: { officePerson: { include: { person: { include: { userAccount: true } } } } },
@@ -327,6 +344,7 @@ export const setMfaEnforcedForRole = async ({ roleName, roleId, enforced }) => {
   if (accountIds.length > 0) {
     await prisma.userAccount.updateMany({ where: { id: { in: accountIds } }, data: { mfaEnforced: Boolean(enforced) } });
   }
+  await auditAction(actor, { action: 'MFA_ENFORCEMENT_CHANGED', entityType: 'role', entityId: role.id, newValues: { mfaEnforced: Boolean(enforced), affectedUsersCount: accountIds.length } });
 
   return {
     roleId: role.id,

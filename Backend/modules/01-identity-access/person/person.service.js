@@ -2,6 +2,7 @@ import { prisma } from '../../../config/database.js';
 import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
+import { auditAction } from '../../../utils/auditLogger.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
 import { parseBoolean, parseBooleanQuery } from '../../../utils/validation.js';
 
@@ -128,7 +129,7 @@ export const getPersonById = async (id) => {
 /**
  * Create a Person, optionally with a login account ({ account: { username, temporaryPassword, ... } }).
  */
-export const createPerson = async ({ staffNumber, firstName, middleName, lastName, email, phone, account }) => {
+export const createPerson = async ({ staffNumber, firstName, middleName, lastName, email, phone, account }, actor) => {
   if (!firstName?.trim() || !lastName?.trim()) throw badRequest('firstName and lastName are required');
 
   const cleanEmail = normalizeEmail(email);
@@ -172,13 +173,14 @@ export const createPerson = async ({ staffNumber, firstName, middleName, lastNam
     return tx.person.findUnique({ where: { id: created.id }, include: PERSON_INCLUDE });
   });
 
+  await auditAction(actor, { action: 'PERSON_CREATED', entityType: 'person', entityId: person.id, newValues: { staffNumber: cleanStaffNumber, firstName: person.firstName, lastName: person.lastName, email: cleanEmail, username: username ?? null } });
   return formatPerson(person);
 };
 
 /**
  * Update the details of a person.
  */
-export const updatePerson = async (id, data) => {
+export const updatePerson = async (id, data, actor) => {
   const existing = await getPersonOrThrow(id);
 
   const update = {};
@@ -204,16 +206,25 @@ export const updatePerson = async (id, data) => {
   }
 
   const person = await prisma.person.update({ where: { id }, data: update, include: PERSON_INCLUDE });
+  await auditAction(actor, {
+    action: 'PERSON_UPDATED',
+    entityType: 'person',
+    entityId: id,
+    oldValues: Object.fromEntries(Object.keys(update).map((key) => [key, existing[key]])),
+    newValues: update,
+  });
   return formatPerson(person);
 };
 
 /**
  * Delete a person; if they are referenced by institutional records, deactivate them instead.
  */
-export const deletePerson = async (id) => {
-  await getPersonOrThrow(id);
+export const deletePerson = async (id, actor) => {
+  const existing = await getPersonOrThrow(id);
+  const oldValues = { firstName: existing.firstName, lastName: existing.lastName, email: existing.email };
   try {
     await prisma.person.delete({ where: { id } });
+    await auditAction(actor, { action: 'PERSON_DELETED', entityType: 'person', entityId: id, oldValues });
     return { deactivated: false, message: 'Person deleted successfully' };
   } catch (error) {
     if (error.code !== 'P2003') throw error;
@@ -221,6 +232,7 @@ export const deletePerson = async (id) => {
       prisma.person.update({ where: { id }, data: { isActive: false } }),
       prisma.userAccount.updateMany({ where: { personId: id }, data: { isActive: false } }),
     ]);
+    await auditAction(actor, { action: 'PERSON_DEACTIVATED', entityType: 'person', entityId: id, oldValues });
     return { deactivated: true, message: 'Person is referenced by institutional records and was deactivated instead' };
   }
 };
@@ -228,7 +240,7 @@ export const deletePerson = async (id) => {
 /**
  * Create the login account for an existing person (or update it if one already exists).
  */
-export const upsertAccount = async (personId, { username, temporaryPassword, mustChangePassword = true, mfaEnforced = false, isActive = true }) => {
+export const upsertAccount = async (personId, { username, temporaryPassword, mustChangePassword = true, mfaEnforced = false, isActive = true }, actor) => {
   const person = await getPersonOrThrow(personId);
   const existing = person.userAccount;
 
@@ -248,6 +260,13 @@ export const upsertAccount = async (personId, { username, temporaryPassword, mus
     ? await prisma.userAccount.update({ where: { id: existing.id }, data, select: { personId: true, ...ACCOUNT_SELECT } })
     : await prisma.userAccount.create({ data: { personId, ...data }, select: { personId: true, ...ACCOUNT_SELECT } });
 
+  await auditAction(actor, {
+    action: existing ? 'ACCOUNT_UPDATED' : 'ACCOUNT_CREATED',
+    entityType: 'user_account',
+    entityId: account.id,
+    oldValues: existing ? { username: existing.username, mfaEnforced: existing.mfaEnforced, isActive: existing.isActive } : undefined,
+    newValues: { username: account.username, mfaEnforced: data.mfaEnforced, isActive: data.isActive, passwordReplaced: Boolean(temporaryPassword) },
+  });
   return { created: !existing, account };
 };
 
@@ -261,7 +280,7 @@ const getAccountByAnyIdOrThrow = async (accountId) => {
  * Enable or disable login for an account (by UserAccount id, Person id or username).
  * Deactivation also ends every active session.
  */
-export const setAccountActive = async (accountId, isActive) => {
+export const setAccountActive = async (accountId, isActive, actor) => {
   if (typeof isActive !== 'boolean') throw badRequest('isActive (boolean) is required');
   const account = await getAccountByAnyIdOrThrow(accountId);
 
@@ -271,6 +290,7 @@ export const setAccountActive = async (accountId, isActive) => {
     select: { id: true, username: true, isActive: true },
   });
   if (!isActive) await revokeAllSessions(account.id, REVOKE_REASONS.ACCOUNT_DEACTIVATED);
+  await auditAction(actor, { action: isActive ? 'ACCOUNT_ACTIVATED' : 'ACCOUNT_DEACTIVATED', entityType: 'user_account', entityId: account.id, oldValues: { isActive: account.isActive }, newValues: { isActive } });
   return updated;
 };
 
@@ -278,7 +298,7 @@ export const setAccountActive = async (accountId, isActive) => {
  * Administrator password reset: sets a temporary password that must be changed on next login
  * and ends every active session of the account.
  */
-export const resetPassword = async (accountId, temporaryPassword) => {
+export const resetPassword = async (accountId, temporaryPassword, actor) => {
   assertPasswordStrength(temporaryPassword);
   const account = await getAccountByAnyIdOrThrow(accountId);
 
@@ -288,6 +308,7 @@ export const resetPassword = async (accountId, temporaryPassword) => {
     select: { id: true, username: true, mustChangePassword: true },
   });
   const { revokedCount } = await revokeAllSessions(account.id, REVOKE_REASONS.PASSWORD_RESET);
+  await auditAction(actor, { action: 'PASSWORD_RESET', entityType: 'user_account', entityId: account.id, newValues: { sessionsRevoked: revokedCount } });
   return { ...updated, sessionsRevoked: revokedCount };
 };
 
@@ -302,9 +323,11 @@ export const listAccountSessions = async (accountId, { includeRevoked } = {}) =>
 /**
  * Administrator: force sign-out of every session of an account.
  */
-export const revokeAccountSessions = async (accountId) => {
+export const revokeAccountSessions = async (accountId, actor) => {
   const account = await getAccountByAnyIdOrThrow(accountId);
-  return revokeAllSessions(account.id, REVOKE_REASONS.ADMIN_REVOKED);
+  const result = await revokeAllSessions(account.id, REVOKE_REASONS.ADMIN_REVOKED);
+  await auditAction(actor, { action: 'SESSIONS_REVOKED', entityType: 'user_account', entityId: account.id, newValues: { revokedCount: result.revokedCount } });
+  return result;
 };
 
 export default {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AMU KPI Monitoring System - Developer Task Division Matrix</title>
+  <title>AMU KPI Monitoring System - Module Status and Roadmap</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -729,8 +729,8 @@
         </div>
         <h1>AMU KPI Monitoring System</h1>
         <p class="subtitle">
-          Task Division &amp; Module Ownership Matrix for <strong>Developer A</strong> and <strong>Developer B</strong>,
-          aligned with the 11-module blueprint in MODULES_SPECIFICATION.html (154 REST routes under <code>/api/v1</code>, 45 Prisma models).
+          Module status and roadmap,
+          aligned with the 11-module blueprint in MODULES_SPECIFICATION.html (154 REST routes under <code>/api/v1</code>, 46 Prisma models).
         </p>
       </div>
       <div class="header-actions">
@@ -746,67 +746,6 @@
       </div>
     </div>
 
-    <!-- Developer Profiles Summary -->
-    <div class="dev-overview-grid">
-      <div class="dev-profile-card dev-card-a">
-        <div>
-          <div class="dev-card-header">
-            <div class="dev-avatar">A</div>
-            <div>
-              <div class="dev-name">
-                Developer A
-                <span class="dev-role-badge">Core Architecture</span>
-              </div>
-              <div style="font-size: 0.8rem; color: #a5b4fc;">Identity, Access Control &amp; Institutional Master Data</div>
-            </div>
-          </div>
-          <p class="dev-focus">Owns identity and authentication, scoped RBAC, the office hierarchy, the strategic KPI catalog with fiscal years, and system settings with the audit trail.</p>
-        </div>
-        <div class="dev-stats-row">
-          <div>
-            <div class="dev-stat-value">6</div>
-            <div class="dev-stat-label">Modules</div>
-          </div>
-          <div>
-            <div class="dev-stat-value">88</div>
-            <div class="dev-stat-label">Endpoints</div>
-          </div>
-          <div>
-            <div class="dev-stat-value">57%</div>
-            <div class="dev-stat-label">Endpoint Share</div>
-          </div>
-        </div>
-      </div>
-      <div class="dev-profile-card dev-card-b">
-        <div>
-          <div class="dev-card-header">
-            <div class="dev-avatar">B</div>
-            <div>
-              <div class="dev-name">
-                Developer B
-                <span class="dev-role-badge">Execution &amp; Ops</span>
-              </div>
-              <div style="font-size: 0.8rem; color: #6ee7b7;">Targets, Evaluation, Evidence &amp; Notifications</div>
-            </div>
-          </div>
-          <p class="dev-focus">Owns the operational chain: target cascading, evaluation cycles and report dossiers, scoring and dashboards, evidence documents, and targeted real-time notifications.</p>
-        </div>
-        <div class="dev-stats-row">
-          <div>
-            <div class="dev-stat-value">5</div>
-            <div class="dev-stat-label">Modules</div>
-          </div>
-          <div>
-            <div class="dev-stat-value">66</div>
-            <div class="dev-stat-label">Endpoints</div>
-          </div>
-          <div>
-            <div class="dev-stat-value">43%</div>
-            <div class="dev-stat-label">Endpoint Share</div>
-          </div>
-        </div>
-      </div>
-    </div>
   </header>
 
   <!-- Filter & Search Controls -->
@@ -814,12 +753,6 @@
     <div class="filter-tabs">
       <button class="filter-btn active" onclick="filterModules('all', this)">
         🌐 All Modules <span style="opacity: 0.6; font-size: 0.75rem;">(11)</span>
-      </button>
-      <button class="filter-btn filter-dev-a" onclick="filterModules('dev-a', this)">
-        🟣 Developer A Only <span style="opacity: 0.6; font-size: 0.75rem;">(6)</span>
-      </button>
-      <button class="filter-btn filter-dev-b" onclick="filterModules('dev-b', this)">
-        🟢 Developer B Only <span style="opacity: 0.6; font-size: 0.75rem;">(5)</span>
       </button>
     </div>
 
@@ -832,15 +765,15 @@
   <!-- Modules Grid -->
   <div class="modules-grid" id="modulesGrid">
 
-    <!-- MODULE 01 (Dev A) -->
+    <!-- MODULE 01 -->
     <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="auth authentication jwt login mfa totp password person user account directory session device refresh">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 01 &bull; Backend/modules/01-identity-access</div>
           <div class="module-title">🔐 Identity &amp; Authentication Module</div>
-          <div class="module-desc">Provides a clean architectural separation between physical biological humans (Person) and credentials / login access (UserAccount). Manages secure credential verification, server-tracked multi-device sessions (UserSession) with rotating refresh tokens, JWT access tokens in HTTP-only cookies, demographic profiles, and user status toggling.</div>
+          <div class="module-desc">Provides a clean architectural separation between physical biological humans (Person) and credentials / login access (UserAccount). Manages secure credential verification, server-tracked multi-device sessions (UserSession) with rotating refresh tokens, JWT access tokens in HTTP-only cookies, demographic profiles, and user status toggling. Failed passwords and verification codes are limited per account and address, and account changes are audited.</div>
         </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -922,14 +855,14 @@
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Rate limiting on /auth/login and MFA endpoints (brute-force defense)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Write AuditLog entries for account changes (create, deactivate, reset, MFA policy)</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -937,21 +870,21 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Handoff to Dev B:</strong> Exports <code>protect</code>, <code>requirePermission()</code> and <code>actorOf(req)</code>; every Dev B controller receives the acting <code>personId</code> from here.
+            <strong>Used by:</strong> Exports <code>protect</code>, <code>requirePermission()</code> and <code>actorOf(req)</code>; every controller receives the acting <code>personId</code> from here.
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 02 (Dev A) -->
+    <!-- MODULE 02 -->
     <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="office hierarchy tree college department position placement member tenure">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 02 &bull; Backend/modules/02-office-hierarchy</div>
           <div class="module-title">🏛️ Organizational Hierarchy &amp; Offices Module</div>
-          <div class="module-desc">Models Arba Minch University's complete organizational tree. Supports customizable tier levels (University, College, Directorate, Department, Unit), recursive office parent-child relations, leadership positions (Head vs Staff), and individual person tenure assignments.</div>
+          <div class="module-desc">Models Arba Minch University's complete organizational tree. Supports customizable tier levels (configurable office types), recursive office parent-child relations, leadership positions (Head vs Staff), and individual person tenure assignments.</div>
         </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -977,6 +910,7 @@
           <div class="chip-list">
             <span class="chip chip-model">OfficeType</span>
             <span class="chip chip-model">Office</span>
+            <span class="chip chip-model">OfficeHierarchyHistory</span>
             <span class="chip chip-model">Position</span>
             <span class="chip chip-model">OfficePerson</span>
           </div>
@@ -999,19 +933,19 @@
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Office type and office CRUD with parent/type validation and cycle prevention</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Recursive tree builder for GET /offices/tree</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Positions and placements with tenure dates and a single primary placement per person</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1019,13 +953,13 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Handoff to Dev B:</strong> The office tree is the roll-up path for target cascading (05), report dossiers (06), scorecards (07) and notification targeting (09).
+            <strong>Used by:</strong> The office tree is the roll-up path for KPI cascading (05), reports (07), scorecards (07) and notification targeting (09).
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 03 (Dev A) -->
+    <!-- MODULE 03 -->
     <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="role permission rbac scope access control assignment check-permission">
       <div class="module-card-header">
         <div class="module-title-box">
@@ -1033,7 +967,7 @@
           <div class="module-title">🛡️ Dynamic Roles &amp; Scoped Access Control</div>
           <div class="module-desc">Empowers dynamic system access control. Combines canonical roles and atomic permissions with location-scoped role delegations (OfficePersonRole), enabling a person to hold specific managerial authority strictly within their college or department during a valid time window.</div>
         </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1089,14 +1023,14 @@
               <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Role CRUD and permission-set sync</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
             <li class="task-item">
-              <span class="task-icon">⏳</span>
+              <span class="task-icon">✅</span>
               <span>Scoped role assignment / revocation with validity-window validation</span>
-              <span class="task-status-pill status-todo">Planned</span>
+              <span class="task-status-pill status-done">Done</span>
             </li>
           </ul>
         </div>
@@ -1104,13 +1038,13 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Handoff to Dev B:</strong> Services call <code>actor.access.can(code, officeId)</code> to enforce office-scoped authority (e.g. a Dean may only cascade inside their college).
+            <strong>Used by:</strong> Services call <code>actor.access.can(code, officeId)</code> to enforce office-scoped authority (e.g. a Dean may only cascade inside their college).
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 04 (Dev A) -->
+    <!-- MODULE 04 -->
     <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="kpi catalog fiscal year theme pillar indicator direction cascade mode">
       <div class="module-card-header">
         <div class="module-title-box">
@@ -1118,7 +1052,7 @@
           <div class="module-title">📚 Strategic KPI Catalog &amp; Fiscal Planning</div>
           <div class="module-desc">Defines what the university measures. Manages fiscal years (closing one makes its data read-only), strategic objectives, themes, units, reporting frequencies, stage and category scales, currencies and the master KPI catalog. KPIs and scales lock once in use, so past results keep their meaning.</div>
         </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1218,165 +1152,21 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Handoff to Dev B:</strong> Fiscal years and master KPIs are the inputs for targets (05), cycles (06) and direction-aware scoring (07).
+            <strong>Used by:</strong> Fiscal years and master KPIs are the inputs for contracts (05), reporting periods (06) and direction-aware scoring (07).
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 10 (Dev A) -->
-    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="settings configuration branding audit log governance public maintenance deadline reporting">
-      <div class="module-card-header">
-        <div class="module-title-box">
-          <div class="module-index">Module 10 &bull; Backend/modules/10-system-governance</div>
-          <div class="module-title">⚙️ System Governance, Settings &amp; Audit Trail</div>
-          <div class="module-desc">Ensures institutional governance, transparency, and configurability. Maintains key-value system settings partitioned by category groups (branding, KPI rules, notifications), and captures an immutable audit trail of state changes with JSON diffs, IP addresses, and user-agent strings.</div>
-        </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
-      </div>
-      <div class="module-body">
-        <div>
-          <div class="section-title">Backend Endpoints (6)</div>
-          <div class="chip-list">
-            <span class="chip chip-endpoint">GET /api/v1/settings/public · Public</span>
-            <span class="chip chip-endpoint">GET /api/v1/settings · settings:manage</span>
-            <span class="chip chip-endpoint">PUT /api/v1/settings/:groupName · settings:manage</span>
-            <span class="chip chip-endpoint">GET /api/v1/audit-logs · audit:read</span>
-            <span class="chip chip-endpoint">GET /api/v1/audit-logs/filters · audit:read</span>
-            <span class="chip chip-endpoint">GET /api/v1/audit-logs/:id · audit:read</span>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Prisma Models</div>
-          <div class="chip-list">
-            <span class="chip chip-model">SystemSetting</span>
-            <span class="chip chip-model">AuditLog</span>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Frontend Scope (integration phase)</div>
-          <div class="chip-list">
-            <span class="chip chip-fe">Pages/Admin/Configuration/GeneralSystemSetting.jsx</span>
-            <span class="chip chip-fe">Pages/Admin/SystemLogs/SystemLogs.jsx</span>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Detailed Task Checklist</div>
-          <ul class="task-list">
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Settings registry (config/settings.json): branding, general, KPI scoring, reporting deadlines, system status</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Typed, validated batch updates per group with reset-to-default and change-only auditing; getSetting() helper with cache</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Maintenance mode: API answers 503 to everyone except university-wide settings managers</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Audit trail queries: filters, pagination, field diff, filter values; secrets redacted from audit entries</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-          </ul>
-        </div>
-
-        <div class="integration-box">
-          <span>🤝</span>
-          <div>
-            <strong>Shared Resource:</strong> Both developers call <code>logActivity()</code> from their services so every state change lands in the audit trail.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 11 (Dev A) -->
-    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="dashboard university parent office subordinate comparison trend history performance view">
-      <div class="module-card-header">
-        <div class="module-title-box">
-          <div class="module-index">Module 11 &bull; Backend/modules/11-dashboards</div>
-          <div class="module-title">📊 Dashboards &amp; Performance Views</div>
-          <div class="module-desc">Read-only views over the results saved by Module 07, with no tables of its own. Only approved reports count as official; missing, pending, returned and rejected results are always shown apart, and a missing result is never treated as zero. A summed KPI before year end shows as in progress. Every view is filtered by fiscal year and optionally by period, and follows the same office scope as the rest of the system.</div>
-        </div>
-        <span class="assigned-badge badge-dev-a">Developer A</span>
-      </div>
-      <div class="module-body">
-        <div>
-          <div class="section-title">Backend Endpoints (3)</div>
-          <div class="chip-list">
-            <span class="chip chip-endpoint">GET /api/v1/dashboards/university · dashboard:read over the top office</span>
-            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId · dashboard:read, checked by scope</span>
-            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId/subordinates · dashboard:read, checked by scope</span>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Prisma Models</div>
-          <div class="chip-list">
-
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Frontend Scope (integration phase)</div>
-          <div class="chip-list">
-            <span class="chip chip-fe">Components/Dashboard/PerformanceDashboard.jsx</span>
-            <span class="chip chip-fe">Components/Dashboard/SubComponents/*</span>
-          </div>
-        </div>
-
-        <div>
-          <div class="section-title">Detailed Task Checklist</div>
-          <ul class="task-list">
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>University dashboard: official score, KPI counts, trend, history, by strategic objective and by office type</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Parent office dashboard: own KPIs, responsibilities, subordinates compared, pending reports and reports awaiting review</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Own office dashboard: baselines, targets, results, deadlines, evidence status, feedback and history</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-            <li class="task-item">
-              <span class="task-icon">✅</span>
-              <span>Only approved reports are official; draft figures stay with the office; every view filters by fiscal year and period</span>
-              <span class="task-status-pill status-done">Done</span>
-            </li>
-          </ul>
-        </div>
-
-        <div class="integration-box">
-          <span>🤝</span>
-          <div>
-            <strong>Depends on:</strong> Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODULE 05 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="contract assignment cascade baseline target weight allocation reconciliation change request">
+    <!-- MODULE 05 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="contract assignment cascade baseline target weight allocation reconciliation change request">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 05 &bull; Backend/modules/05-contract-cascading</div>
           <div class="module-title">🎯 Contracts &amp; KPI Cascading</div>
           <div class="module-desc">Carries KPIs down the hierarchy. Each office has one contract per year with the office above, which sets its official baseline, target and weight. Offices record how they split responsibility, and differences are flagged, not corrected. Approved values change only through a change request, which adds a new version, so history stays traceable.</div>
         </div>
-        <span class="assigned-badge badge-dev-b">Developer B</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1463,21 +1253,21 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Depends on Dev A:</strong> Needs offices (02), scoped access (03) and KPIs / fiscal years (04).
+            <strong>Depends on:</strong> Needs offices (02), scoped access (03) and KPIs / fiscal years (04).
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 06 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="period quarter deadline year end frequency generate">
+    <!-- MODULE 06 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="period quarter deadline year end frequency generate">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 06 &bull; Backend/modules/06-reporting-periods</div>
           <div class="module-title">🗓️ Reporting Periods</div>
           <div class="module-desc">Sets when offices report. Periods belong to a fiscal year and a frequency, and can be generated or created by hand. Each has a submission deadline and a calculated phase. The year-end period takes the final report, where shorter periods roll up.</div>
         </div>
-        <span class="assigned-badge badge-dev-b">Developer B</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1538,15 +1328,15 @@
       </div>
     </div>
 
-    <!-- MODULE 07 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="report result achievement improvement target score rollup aggregation scorecard threshold">
+    <!-- MODULE 07 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="report result achievement improvement target score rollup aggregation scorecard threshold">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 07 &bull; Backend/modules/07-performance-scoring</div>
           <div class="module-title">📈 Performance Reporting &amp; Scoring</div>
           <div class="module-desc">The core of the system. Offices report results per period and the office above reviews them. Improvement and target achievement are calculated separately, respecting direction and approved scoring. Results add up across periods and offices without double counting, and missing results are never treated as zero.</div>
         </div>
-        <span class="assigned-badge badge-dev-b">Developer B</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1575,9 +1365,9 @@
             <span class="chip chip-model">PerformanceReport</span>
             <span class="chip chip-model">PerformanceValue</span>
             <span class="chip chip-model">PerformanceReview</span>
+            <span class="chip chip-model">PerformanceStatusThreshold</span>
             <span class="chip chip-model">KpiAchievement</span>
             <span class="chip chip-model">ContractScore</span>
-            <span class="chip chip-model">PerformanceStatusThreshold</span>
           </div>
         </div>
 
@@ -1626,15 +1416,15 @@
       </div>
     </div>
 
-    <!-- MODULE 08 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="evidence file upload document proof download verify logo">
+    <!-- MODULE 08 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="evidence file upload document proof download verify logo">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 08 &bull; Backend/modules/08-evidence-documents</div>
           <div class="module-title">📑 Document Management &amp; Evidence Linking</div>
           <div class="module-desc">Stores files safely and proves results. Uploads are checked for type, size and real contents, kept outside any public route and downloaded only through permission checks. Offices attach evidence to reported results and the office above verifies it during review.</div>
         </div>
-        <span class="assigned-badge badge-dev-b">Developer B</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1703,21 +1493,21 @@
         <div class="integration-box">
           <span>🤝</span>
           <div>
-            <strong>Interlinks with:</strong> Evidence attached to evaluations (07) and report dossiers (06) is what verifiers review before scoring.
+            <strong>Interlinks with:</strong> Evidence attached to evaluations (07) and reports (07) is what verifiers review before scoring.
           </div>
         </div>
       </div>
     </div>
 
-    <!-- MODULE 09 (Dev B) -->
-    <div class="module-card dev-b-assigned" data-dev="dev-b" data-keywords="notification alert broadcast inbox unread socket realtime">
+    <!-- MODULE 09 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="notification alert broadcast inbox unread socket realtime">
       <div class="module-card-header">
         <div class="module-title-box">
           <div class="module-index">Module 09 &bull; Backend/modules/09-notifications</div>
           <div class="module-title">🔔 Targeted Notifications &amp; Realtime Alerts</div>
-          <div class="module-desc">Dispatches actionable announcements and alerts across the university. Supports targeting specific offices, cascading broadcasts to sub-offices (includeSubOffices), gating messages by required permission codes, and tracking individual read receipts.</div>
+          <div class="module-desc">Dispatches actionable announcements and alerts across the university. Supports targeting specific offices, cascading broadcasts to sub-offices (includeSubOffices), gating messages by required permission codes, and tracking individual read receipts. Sends automatic alerts and deadline reminders, in-app and live over authenticated sockets.</div>
         </div>
-        <span class="assigned-badge badge-dev-b">Developer B</span>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
       </div>
       <div class="module-body">
         <div>
@@ -1777,20 +1567,163 @@
         </div>
       </div>
     </div>
+
+    <!-- MODULE 10 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="settings configuration branding audit log governance public maintenance deadline reporting">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 10 &bull; Backend/modules/10-system-governance</div>
+          <div class="module-title">⚙️ System Governance, Settings &amp; Audit Trail</div>
+          <div class="module-desc">Ensures institutional governance, transparency, and configurability. Maintains key-value system settings partitioned by category groups (branding, KPI rules, reporting, login security), and captures an immutable audit trail of state changes with JSON diffs, IP addresses, and user-agent strings.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints (6)</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/v1/settings/public · Public</span>
+            <span class="chip chip-endpoint">GET /api/v1/settings · settings:manage</span>
+            <span class="chip chip-endpoint">PUT /api/v1/settings/:groupName · settings:manage</span>
+            <span class="chip chip-endpoint">GET /api/v1/audit-logs · audit:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/audit-logs/filters · audit:read</span>
+            <span class="chip chip-endpoint">GET /api/v1/audit-logs/:id · audit:read</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models</div>
+          <div class="chip-list">
+            <span class="chip chip-model">SystemSetting</span>
+            <span class="chip chip-model">AuditLog</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope (integration phase)</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Pages/Admin/Configuration/GeneralSystemSetting.jsx</span>
+            <span class="chip chip-fe">Pages/Admin/SystemLogs/SystemLogs.jsx</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Settings registry (config/settings.json): branding, general, KPI scoring, reporting deadlines, system status</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Typed, validated batch updates per group with reset-to-default and change-only auditing; getSetting() helper with cache</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Maintenance mode: API answers 503 to everyone except university-wide settings managers</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Audit trail queries: filters, pagination, field diff, filter values; secrets redacted from audit entries</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Shared Resource:</strong> Every service calls <code>logActivity()</code> from their services so every state change lands in the audit trail.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 11 -->
+    <div class="module-card dev-a-assigned" data-dev="dev-a" data-keywords="dashboard university parent office subordinate comparison trend history performance view">
+      <div class="module-card-header">
+        <div class="module-title-box">
+          <div class="module-index">Module 11 &bull; Backend/modules/11-dashboards</div>
+          <div class="module-title">📊 Dashboards &amp; Performance Views</div>
+          <div class="module-desc">Read-only views over the results saved by Module 07, with no tables of its own. Only approved reports count as official; missing, pending, returned and rejected results are always shown apart, and a missing result is never treated as zero. A summed KPI before year end shows as in progress. Every view is filtered by fiscal year and optionally by period, and follows the same office scope as the rest of the system.</div>
+        </div>
+        <span class="assigned-badge badge-dev-a">Backend complete</span>
+      </div>
+      <div class="module-body">
+        <div>
+          <div class="section-title">Backend Endpoints (3)</div>
+          <div class="chip-list">
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/university · dashboard:read over the top office</span>
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId · dashboard:read, checked by scope</span>
+            <span class="chip chip-endpoint">GET /api/v1/dashboards/offices/:officeId/subordinates · dashboard:read, checked by scope</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Prisma Models</div>
+          <div class="chip-list">
+
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Frontend Scope (integration phase)</div>
+          <div class="chip-list">
+            <span class="chip chip-fe">Components/Dashboard/PerformanceDashboard.jsx</span>
+            <span class="chip chip-fe">Components/Dashboard/SubComponents/*</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Detailed Task Checklist</div>
+          <ul class="task-list">
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>University dashboard: official score, KPI counts, trend, history, by strategic objective and by office type</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Parent office dashboard: own KPIs, responsibilities, subordinates compared, pending reports and reports awaiting review</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Own office dashboard: baselines, targets, results, deadlines, evidence status, feedback and history</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+            <li class="task-item">
+              <span class="task-icon">✅</span>
+              <span>Only approved reports are official; draft figures stay with the office; every view filters by fiscal year and period</span>
+              <span class="task-status-pill status-done">Done</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="integration-box">
+          <span>🤝</span>
+          <div>
+            <strong>Depends on:</strong> Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Work Breakdown & Responsibility Matrix Table -->
   <div class="matrix-section" id="matrix-view">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
       <div>
-        <h2>📋 Detailed Module Allocation &amp; Shared Interfaces</h2>
+        <h2>📋 Modules and How They Connect</h2>
         <p style="color: var(--text-muted); font-size: 0.95rem;">
-          Ownership, Prisma models, endpoint counts and handoff contracts per module.
+          Prisma models, endpoint counts and links between modules.
         </p>
       </div>
       <div style="display: flex; gap: 0.75rem;">
-        <span class="assigned-badge badge-dev-a">Dev A: 6 Modules / 88 Endpoints</span>
-        <span class="assigned-badge badge-dev-b">Dev B: 5 Modules / 66 Endpoints</span>
+        <span class="assigned-badge badge-dev-a">11 Modules / 154 Endpoints</span>
       </div>
     </div>
     <div class="matrix-table-wrapper">
@@ -1798,33 +1731,33 @@
         <thead>
           <tr>
             <th>Module Name</th>
-            <th>Primary Owner</th>
+            <th>Status</th>
             <th>Backend Directory</th>
-            <th>Prisma Models Owned</th>
+            <th>Prisma Models</th>
             <th>Endpoints</th>
-            <th>Integration Handoff</th>
+            <th>Connections</th>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td><strong>01. Identity &amp; Authentication Module</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/01-identity-access</code></td>
             <td>Person, UserAccount, UserSession</td>
             <td>25</td>
-            <td>Exports protect, requirePermission() and actorOf(req); every Dev B controller receives the acting personId from here.</td>
+            <td>Exports protect, requirePermission() and actorOf(req); every controller receives the acting personId from here.</td>
           </tr>
           <tr>
             <td><strong>02. Organizational Hierarchy &amp; Offices Module</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/02-office-hierarchy</code></td>
-            <td>OfficeType, Office, Position, OfficePerson</td>
+            <td>OfficeType, Office, OfficeHierarchyHistory, Position, OfficePerson</td>
             <td>12</td>
-            <td>The office tree is the roll-up path for target cascading (05), report dossiers (06), scorecards (07) and notification targeting (09).</td>
+            <td>The office tree is the roll-up path for KPI cascading (05), reports (07), scorecards (07) and notification targeting (09).</td>
           </tr>
           <tr>
             <td><strong>03. Dynamic Roles &amp; Scoped Access Control</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/03-access-control</code></td>
             <td>Role, Permission, RolePermission, OfficePersonRole</td>
             <td>10</td>
@@ -1832,31 +1765,15 @@
           </tr>
           <tr>
             <td><strong>04. Strategic KPI Catalog &amp; Fiscal Planning</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/04-kpi-catalog</code></td>
             <td>FiscalYear, StrategicObjective, KpiTheme, MeasurementUnit, ReportingFrequency, KpiScale, KpiScaleLevel, Currency, ExchangeRate, Kpi</td>
             <td>32</td>
-            <td>Fiscal years and master KPIs are the inputs for targets (05), cycles (06) and direction-aware scoring (07).</td>
-          </tr>
-          <tr>
-            <td><strong>10. System Governance, Settings &amp; Audit Trail</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
-            <td><code>modules/10-system-governance</code></td>
-            <td>SystemSetting, AuditLog</td>
-            <td>6</td>
-            <td>Both developers call logActivity() from their services so every state change lands in the audit trail.</td>
-          </tr>
-          <tr>
-            <td><strong>11. Dashboards &amp; Performance Views</strong></td>
-            <td><span class="assigned-badge badge-dev-a">Developer A</span></td>
-            <td><code>modules/11-dashboards</code></td>
-            <td></td>
-            <td>3</td>
-            <td>Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.</td>
+            <td>Fiscal years and master KPIs are the inputs for contracts (05), reporting periods (06) and direction-aware scoring (07).</td>
           </tr>
           <tr>
             <td><strong>05. Contracts &amp; KPI Cascading</strong></td>
-            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/05-contract-cascading</code></td>
             <td>PerformanceContract, KpiAssignment, KpiWeight, KpiBaseline, KpiTarget, ResponsibilityAllocation, AssignmentChangeRequest, BaselineEvidence, ChangeRequestEvidence</td>
             <td>25</td>
@@ -1864,7 +1781,7 @@
           </tr>
           <tr>
             <td><strong>06. Reporting Periods</strong></td>
-            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/06-reporting-periods</code></td>
             <td>ReportingPeriod</td>
             <td>8</td>
@@ -1872,27 +1789,43 @@
           </tr>
           <tr>
             <td><strong>07. Performance Reporting &amp; Scoring</strong></td>
-            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/07-performance-scoring</code></td>
-            <td>PerformanceReport, PerformanceValue, PerformanceReview, KpiAchievement, ContractScore, PerformanceStatusThreshold</td>
+            <td>PerformanceReport, PerformanceValue, PerformanceReview, PerformanceStatusThreshold, KpiAchievement, ContractScore</td>
             <td>14</td>
             <td>Scorecards and the institution dashboard present the combined data of both developers to the President and VPs.</td>
           </tr>
           <tr>
             <td><strong>08. Document Management &amp; Evidence Linking</strong></td>
-            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/08-evidence-documents</code></td>
             <td>FileUpload, DocumentType, Document, PerformanceEvidence</td>
             <td>14</td>
-            <td>Evidence attached to evaluations (07) and report dossiers (06) is what verifiers review before scoring.</td>
+            <td>Evidence attached to evaluations (07) and reports (07) is what verifiers review before scoring.</td>
           </tr>
           <tr>
             <td><strong>09. Targeted Notifications &amp; Realtime Alerts</strong></td>
-            <td><span class="assigned-badge badge-dev-b">Developer B</span></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
             <td><code>modules/09-notifications</code></td>
             <td>Notification, NotificationRecipient</td>
             <td>5</td>
             <td>Exposes dispatchNotification() for every module that needs to alert offices or permission groups.</td>
+          </tr>
+          <tr>
+            <td><strong>10. System Governance, Settings &amp; Audit Trail</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
+            <td><code>modules/10-system-governance</code></td>
+            <td>SystemSetting, AuditLog</td>
+            <td>6</td>
+            <td>Every service calls logActivity() from their services so every state change lands in the audit trail.</td>
+          </tr>
+          <tr>
+            <td><strong>11. Dashboards &amp; Performance Views</strong></td>
+            <td><span class="assigned-badge badge-dev-a">Backend complete</span></td>
+            <td><code>modules/11-dashboards</code></td>
+            <td></td>
+            <td>3</td>
+            <td>Reads results saved by Module 07 and office scope from Module 03. Calculates no contract scores of its own.</td>
           </tr>
         </tbody>
       </table>
@@ -1900,38 +1833,27 @@
 
     <!-- Suggested Sprints & Milestones -->
     <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-      <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white;">🚀 Coordinated Roadmap (backend first, frontend integration last)</h3>
+      <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: white;">🚀 Roadmap (backend first, frontend integration last)</h3>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
         <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #a855f7; text-transform: uppercase;">Sprint 1 &bull; Done</div>
-          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Foundations</div>
+          <div style="font-size: 0.78rem; font-weight: 700; color: #10b981; text-transform: uppercase;">Done</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Backend</div>
           <div style="font-size: 0.82rem; color: var(--text-muted);">
-            <div><strong>Dev A:</strong> Baseline migration, cookie auth with MFA, multi-device sessions, person directory, scoped RBAC middleware, permission catalog.</div>
-            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Route skeletons with permission guards for modules 05–09, Socket.io baseline, error handling contract.</div>
+            <div>All 11 modules, login security and audit logging, tested through the API.</div>
           </div>
         </div>
         <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #3b82f6; text-transform: uppercase;">Sprint 2</div>
-          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Structure &amp; Independent Services</div>
+          <div style="font-size: 0.78rem; font-weight: 700; color: #3b82f6; text-transform: uppercase;">Next</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Frontend Integration</div>
           <div style="font-size: 0.82rem; color: var(--text-muted);">
-            <div><strong>Dev A:</strong> Office types, office tree, positions and placements (02); roles, permission sync and scoped assignments (03).</div>
-            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> File upload, document types, documents and evidence links (08); notification dispatch and inbox (09).</div>
+            <div>Connect each screen to /api/v1 and build the dashboards on Module 11.</div>
           </div>
         </div>
         <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #10b981; text-transform: uppercase;">Sprint 3</div>
-          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Planning &amp; Operations</div>
+          <div style="font-size: 0.78rem; font-weight: 700; color: #f59e0b; text-transform: uppercase;">Later</div>
+          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Deployment</div>
           <div style="font-size: 0.82rem; color: var(--text-muted);">
-            <div><strong>Dev A:</strong> Fiscal years, themes and master KPIs plus KPI seed (04); settings and audit-log queries (10).</div>
-            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Target creation and cascade engine (05); evaluation cycles and report dossiers (06).</div>
-          </div>
-        </div>
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem;">
-          <div style="font-size: 0.78rem; font-weight: 700; color: #f59e0b; text-transform: uppercase;">Sprint 4</div>
-          <div style="font-weight: 700; margin: 0.3rem 0; color: white;">Scoring, Hardening &amp; Integration</div>
-          <div style="font-size: 0.82rem; color: var(--text-muted);">
-            <div><strong>Dev A:</strong> Login rate limiting, audit hooks across modules, security review; connect Dev A screens to /api/v1.</div>
-            <div style="margin-top: 0.3rem;"><strong>Dev B:</strong> Evaluation entry, direction-aware scoring, scorecards and institution dashboard (07); connect Dev B screens to /api/v1.</div>
+            <div>Production configuration, proxy settings and university data.</div>
           </div>
         </div>
       </div>

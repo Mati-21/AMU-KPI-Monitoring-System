@@ -9,8 +9,9 @@ https://github.com/MentosMkt/AMU-KPI-Monitoring-System
 
 ## Documentation
 
-- [MODULES_SPECIFICATION.html](MODULES_SPECIFICATION.html) — the 10 modules, 25 Prisma models and every `/api/v1` route (source of truth)
-- [TASK_DIVISION.html](TASK_DIVISION.html) — module ownership for Developer A / Developer B and the roadmap
+- [MODULES_SPECIFICATION.html](MODULES_SPECIFICATION.html) — the 11 modules, 46 Prisma models and every `/api/v1` route (source of truth)
+- [TASK_DIVISION.html](TASK_DIVISION.html) — module status and roadmap
+- [Docs/BACKEND_GUIDE.md](Docs/BACKEND_GUIDE.md) — how the backend is organised and how to work on it
 - [Docs/CLASS_DIAGRAM.md](Docs/CLASS_DIAGRAM.md) — class diagram of `Backend/prisma/schema.prisma`
 - Swagger UI at `http://localhost:8058/api-docs` while the backend runs
 

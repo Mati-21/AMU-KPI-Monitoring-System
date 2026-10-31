@@ -1,8 +1,22 @@
 import { Router } from 'express';
 import * as authController from './auth.controller.js';
 import { optionalAuth, protect, requireSuperAdmin } from '../../../middleware/authMiddleware.js';
+import { limitFailedAttempts } from '../../../middleware/attemptLimiter.js';
+import { TOKEN_TYPES, verifyToken } from '../../../config/jwt.js';
 
 const router = Router();
+
+// The account a login step belongs to, for counting failed attempts. A bad cookie is refused by the service.
+const stageAccountOf = (req) => {
+  try {
+    return verifyToken(req.cookies?.auth_stage, TOKEN_TYPES.STAGE).id;
+  } catch {
+    return null;
+  }
+};
+const limitLogin = limitFailedAttempts('login', (req) => String(req.body?.username || req.body?.email || '').trim().toLowerCase() || null);
+const limitCodes = limitFailedAttempts('mfa', (req) => req.user?.id ?? stageAccountOf(req));
+const limitPassword = limitFailedAttempts('password', (req) => req.user.id);
 
 /**
  * @swagger
@@ -37,7 +51,7 @@ const router = Router();
  *       401: { description: Invalid credentials }
  *       403: { description: Account deactivated }
  */
-router.post('/auth/login', authController.login);
+router.post('/auth/login', limitLogin, authController.login);
 
 /**
  * @swagger
@@ -89,7 +103,7 @@ router.post('/auth/mfa/setup', optionalAuth, authController.setupMfa);
  *     responses:
  *       200: { description: MFA enabled, session cookies set }
  */
-router.post('/auth/mfa/verify-setup', optionalAuth, authController.verifyMfaSetup);
+router.post('/auth/mfa/verify-setup', optionalAuth, limitCodes, authController.verifyMfaSetup);
 
 /**
  * @swagger
@@ -111,7 +125,7 @@ router.post('/auth/mfa/verify-setup', optionalAuth, authController.verifyMfaSetu
  *       200: { description: Session cookies set }
  *       401: { description: Invalid code }
  */
-router.post('/auth/mfa/verify', authController.verifyMfa);
+router.post('/auth/mfa/verify', limitCodes, authController.verifyMfa);
 
 /**
  * @swagger
@@ -131,7 +145,7 @@ router.post('/auth/mfa/verify', authController.verifyMfa);
  *     responses:
  *       200: { description: MFA disabled }
  */
-router.post('/auth/mfa/disable', protect, authController.disableMfa);
+router.post('/auth/mfa/disable', protect, limitCodes, authController.disableMfa);
 
 /**
  * @swagger
@@ -225,7 +239,7 @@ router.delete('/auth/sessions/:id', protect, authController.revokeMySession);
  *     responses:
  *       200: { description: Password changed }
  */
-router.post('/auth/change-password', protect, authController.changePassword);
+router.post('/auth/change-password', protect, limitPassword, authController.changePassword);
 
 /**
  * @swagger

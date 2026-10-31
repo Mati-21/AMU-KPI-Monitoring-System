@@ -1,4 +1,5 @@
 import * as personService from './person.service.js';
+import { actorOf } from '../../../utils/requestContext.js';
 
 export const listPersons = async (req, res) => {
   const { search, isActive, officeId, hasAccount, page, limit } = req.query;
@@ -12,22 +13,22 @@ export const getPersonById = async (req, res) => {
 };
 
 export const createPerson = async (req, res) => {
-  const person = await personService.createPerson(req.body || {});
+  const person = await personService.createPerson(req.body || {}, actorOf(req));
   res.status(201).json({ status: 'success', message: 'Person registered successfully', data: person });
 };
 
 export const updatePerson = async (req, res) => {
-  const person = await personService.updatePerson(req.params.id, req.body || {});
+  const person = await personService.updatePerson(req.params.id, req.body || {}, actorOf(req));
   res.json({ status: 'success', message: 'Person updated successfully', data: person });
 };
 
 export const deletePerson = async (req, res) => {
-  const result = await personService.deletePerson(req.params.id);
+  const result = await personService.deletePerson(req.params.id, actorOf(req));
   res.json({ status: 'success', ...result });
 };
 
 export const upsertAccount = async (req, res) => {
-  const { created, account } = await personService.upsertAccount(req.params.id, req.body || {});
+  const { created, account } = await personService.upsertAccount(req.params.id, req.body || {}, actorOf(req));
   res.status(created ? 201 : 200).json({
     status: 'success',
     message: created ? 'User account created successfully' : 'User account updated successfully',
@@ -36,7 +37,7 @@ export const upsertAccount = async (req, res) => {
 };
 
 export const toggleActive = async (req, res) => {
-  const account = await personService.setAccountActive(req.params.id, req.body?.isActive);
+  const account = await personService.setAccountActive(req.params.id, req.body?.isActive, actorOf(req));
   res.json({
     status: 'success',
     message: `User account ${account.isActive ? 'activated' : 'deactivated'} successfully`,
@@ -45,7 +46,7 @@ export const toggleActive = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  const account = await personService.resetPassword(req.params.id, req.body?.temporaryPassword);
+  const account = await personService.resetPassword(req.params.id, req.body?.temporaryPassword, actorOf(req));
   res.json({
     status: 'success',
     message: 'Password reset. The user must change it on next login.',
@@ -59,7 +60,7 @@ export const listAccountSessions = async (req, res) => {
 };
 
 export const revokeAccountSessions = async (req, res) => {
-  const result = await personService.revokeAccountSessions(req.params.id);
+  const result = await personService.revokeAccountSessions(req.params.id, actorOf(req));
   res.json({ status: 'success', message: `Revoked ${result.revokedCount} session(s)`, data: result });
 };
 

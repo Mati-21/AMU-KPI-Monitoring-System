@@ -2,6 +2,7 @@ import * as authService from './auth.service.js';
 import * as sessionService from './session.service.js';
 import { ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL, STAGE_TOKEN_TTL, ttlToMs } from '../../../config/jwt.js';
 import { badRequest, unauthorized } from '../../../utils/httpError.js';
+import { actorOf } from '../../../utils/requestContext.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -73,7 +74,7 @@ export const changePassword = async (req, res) => {
     currentPassword,
     newPassword,
     code,
-  });
+  }, clientContext(req));
   res.json(result);
 };
 
@@ -100,7 +101,7 @@ export const verifyMfa = async (req, res) => {
 
 export const disableMfa = async (req, res) => {
   if (!req.body?.code) throw badRequest('Verification code required to disable MFA');
-  const result = await authService.disableMfa({ accountId: req.user.id, code: req.body.code });
+  const result = await authService.disableMfa({ accountId: req.user.id, code: req.body.code }, clientContext(req));
   res.json({ status: 'success', ...result });
 };
 
@@ -152,13 +153,13 @@ export const revokeMyOtherSessions = async (req, res) => {
 
 export const enforceUserMfa = async (req, res) => {
   const enforced = req.body?.enforced ?? true;
-  const updated = await authService.setMfaEnforced({ accountId: req.params.id, enforced });
+  const updated = await authService.setMfaEnforced({ accountId: req.params.id, enforced }, actorOf(req));
   res.json({ status: 'success', message: `MFA enforcement for user set to ${updated.mfaEnforced}`, data: updated });
 };
 
 export const enforceRoleMfa = async (req, res) => {
   const { roleName, roleId, enforced = true } = req.body || {};
-  const result = await authService.setMfaEnforcedForRole({ roleName, roleId, enforced });
+  const result = await authService.setMfaEnforcedForRole({ roleName, roleId, enforced }, actorOf(req));
   res.json({
     status: 'success',
     message: `2FA enforcement for role "${result.roleName}" set to ${result.mfaEnforced} (${result.affectedUsersCount} users updated)`,

@@ -2,420 +2,866 @@
 
 ## Overview
 
-Class diagram of the **Arba Minch University (AMU) KPI Monitoring System**, mapped one-to-one to
-[Backend/prisma/schema.prisma](../Backend/prisma/schema.prisma) (26 models, PostgreSQL) and to the ten modules in
-[MODULES_SPECIFICATION.html](../MODULES_SPECIFICATION.html). Table names (snake_case) are shown in brackets.
+Class diagram of the **Arba Minch University (AMU) KPI Monitoring System**, generated from
+[Backend/prisma/schema.prisma](../Backend/prisma/schema.prisma) (46 models, 24 enums, PostgreSQL). Table names are shown in `<<brackets>>`.
 
 | Module | Models |
 |---|---|
-| 01 Identity & Authentication | `Person`, `UserAccount`, `UserSession` |
-| 02 Organizational Hierarchy | `OfficeType`, `Office`, `Position`, `OfficePerson` |
-| 03 Scoped Access Control | `Role`, `Permission`, `RolePermission`, `OfficePersonRole` |
-| 04 Strategic KPI Catalog | `FiscalYear`, `KpiTheme`, `Kpi` |
-| 05 Target Cascading | `KpiTarget` |
-| 06 Evaluation Cycles | `EvalCycle`, `CycleReport` |
-| 07 Performance Scoring | `KpiEvaluation` |
-| 08 Evidence & Documents | `File`, `DocumentType`, `Document`, `DocumentLink` |
-| 09 Notifications | `Notification`, `NotificationRecipient` |
 | 10 System Governance | `SystemSetting`, `AuditLog` |
+| 11 Dashboards | None: reads results saved by Module 07 |
+| 01 Identity & Authentication | `Person`, `UserAccount`, `UserSession` |
+| 02 Organizational Hierarchy | `OfficeType`, `Office`, `OfficeHierarchyHistory`, `Position`, `OfficePerson` |
+| 03 Scoped Access Control | `Role`, `Permission`, `RolePermission`, `OfficePersonRole` |
+| 04 KPI Catalog & Fiscal Planning | `FiscalYear`, `StrategicObjective`, `KpiTheme`, `MeasurementUnit`, `ReportingFrequency`, `KpiScale`, `KpiScaleLevel`, `Currency`, `ExchangeRate`, `Kpi` |
+| 05 Contracts & KPI Cascading | `PerformanceContract`, `KpiAssignment`, `KpiWeight`, `KpiBaseline`, `KpiTarget`, `ResponsibilityAllocation`, `AssignmentChangeRequest`, `BaselineEvidence`, `ChangeRequestEvidence` |
+| 06 Reporting Periods | `ReportingPeriod` |
+| 07 Performance Reporting & Scoring | `PerformanceReport`, `PerformanceValue`, `PerformanceReview`, `PerformanceStatusThreshold`, `KpiAchievement`, `ContractScore` |
+| 08 Evidence & Documents | `FileUpload`, `DocumentType`, `Document`, `PerformanceEvidence` |
+| 09 Notifications | `Notification`, `NotificationRecipient` |
 
 ---
 
 ## 1. Domain Description
 
 ### Identity (Module 01)
-- **Person** `[person]` — the human being (faculty, staff, management) with demographic and contact data. Every other
-  module references a `Person`, never a login account.
-- **UserAccount** `[user_account]` — optional 1:1 login credentials for a Person: username, bcrypt hash, first-login
-  password change flag and TOTP MFA settings (`mfaEnabled`, `mfaEnforced`, `mfaSecret`). Deleting a Person cascades to it.
-- **UserSession** `[user_session]` — one row per logged-in device/browser, so an account can have many concurrent
-  sessions. Access tokens carry the session id (`sid`) and stop working as soon as the session is revoked or expires.
-  Only SHA-256 hashes of the rotating refresh token are stored; replaying an already-rotated token revokes the session.
-  Tracks IP, user agent, created / last used / expiry times and why it was revoked.
+A `Person` is anyone known to the university. A `UserAccount` lets them log in, and each device they use holds a `UserSession`.
 
 ### Organization (Module 02)
-- **OfficeType** `[office_type]` — tier of the hierarchy (University = 1, College = 2, Department = 3 …) via `levelOrder`.
-- **Office** `[office]` — node of the university tree; `parentOfficeId` self-reference forms the `OfficeTree`.
-- **Position** `[position]` — job title defined inside an office (e.g. Dean, Lecturer); `isHead` marks the office head.
-- **OfficePerson** `[office_person]` — placement of a Person in an Office + Position with tenure (`startDate`/`endDate`)
-  and an `isPrimary` flag. A person may hold several placements.
+`Office` records form one tree under the university, each of a configurable `OfficeType`. `OfficePerson` places a person in an office and `Position`. `OfficeHierarchyHistory` keeps past parents.
 
 ### Access control (Module 03)
-- **Role** `[role]` — named bundle of permissions (Super Admin, Dean, Strategy Officer …).
-- **Permission** `[permission]` — atomic code such as `kpi:create`, `target:cascade`; `*` is the Super Admin wildcard.
-  The catalog lives in `Backend/config/permissions.js`.
-- **RolePermission** `[role_permission]` — M:N join between Role and Permission.
-- **OfficePersonRole** `[office_person_role]` — grants a Role to a placement, optionally limited to `scopeOfficeId`
-  (that office and its descendants; `null` = university-wide) and a validity window (`validFrom`/`validTo`).
+A `Role` is a set of `Permission` records. `OfficePersonRole` grants a role to a placement, optionally scoped to an office and everything under it.
 
-### KPI planning (Modules 04–05)
-- **FiscalYear** `[fiscal_year]` — planning year (e.g. "2018 E.C.") with status `planned | active | closed`.
-- **KpiTheme** `[kpi_theme]` — strategic pillar; `parentThemeId` self-reference forms the `ThemeTree`.
-- **Kpi** `[kpi]` — master indicator: unit, `direction` (`higher_is_better | lower_is_better`), `cascadeMode`
-  (`split | replicate | aggregate`) and `maxOverAllocationPercent` for cascading.
-- **KpiTarget** `[kpi_target]` — target value for a KPI, office (and optionally a person) in a fiscal year.
-  `parentTargetId` self-reference forms the `TargetTree`: a university target is cascaded into college, department
-  and individual targets. Two Person relations: owner (`TargetOwner`) and assigner (`TargetAssigner`).
+### KPI catalog (Module 04)
+A `Kpi` is a master definition that is not tied to a year. It belongs to a `KpiTheme` and `StrategicObjective`, and is measured with a `MeasurementUnit`, `KpiScale` or `Currency`. Once in use it is locked, and a real change means a new KPI that points back through `replacesKpiId`.
 
-### Evaluation (Modules 06–07)
-- **EvalCycle** `[eval_cycle]` — reporting window inside a fiscal year (Q1, Mid-Year, Annual) with status
-  `planned | open | in_review | closed`.
-- **CycleReport** `[cycle_report]` — one report dossier per office per cycle (`@@unique([evalCycleId, officeId])`);
-  submitted and reviewed by Persons.
-- **KpiEvaluation** `[kpi_evaluation]` — achievement for one target in one cycle (`@@unique([kpiTargetId, evalCycleId])`):
-  `reportedValue`, verified `actualValue`, computed `score`, optional link to the CycleReport and evaluator.
+### Contracts and cascading (Module 05)
+Each office has one `PerformanceContract` per `FiscalYear`. A `KpiAssignment` puts a KPI on a contract, cascaded from the assignment above. `KpiWeight`, `KpiBaseline` and `KpiTarget` are versioned, so old values are never overwritten. `ResponsibilityAllocation` records what was retained and distributed, and `AssignmentChangeRequest` is how approved values change.
+
+### Reporting and scoring (Modules 06-07)
+A `ReportingPeriod` says when offices report. A `PerformanceReport` holds `PerformanceValue` rows (direct, aggregated and total) and `PerformanceReview` decisions. Each `KpiAchievement` keeps improvement and target achievement separately and records the exact baseline, target and weight versions it used. `ContractScore` is the weighted result per period, and `PerformanceStatusThreshold` holds the university's bands.
 
 ### Evidence (Module 08)
-- **File** `[file]` — stored binary: path, MIME type, size, checksum, uploader.
-- **DocumentType** `[document_type]` — evidence category with allowed extensions and max size.
-- **Document** `[document]` — business document wrapping a File (title, owner office, confidentiality).
-- **DocumentLink** `[document_link]` — polymorphic attachment of a Document to any entity by
-  (`entityType`, `entityId`), e.g. `kpi_evaluation`, `cycle_report`, `kpi_target`.
+A `FileUpload` is a stored file, a `Document` describes it, and `PerformanceEvidence`, `BaselineEvidence` and `ChangeRequestEvidence` link documents to what they prove.
 
-### Notifications & governance (Modules 09–10)
-- **Notification** `[notification]` — broadcast to a target office (optionally `includeSubOffices`) and/or the holders
-  of a `requiredPermission`; may reference an entity.
-- **NotificationRecipient** `[notification_recipient]` — per-person delivery and read receipt.
-- **SystemSetting** `[system_setting]` — key/value configuration grouped by `groupName` (`@@unique([groupName, key])`),
-  optional File (e.g. logo), `isPublic` flag.
-- **AuditLog** `[audit_log]` — immutable record of who changed what (`oldValues`/`newValues` JSON), from which IP/agent.
+### Notifications and governance (Modules 09-10)
+`Notification` and `NotificationRecipient` hold in-app messages. `SystemSetting` stores configuration declared in `config/settings.json`, and `AuditLog` is the immutable trail.
+
+### Dashboards (Module 11)
+Dashboards have no tables of their own. They read `KpiAchievement`, `ContractScore` and `PerformanceReport`.
 
 ---
 
 ## 2. PlantUML Class Diagram
 
 ```plantuml
-@startuml AMU_KPI_Class_Diagram
-skinparam classAttributeIconSize 0
-skinparam linetype ortho
+@startuml
 hide methods
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
 
-package "01 Identity" {
-  class Person {
-    id : Uuid
-    firstName : String
-    middleName : String?
-    lastName : String
-    gender : String?
-    birthDate : Date?
-    email : String? <<unique>>
-    phone : String?
-    status : String = "active"
+package "10 System Governance" {
+  class SystemSetting <<system_setting>> {
+    + id : String
+      groupName : String
+      key : String
+      value : String?
+      valueType : String
+      fileId : String?
+      description : String?
+      isPublic : Boolean
+      updatedByPersonId : String?
+      updatedAt : DateTime
   }
-  class UserAccount {
-    id : Uuid
-    personId : Uuid <<unique>>
-    username : String <<unique>>
-    passwordHash : String
-    isActive : Boolean = true
-    mustChangePassword : Boolean = false
-    mfaEnabled : Boolean = false
-    mfaEnforced : Boolean = false
-    mfaSecret : String?
-    mfaType : String = "totp"
-    lastLoginAt : Timestamptz?
-  }
-  class UserSession {
-    id : Uuid
-    userAccountId : Uuid
-    refreshTokenHash : String <<unique>>
-    previousRefreshTokenHash : String?
-    rotatedAt : Timestamptz?
-    ipAddress : String?
-    userAgent : String?
-    createdAt : Timestamptz
-    lastUsedAt : Timestamptz
-    expiresAt : Timestamptz
-    revokedAt : Timestamptz?
-    revokedReason : String?
+  class AuditLog <<audit_log>> {
+    + id : String
+      actorPersonId : String?
+      action : String
+      entityType : String
+      entityId : String?
+      oldValues : Json?
+      newValues : Json?
+      reason : String?
+      ipAddress : String?
+      userAgent : String?
+      createdAt : DateTime
   }
 }
 
-package "02 Organization" {
-  class OfficeType {
-    id : Int
-    name : String <<unique>>
-    levelOrder : Int?
+package "01 Identity & Authentication" {
+  class Person <<person>> {
+    + id : String
+      staffNumber : String?
+      firstName : String
+      middleName : String?
+      lastName : String
+      email : String?
+      phone : String?
+      isActive : Boolean
+      createdAt : DateTime
+      updatedAt : DateTime
   }
-  class Office {
-    id : Uuid
-    parentOfficeId : Uuid?
-    officeTypeId : Int
-    name : String
-    code : String? <<unique>>
-    isActive : Boolean = true
+  class UserAccount <<user_account>> {
+    + id : String
+      personId : String
+      username : String
+      passwordHash : String
+      isActive : Boolean
+      mustChangePassword : Boolean
+      mfaEnabled : Boolean
+      mfaEnforced : Boolean
+      mfaSecret : String?
+      mfaType : String
+      lastLoginAt : DateTime?
+      createdAt : DateTime
   }
-  class Position {
-    id : Uuid
-    officeId : Uuid
-    title : String
-    isHead : Boolean = false
-  }
-  class OfficePerson {
-    id : Uuid
-    personId : Uuid
-    officeId : Uuid
-    positionId : Uuid
-    startDate : Date
-    endDate : Date?
-    isPrimary : Boolean = false
-  }
-}
-
-package "03 Access Control" {
-  class Role {
-    id : Int
-    name : String <<unique>>
-    description : String?
-  }
-  class Permission {
-    id : Int
-    code : String <<unique>>
-  }
-  class RolePermission {
-    id : Int
-    roleId : Int
-    permissionId : Int
-  }
-  class OfficePersonRole {
-    id : Uuid
-    officePersonId : Uuid
-    roleId : Int
-    scopeOfficeId : Uuid?
-    validFrom : Date
-    validTo : Date?
+  class UserSession <<user_session>> {
+    + id : String
+      userAccountId : String
+      refreshTokenHash : String
+      previousRefreshTokenHash : String?
+      rotatedAt : DateTime?
+      ipAddress : String?
+      userAgent : String?
+      createdAt : DateTime
+      lastUsedAt : DateTime
+      expiresAt : DateTime
+      revokedAt : DateTime?
+      revokedReason : String?
   }
 }
 
-package "04-05 KPI Planning" {
-  class FiscalYear {
-    id : Int
-    label : String <<unique>>
-    startDate : Date
-    endDate : Date
-    status : String = "planned"
+package "02 Organizational Hierarchy" {
+  class OfficeType <<office_type>> {
+    + id : String
+      name : String
+      description : String?
+      levelOrder : Int?
+      isActive : Boolean
+      createdAt : DateTime
   }
-  class KpiTheme {
-    id : Uuid
-    parentThemeId : Uuid?
-    name : String
-    code : String?
-    sortOrder : Int = 0
-    isActive : Boolean = true
+  class Office <<office>> {
+    + id : String
+      parentOfficeId : String?
+      officeTypeId : String
+      name : String
+      code : String?
+      canAssignKpi : Boolean
+      isActive : Boolean
+      createdAt : DateTime
+      updatedAt : DateTime
   }
-  class Kpi {
-    id : Uuid
-    kpiThemeId : Uuid
-    code : String <<unique>>
-    name : String
-    unitOfMeasure : String
-    direction : String = "higher_is_better"
-    cascadeMode : String = "split"
-    maxOverAllocationPercent : Decimal(6,2)?
-    sortOrder : Int = 0
-    isActive : Boolean = true
+  class OfficeHierarchyHistory <<office_hierarchy_history>> {
+    + id : String
+      officeId : String
+      parentOfficeId : String?
+      validFrom : DateTime
+      validTo : DateTime?
+      reason : String?
+      changedByPersonId : String?
+      createdAt : DateTime
   }
-  class KpiTarget {
-    id : Uuid
-    fiscalYearId : Int
-    kpiId : Uuid
-    officeId : Uuid
-    personId : Uuid?
-    assignedByPersonId : Uuid?
-    assignedAt : Date?
-    parentTargetId : Uuid?
-    baselineValue : Decimal(18,4)?
-    targetValue : Decimal(18,4)
-    weight : Decimal(7,4) = 1
-    status : String = "draft"
+  class Position <<position>> {
+    + id : String
+      officeId : String
+      title : String
+      isHead : Boolean
   }
-}
-
-package "06-07 Evaluation" {
-  class EvalCycle {
-    id : Uuid
-    fiscalYearId : Int
-    name : String
-    periodStart : Date
-    periodEnd : Date
-    dueDate : Date?
-    status : String = "planned"
-  }
-  class CycleReport {
-    id : Uuid
-    evalCycleId : Uuid
-    officeId : Uuid
-    submittedByPersonId : Uuid?
-    reviewedByPersonId : Uuid?
-    status : String = "draft"
-    submissionType : String? = "normal"
-    autoFilledCount : Int = 0
-    reviewNote : String?
-    submittedAt : Timestamptz?
-    reviewedAt : Timestamptz?
-    createdAt : Timestamptz
-  }
-  class KpiEvaluation {
-    id : Uuid
-    kpiTargetId : Uuid
-    evalCycleId : Uuid
-    cycleReportId : Uuid?
-    evaluatorPersonId : Uuid?
-    reportedValue : Decimal(18,4)?
-    actualValue : Decimal(18,4)?
-    valueSource : String?
-    score : Decimal(7,2)?
-    comment : String?
-    status : String = "pending"
+  class OfficePerson <<office_person>> {
+    + id : String
+      personId : String
+      officeId : String
+      positionId : String
+      startDate : DateTime
+      endDate : DateTime?
+      isPrimary : Boolean
   }
 }
 
-package "08 Evidence" {
-  class File {
-    id : Uuid
-    originalName : String
-    storagePath : String
-    mimeType : String
-    sizeBytes : BigInt
-    checksum : String?
-    uploadedByPersonId : Uuid?
-    uploadedAt : Timestamptz
+package "03 Scoped Access Control" {
+  class Role <<role>> {
+    + id : String
+      name : String
+      description : String?
+      isSystem : Boolean
+      createdAt : DateTime
   }
-  class DocumentType {
-    id : Int
-    name : String
-    code : String <<unique>>
-    allowedExtensions : String?
-    maxSizeMb : Int?
-    isActive : Boolean = true
+  class Permission <<permission>> {
+    + id : String
+      code : String
+      name : String?
+      module : String?
+      description : String?
   }
-  class Document {
-    id : Uuid
-    documentTypeId : Int
-    fileId : Uuid
-    ownerOfficeId : Uuid?
-    uploadedByPersonId : Uuid?
-    title : String
-    description : String?
-    isConfidential : Boolean = false
-    createdAt : Timestamptz
+  class RolePermission <<role_permission>> {
+    + id : String
+      roleId : String
+      permissionId : String
   }
-  class DocumentLink {
-    id : Uuid
-    documentId : Uuid
-    entityType : String
-    entityId : Uuid
+  class OfficePersonRole <<office_person_role>> {
+    + id : String
+      officePersonId : String
+      roleId : String
+      scopeOfficeId : String?
+      validFrom : DateTime
+      validTo : DateTime?
   }
 }
 
-package "09-10 Notifications & Governance" {
-  class Notification {
-    id : Uuid
-    createdByPersonId : Uuid?
-    targetOfficeId : Uuid?
-    includeSubOffices : Boolean = false
-    requiredPermissionId : Int?
-    title : String
-    message : String
-    channel : String = "in_app"
-    entityType : String?
-    entityId : Uuid?
-    createdAt : Timestamptz
+package "04 KPI Catalog & Fiscal Planning" {
+  class FiscalYear <<fiscal_year>> {
+    + id : String
+      name : String
+      startDate : DateTime
+      endDate : DateTime
+      status : FiscalYearStatus
   }
-  class NotificationRecipient {
-    id : Uuid
-    notificationId : Uuid
-    personId : Uuid
-    isRead : Boolean = false
-    readAt : Timestamptz?
-    deliveredAt : Timestamptz?
+  class StrategicObjective <<strategic_objective>> {
+    + id : String
+      code : String
+      name : String
+      description : String?
+      isActive : Boolean
   }
-  class SystemSetting {
-    id : Uuid
-    groupName : String
-    key : String
-    value : String?
-    valueType : String = "text"
-    fileId : Uuid?
-    description : String?
-    isPublic : Boolean = false
-    updatedByPersonId : Uuid?
-    updatedAt : Timestamptz
+  class KpiTheme <<kpi_theme>> {
+    + id : String
+      parentThemeId : String?
+      code : String?
+      name : String
+      description : String?
+      sortOrder : Int
+      isActive : Boolean
   }
-  class AuditLog {
-    id : Uuid
-    actorPersonId : Uuid?
-    action : String
-    entityType : String
-    entityId : String?
-    oldValues : Json?
-    newValues : Json?
-    ipAddress : String?
-    userAgent : String?
-    createdAt : Timestamptz
+  class MeasurementUnit <<measurement_unit>> {
+    + id : String
+      name : String
+      symbol : String?
+      description : String?
+  }
+  class ReportingFrequency <<reporting_frequency>> {
+    + id : String
+      name : String
+      intervalMonths : Int?
+      isCustom : Boolean
+  }
+  class KpiScale <<kpi_scale>> {
+    + id : String
+      name : String
+      scaleType : ScaleType
+      isOrdered : Boolean
+      isBinary : Boolean
+      scoringApproved : Boolean
+      approvedByPersonId : String?
+      approvedAt : DateTime?
+  }
+  class KpiScaleLevel <<kpi_scale_level>> {
+    + id : String
+      scaleId : String
+      name : String
+      description : String?
+      sortOrder : Int
+      score : Decimal?
+      assessmentCriteria : String?
+  }
+  class Currency <<currency>> {
+    + id : String
+      code : String
+      name : String
+      symbol : String?
+      isReportingCurrency : Boolean
+  }
+  class ExchangeRate <<exchange_rate>> {
+    + id : String
+      fromCurrencyId : String
+      toCurrencyId : String
+      rate : Decimal
+      rateDate : DateTime
+      source : String?
+  }
+  class Kpi <<kpi>> {
+    + id : String
+      code : String
+      name : String
+      description : String?
+      themeId : String
+      strategicObjectiveId : String
+      measurementType : MeasurementType
+      unitId : String?
+      scaleId : String?
+      currencyId : String?
+      direction : KpiDirection
+      targetType : TargetType
+      numeratorLabel : String?
+      denominatorLabel : String?
+      formula : String?
+      dataSource : String?
+      defaultFrequencyId : String
+      evidenceRequirement : String?
+      aggregationMethod : AggregationMethod
+      periodRollupMethod : PeriodRollupMethod
+      scoringMethod : ScoringBasis
+      zeroTargetRule : ZeroTargetRule
+      isAdditive : Boolean
+      decimalPlaces : Int
+      maintenanceTolerance : Decimal?
+      coordinatingOfficeId : String?
+      replacesKpiId : String?
+      isActive : Boolean
+      createdByPersonId : String?
+      createdAt : DateTime
+      updatedAt : DateTime
   }
 }
 
-' Identity
-Person "1" -- "0..1" UserAccount : login >
-UserAccount "1" -- "0..*" UserSession : signed in on >
+package "05 Contracts & KPI Cascading" {
+  class PerformanceContract <<performance_contract>> {
+    + id : String
+      fiscalYearId : String
+      officeId : String
+      assigningOfficeId : String?
+      versionNo : Int
+      requiredTotalWeight : Decimal
+      status : ContractStatus
+      signedByPersonId : String?
+      signedAt : DateTime?
+      approvedByPersonId : String?
+      approvedAt : DateTime?
+      reviewComment : String?
+      createdAt : DateTime
+  }
+  class KpiAssignment <<kpi_assignment>> {
+    + id : String
+      contractId : String
+      kpiId : String
+      parentAssignmentId : String?
+      reportingFrequencyId : String
+      distributionMethod : DistributionMethod
+      scopeRelation : ScopeRelation
+      reconciliationStatus : ReconciliationStatus
+      reconciliationNote : String?
+      maxOverAllocationPercent : Decimal?
+      status : AssignmentStatus
+      createdByPersonId : String?
+      createdAt : DateTime
+      approvedByPersonId : String?
+      approvedAt : DateTime?
+      acknowledgedByPersonId : String?
+      acknowledgedAt : DateTime?
+      reviewComment : String?
+  }
+  class KpiWeight <<kpi_weight>> {
+    + id : String
+      assignmentId : String
+      weight : Decimal
+      versionNo : Int
+      isCurrent : Boolean
+      reason : String?
+      createdByPersonId : String?
+      approvedByPersonId : String?
+      approvedAt : DateTime?
+      createdAt : DateTime
+  }
+  class KpiBaseline <<kpi_baseline>> {
+    + id : String
+      assignmentId : String
+      versionNo : Int
+      baselineStatus : BaselineStatus
+      value : Decimal?
+      numerator : Decimal?
+      denominator : Decimal?
+      scaleLevelId : String?
+      currencyId : String?
+      unknownJustification : String?
+      effectiveFromPeriodId : String?
+      isCurrent : Boolean
+      reason : String?
+      createdByPersonId : String?
+      verifiedByPersonId : String?
+      verifiedAt : DateTime?
+      createdAt : DateTime
+  }
+  class KpiTarget <<kpi_target>> {
+    + id : String
+      assignmentId : String
+      versionNo : Int
+      value : Decimal?
+      numerator : Decimal?
+      denominator : Decimal?
+      scaleLevelId : String?
+      currencyId : String?
+      effectiveFromPeriodId : String?
+      isCurrent : Boolean
+      reason : String?
+      createdByPersonId : String?
+      approvedByPersonId : String?
+      approvedAt : DateTime?
+      createdAt : DateTime
+  }
+  class ResponsibilityAllocation <<responsibility_allocation>> {
+    + id : String
+      parentAssignmentId : String
+      childAssignmentId : String?
+      allocationType : AllocationType
+      allocatedAmount : Decimal
+      note : String?
+      createdByPersonId : String?
+      createdAt : DateTime
+  }
+  class AssignmentChangeRequest <<assignment_change_request>> {
+    + id : String
+      assignmentId : String
+      requestType : ChangeRequestType
+      requestedByPersonId : String?
+      proposedValues : Json?
+      reason : String
+      status : ChangeRequestStatus
+      reviewedByPersonId : String?
+      reviewedAt : DateTime?
+      reviewComment : String?
+      newBaselineId : String?
+      newTargetId : String?
+      newWeightId : String?
+      createdAt : DateTime
+  }
+  class BaselineEvidence <<baseline_evidence>> {
+    + id : String
+      baselineId : String
+      documentId : String
+      sourceDescription : String?
+      sourceDate : DateTime?
+      createdAt : DateTime
+  }
+  class ChangeRequestEvidence <<change_request_evidence>> {
+    + id : String
+      changeRequestId : String
+      documentId : String
+      comment : String?
+      createdAt : DateTime
+  }
+}
 
-' Organization
-OfficeType "1" -- "0..*" Office : classifies >
-Office "0..1" -- "0..*" Office : parent / children
-Office "1" -- "0..*" Position : defines >
-Person "1" -- "0..*" OfficePerson : placed as >
-Office "1" -- "0..*" OfficePerson : employs >
-Position "1" -- "0..*" OfficePerson : held in >
+package "06 Reporting Periods" {
+  class ReportingPeriod <<reporting_period>> {
+    + id : String
+      fiscalYearId : String
+      frequencyId : String
+      name : String
+      startDate : DateTime
+      endDate : DateTime
+      submissionDeadline : DateTime?
+      isYearEnd : Boolean
+      isClosed : Boolean
+  }
+}
 
-' Access control
-Role "1" -- "0..*" RolePermission
-Permission "1" -- "0..*" RolePermission
-OfficePerson "1" -- "0..*" OfficePersonRole : granted >
-Role "1" -- "0..*" OfficePersonRole
-Office "0..1" -- "0..*" OfficePersonRole : scope >
+package "07 Performance Reporting & Scoring" {
+  class PerformanceReport <<performance_report>> {
+    + id : String
+      contractId : String
+      reportingPeriodId : String
+      status : ReportStatus
+      preparedByPersonId : String?
+      submittedByPersonId : String?
+      submittedAt : DateTime?
+      isProvisional : Boolean
+      createdAt : DateTime
+      updatedAt : DateTime
+  }
+  class PerformanceValue <<performance_value>> {
+    + id : String
+      reportId : String
+      assignmentId : String
+      contributionType : ContributionType
+      reportingStatus : ReportingStatus
+      value : Decimal?
+      numerator : Decimal?
+      denominator : Decimal?
+      scaleLevelId : String?
+      currencyId : String?
+      convertedValue : Decimal?
+      exchangeRateId : String?
+      note : String?
+      enteredByPersonId : String?
+      createdAt : DateTime
+  }
+  class PerformanceReview <<performance_review>> {
+    + id : String
+      reportId : String
+      reviewerPersonId : String
+      reviewerOfficeId : String?
+      decision : ReviewDecision
+      comment : String?
+      reviewedAt : DateTime
+  }
+  class PerformanceStatusThreshold <<performance_status_threshold>> {
+    + id : String
+      name : String
+      minPercent : Decimal
+      maxPercent : Decimal?
+      color : String?
+      sortOrder : Int
+      isActive : Boolean
+  }
+  class KpiAchievement <<kpi_achievement>> {
+    + id : String
+      assignmentId : String
+      reportingPeriodId : String
+      baselineId : String
+      targetId : String
+      weightId : String
+      actualValue : Decimal?
+      actualNumerator : Decimal?
+      actualDenominator : Decimal?
+      actualScaleLevelId : String?
+      requiredImprovement : Decimal?
+      actualImprovement : Decimal?
+      improvementCalculable : Boolean
+      notCalculableReason : String?
+      improvementAchievementRaw : Decimal?
+      improvementAchievementCapped : Decimal?
+      targetAchievementRaw : Decimal?
+      targetAchievementCapped : Decimal?
+      targetMet : Boolean?
+      achievementStatus : AchievementStatus
+      statusThresholdId : String?
+      weightedImprovementScore : Decimal?
+      weightedTargetScore : Decimal?
+      isProvisional : Boolean
+      calculatedAt : DateTime
+  }
+  class ContractScore <<contract_score>> {
+    + id : String
+      contractId : String
+      reportingPeriodId : String
+      totalWeight : Decimal
+      reportedWeight : Decimal
+      weightedImprovementScore : Decimal?
+      weightedTargetScore : Decimal?
+      officialBasis : ScoringBasis
+      isProvisional : Boolean
+      calculatedAt : DateTime
+  }
+}
 
-' KPI planning
-KpiTheme "0..1" -- "0..*" KpiTheme : parent / children
-KpiTheme "1" -- "0..*" Kpi : groups >
-FiscalYear "1" -- "0..*" KpiTarget
-Kpi "1" -- "0..*" KpiTarget : measured by >
-Office "1" -- "0..*" KpiTarget : owns >
-Person "0..1" -- "0..*" KpiTarget : owner
-Person "0..1" -- "0..*" KpiTarget : assigned by
-KpiTarget "0..1" -- "0..*" KpiTarget : cascades into >
+package "08 Evidence & Documents" {
+  class FileUpload <<file_upload>> {
+    + id : String
+      originalName : String
+      storedPath : String
+      mimeType : String
+      sizeBytes : BigInt
+      checksum : String?
+      uploadedByPersonId : String?
+      uploadedAt : DateTime
+  }
+  class DocumentType <<document_type>> {
+    + id : String
+      name : String
+      description : String?
+      allowedExtensions : String?
+      maxSizeMb : Int?
+      isActive : Boolean
+  }
+  class Document <<document>> {
+    + id : String
+      documentTypeId : String
+      fileId : String
+      ownerOfficeId : String?
+      title : String
+      description : String?
+      createdByPersonId : String?
+      createdAt : DateTime
+  }
+  class PerformanceEvidence <<performance_evidence>> {
+    + id : String
+      performanceValueId : String
+      documentId : String
+      verificationStatus : VerificationStatus
+      verifiedByPersonId : String?
+      verifiedAt : DateTime?
+      comment : String?
+      createdAt : DateTime
+  }
+}
 
-' Evaluation
-FiscalYear "1" -- "0..*" EvalCycle
-EvalCycle "1" -- "0..*" CycleReport
-Office "1" -- "0..*" CycleReport : submits >
-Person "0..1" -- "0..*" CycleReport : submitter / reviewer
-KpiTarget "1" -- "0..*" KpiEvaluation : achieved in >
-EvalCycle "1" -- "0..*" KpiEvaluation
-CycleReport "0..1" -- "0..*" KpiEvaluation : contains >
-Person "0..1" -- "0..*" KpiEvaluation : evaluator
+package "09 Notifications" {
+  class Notification <<notification>> {
+    + id : String
+      createdByPersonId : String?
+      targetOfficeId : String?
+      includeSubOffices : Boolean
+      requiredPermissionId : String?
+      title : String
+      message : String
+      notificationType : String?
+      entityType : String?
+      entityId : String?
+      createdAt : DateTime
+  }
+  class NotificationRecipient <<notification_recipient>> {
+    + id : String
+      notificationId : String
+      personId : String
+      channel : String
+      isRead : Boolean
+      readAt : DateTime?
+      deliveredAt : DateTime?
+  }
+}
 
-' Evidence
-Person "0..1" -- "0..*" File : uploads >
-DocumentType "1" -- "0..*" Document
-File "1" -- "0..*" Document : stored as >
-Office "0..1" -- "0..*" Document : owner
-Person "0..1" -- "0..*" Document : uploader
-Document "1" -- "0..*" DocumentLink : attached via >
-DocumentLink ..> KpiEvaluation : entityType/entityId
-DocumentLink ..> CycleReport : entityType/entityId
-DocumentLink ..> KpiTarget : entityType/entityId
+Person "1" -- "*" UserAccount : personId
+UserAccount "1" -- "*" UserSession : userAccountId
+Office "0..1" -- "*" Office : parentOfficeId
+OfficeType "1" -- "*" Office : officeTypeId
+Office "1" -- "*" OfficeHierarchyHistory : officeId
+Office "0..1" -- "*" OfficeHierarchyHistory : parentOfficeId
+Person "0..1" -- "*" OfficeHierarchyHistory : changedByPersonId
+Office "1" -- "*" Position : officeId
+Person "1" -- "*" OfficePerson : personId
+Office "1" -- "*" OfficePerson : officeId
+Position "1" -- "*" OfficePerson : positionId
+Role "1" -- "*" RolePermission : roleId
+Permission "1" -- "*" RolePermission : permissionId
+OfficePerson "1" -- "*" OfficePersonRole : officePersonId
+Role "1" -- "*" OfficePersonRole : roleId
+Office "0..1" -- "*" OfficePersonRole : scopeOfficeId
+KpiTheme "0..1" -- "*" KpiTheme : parentThemeId
+Person "0..1" -- "*" KpiScale : approvedByPersonId
+KpiScale "1" -- "*" KpiScaleLevel : scaleId
+Currency "1" -- "*" ExchangeRate : fromCurrencyId
+Currency "1" -- "*" ExchangeRate : toCurrencyId
+KpiTheme "1" -- "*" Kpi : themeId
+StrategicObjective "1" -- "*" Kpi : strategicObjectiveId
+MeasurementUnit "0..1" -- "*" Kpi : unitId
+KpiScale "0..1" -- "*" Kpi : scaleId
+Currency "0..1" -- "*" Kpi : currencyId
+ReportingFrequency "1" -- "*" Kpi : defaultFrequencyId
+Office "0..1" -- "*" Kpi : coordinatingOfficeId
+Kpi "0..1" -- "*" Kpi : replacesKpiId
+Person "0..1" -- "*" Kpi : createdByPersonId
+FiscalYear "1" -- "*" ReportingPeriod : fiscalYearId
+ReportingFrequency "1" -- "*" ReportingPeriod : frequencyId
+FiscalYear "1" -- "*" PerformanceContract : fiscalYearId
+Office "1" -- "*" PerformanceContract : officeId
+Office "0..1" -- "*" PerformanceContract : assigningOfficeId
+Person "0..1" -- "*" PerformanceContract : signedByPersonId
+Person "0..1" -- "*" PerformanceContract : approvedByPersonId
+PerformanceContract "1" -- "*" KpiAssignment : contractId
+Kpi "1" -- "*" KpiAssignment : kpiId
+KpiAssignment "0..1" -- "*" KpiAssignment : parentAssignmentId
+ReportingFrequency "1" -- "*" KpiAssignment : reportingFrequencyId
+Person "0..1" -- "*" KpiAssignment : createdByPersonId
+Person "0..1" -- "*" KpiAssignment : approvedByPersonId
+Person "0..1" -- "*" KpiAssignment : acknowledgedByPersonId
+KpiAssignment "1" -- "*" KpiWeight : assignmentId
+Person "0..1" -- "*" KpiWeight : createdByPersonId
+Person "0..1" -- "*" KpiWeight : approvedByPersonId
+KpiAssignment "1" -- "*" KpiBaseline : assignmentId
+KpiScaleLevel "0..1" -- "*" KpiBaseline : scaleLevelId
+Currency "0..1" -- "*" KpiBaseline : currencyId
+ReportingPeriod "0..1" -- "*" KpiBaseline : effectiveFromPeriodId
+Person "0..1" -- "*" KpiBaseline : createdByPersonId
+Person "0..1" -- "*" KpiBaseline : verifiedByPersonId
+KpiAssignment "1" -- "*" KpiTarget : assignmentId
+KpiScaleLevel "0..1" -- "*" KpiTarget : scaleLevelId
+Currency "0..1" -- "*" KpiTarget : currencyId
+ReportingPeriod "0..1" -- "*" KpiTarget : effectiveFromPeriodId
+Person "0..1" -- "*" KpiTarget : createdByPersonId
+Person "0..1" -- "*" KpiTarget : approvedByPersonId
+KpiAssignment "1" -- "*" ResponsibilityAllocation : parentAssignmentId
+KpiAssignment "0..1" -- "*" ResponsibilityAllocation : childAssignmentId
+Person "0..1" -- "*" ResponsibilityAllocation : createdByPersonId
+KpiAssignment "1" -- "*" AssignmentChangeRequest : assignmentId
+Person "0..1" -- "*" AssignmentChangeRequest : requestedByPersonId
+Person "0..1" -- "*" AssignmentChangeRequest : reviewedByPersonId
+KpiBaseline "0..1" -- "*" AssignmentChangeRequest : newBaselineId
+KpiTarget "0..1" -- "*" AssignmentChangeRequest : newTargetId
+KpiWeight "0..1" -- "*" AssignmentChangeRequest : newWeightId
+Person "0..1" -- "*" FileUpload : uploadedByPersonId
+DocumentType "1" -- "*" Document : documentTypeId
+FileUpload "1" -- "*" Document : fileId
+Office "0..1" -- "*" Document : ownerOfficeId
+Person "0..1" -- "*" Document : createdByPersonId
+KpiBaseline "1" -- "*" BaselineEvidence : baselineId
+Document "1" -- "*" BaselineEvidence : documentId
+AssignmentChangeRequest "1" -- "*" ChangeRequestEvidence : changeRequestId
+Document "1" -- "*" ChangeRequestEvidence : documentId
+PerformanceContract "1" -- "*" PerformanceReport : contractId
+ReportingPeriod "1" -- "*" PerformanceReport : reportingPeriodId
+Person "0..1" -- "*" PerformanceReport : preparedByPersonId
+Person "0..1" -- "*" PerformanceReport : submittedByPersonId
+PerformanceReport "1" -- "*" PerformanceValue : reportId
+KpiAssignment "1" -- "*" PerformanceValue : assignmentId
+KpiScaleLevel "0..1" -- "*" PerformanceValue : scaleLevelId
+Currency "0..1" -- "*" PerformanceValue : currencyId
+ExchangeRate "0..1" -- "*" PerformanceValue : exchangeRateId
+Person "0..1" -- "*" PerformanceValue : enteredByPersonId
+PerformanceValue "1" -- "*" PerformanceEvidence : performanceValueId
+Document "1" -- "*" PerformanceEvidence : documentId
+Person "0..1" -- "*" PerformanceEvidence : verifiedByPersonId
+PerformanceReport "1" -- "*" PerformanceReview : reportId
+Person "1" -- "*" PerformanceReview : reviewerPersonId
+Office "0..1" -- "*" PerformanceReview : reviewerOfficeId
+KpiAssignment "1" -- "*" KpiAchievement : assignmentId
+ReportingPeriod "1" -- "*" KpiAchievement : reportingPeriodId
+KpiBaseline "1" -- "*" KpiAchievement : baselineId
+KpiTarget "1" -- "*" KpiAchievement : targetId
+KpiWeight "1" -- "*" KpiAchievement : weightId
+KpiScaleLevel "0..1" -- "*" KpiAchievement : actualScaleLevelId
+PerformanceStatusThreshold "0..1" -- "*" KpiAchievement : statusThresholdId
+PerformanceContract "1" -- "*" ContractScore : contractId
+ReportingPeriod "1" -- "*" ContractScore : reportingPeriodId
+FileUpload "0..1" -- "*" SystemSetting : fileId
+Person "0..1" -- "*" SystemSetting : updatedByPersonId
+Person "0..1" -- "*" Notification : createdByPersonId
+Office "0..1" -- "*" Notification : targetOfficeId
+Permission "0..1" -- "*" Notification : requiredPermissionId
+Notification "1" -- "*" NotificationRecipient : notificationId
+Person "1" -- "*" NotificationRecipient : personId
+Person "0..1" -- "*" AuditLog : actorPersonId
 
-' Notifications & governance
-Person "0..1" -- "0..*" Notification : creator
-Office "0..1" -- "0..*" Notification : target >
-Permission "0..1" -- "0..*" Notification : required >
-Notification "1" -- "0..*" NotificationRecipient : delivered to >
-Person "1" -- "0..*" NotificationRecipient
-File "0..1" -- "0..*" SystemSetting : asset
-Person "0..1" -- "0..*" SystemSetting : updated by
-Person "0..1" -- "0..*" AuditLog : actor
-
+enum MeasurementType {
+  NUMBER
+  PERCENTAGE
+  RATIO
+  STAGE
+  CATEGORY
+  MONEY
+}
+enum KpiDirection {
+  HIGHER_IS_BETTER
+  LOWER_IS_BETTER
+  MAINTAIN
+}
+enum TargetType {
+  MINIMUM
+  MAXIMUM
+  EXACT
+}
+enum AggregationMethod {
+  SUM
+  RATIO_OF_SUMS
+  WEIGHTED_SCORE
+  SHARE_MEETING_TARGET
+  WEAKEST_LINK
+  STAGE_DISTRIBUTION
+  DIRECT
+}
+enum PeriodRollupMethod {
+  SUM
+  RATIO_OF_SUMS
+  LATEST
+  AVERAGE
+}
+enum ZeroTargetRule {
+  NOT_CALCULABLE
+  FULL_IF_MET
+}
+enum ScoringBasis {
+  IMPROVEMENT
+  TARGET
+}
+enum ScaleType {
+  STAGE
+  CATEGORY
+}
+enum FiscalYearStatus {
+  PLANNING
+  ACTIVE
+  CLOSED
+}
+enum ContractStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  SIGNED
+  CLOSED
+}
+enum AssignmentStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  ACKNOWLEDGED
+  REJECTED
+  SUPERSEDED
+  CANCELLED
+}
+enum DistributionMethod {
+  EQUAL
+  CUSTOM
+  FULL
+  NONE
+}
+enum ScopeRelation {
+  EXCLUSIVE_COMPLETE
+  OVERLAPPING
+  INSTITUTION_WIDE
+}
+enum ReconciliationStatus {
+  NOT_REQUIRED
+  BALANCED
+  UNDER_ALLOCATED
+  OVER_ALLOCATED
+  JUSTIFIED
+}
+enum AllocationType {
+  DISTRIBUTED
+  RETAINED
+}
+enum BaselineStatus {
+  KNOWN
+  UNKNOWN
+  PENDING_VERIFICATION
+  VERIFIED
+}
+enum ChangeRequestType {
+  CLARIFICATION
+  CORRECTION
+  MODIFICATION
+}
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+enum ReportStatus {
+  NOT_STARTED
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUIRED
+  APPROVED
+  REJECTED
+  OVERDUE
+}
+enum ContributionType {
+  DIRECT
+  AGGREGATED
+  TOTAL
+}
+enum ReportingStatus {
+  REPORTED
+  NOT_REPORTED
+  AUTO_FILLED
+}
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+enum ReviewDecision {
+  APPROVED
+  REJECTED
+  REVISION_REQUIRED
+}
+enum AchievementStatus {
+  BELOW_TARGET
+  AT_TARGET
+  ABOVE_TARGET
+  NOT_REPORTED
+  NOT_CALCULABLE
+  PENDING_VERIFICATION
+}
 @enduml
 ```
 
@@ -423,14 +869,26 @@ Person "0..1" -- "0..*" AuditLog : actor
 
 ## 3. Key Constraints
 
-| Model | Constraint | Meaning |
-|---|---|---|
-| UserAccount | `personId` unique, `onDelete: Cascade` | At most one login per person; removed with the person |
-| UserSession | `refreshTokenHash` unique, `onDelete: Cascade` | Each refresh token maps to one session; sessions are removed with the account |
-| RolePermission | `@@unique([roleId, permissionId])` | A permission is granted to a role once |
-| OfficePersonRole | `@@unique([officePersonId, roleId, scopeOfficeId, validFrom])` | No duplicate scoped grants |
-| CycleReport | `@@unique([evalCycleId, officeId])` | One report dossier per office per cycle |
-| KpiEvaluation | `@@unique([kpiTargetId, evalCycleId])` | One achievement entry per target per cycle |
-| DocumentLink | `@@unique([documentId, entityType, entityId])` | A document is linked to an entity once |
-| SystemSetting | `@@unique([groupName, key])` | Keys are unique within a group |
-| NotificationRecipient | `@@unique([notificationId, personId])` | One receipt per person per notification |
+- `RolePermission`: one row per `[roleId, permissionId]`
+- `OfficePersonRole`: one row per `[officePersonId, roleId, scopeOfficeId, validFrom]`
+- `KpiScaleLevel`: one row per `[scaleId, name]`
+- `KpiScaleLevel`: one row per `[scaleId, sortOrder]`
+- `ExchangeRate`: one row per `[fromCurrencyId, toCurrencyId, rateDate]`
+- `ReportingPeriod`: one row per `[fiscalYearId, frequencyId, name]`
+- `PerformanceContract`: one row per `[fiscalYearId, officeId, versionNo]`
+- `KpiAssignment`: one row per `[contractId, kpiId]`
+- `KpiWeight`: one row per `[assignmentId, versionNo]`
+- `KpiBaseline`: one row per `[assignmentId, versionNo]`
+- `KpiTarget`: one row per `[assignmentId, versionNo]`
+- `ResponsibilityAllocation`: one row per `[parentAssignmentId, childAssignmentId]`
+- `BaselineEvidence`: one row per `[baselineId, documentId]`
+- `ChangeRequestEvidence`: one row per `[changeRequestId, documentId]`
+- `PerformanceReport`: one row per `[contractId, reportingPeriodId]`
+- `PerformanceValue`: one row per `[reportId, assignmentId, contributionType]`
+- `PerformanceEvidence`: one row per `[performanceValueId, documentId]`
+- `KpiAchievement`: one row per `[assignmentId, reportingPeriodId]`
+- `ContractScore`: one row per `[contractId, reportingPeriodId]`
+- `SystemSetting`: one row per `[groupName, key]`
+- `NotificationRecipient`: one row per `[notificationId, personId, channel]`
+- Partial unique indexes in the migrations allow one current baseline, target and weight per assignment, one active fiscal year, one reporting currency, one retained allocation per assignment and one year-end period per fiscal year.
+- A closed fiscal year is read-only until a Super Admin reopens it.

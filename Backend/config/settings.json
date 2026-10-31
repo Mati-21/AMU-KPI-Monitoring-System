@@ -53,6 +53,15 @@
       ]
     },
     {
+      "group": "security",
+      "label": "Login Security",
+      "description": "Protection against password and verification code guessing.",
+      "settings": [
+        { "key": "max_failed_attempts", "label": "Failed attempts allowed", "type": "number", "default": 5, "min": 3, "max": 100, "integer": true, "public": false, "description": "Failed password or verification code attempts before that account is blocked from that address" },
+        { "key": "lockout_minutes", "label": "Lockout period", "type": "number", "default": 15, "min": 1, "max": 1440, "integer": true, "public": false, "description": "Minutes the failed attempts are remembered and the block lasts" }
+      ]
+    },
+    {
       "group": "system",
       "label": "System Status",
       "description": "Availability of the system. In maintenance mode only university-wide settings managers can use the API.",
