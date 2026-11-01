@@ -1,6 +1,7 @@
 import {
   BadgeCheck,
   Bell,
+  Building2,
   ClipboardList,
   FileText,
   GraduationCap,
@@ -51,10 +52,10 @@ export const navigationSections = [
         permissions: [permissionUtils.permissionKey('view', 'KPI Allocation'), permissionUtils.permissionKey('create', 'KPI Allocation')],
       },
       {
-        icon: Users,
-        label: 'Sub Unit',
-        path: '/sub-unit',
-        permissions: [permissionUtils.permissionKey('view', 'Sub Unit')],
+        icon: Building2,
+        label: 'Offices',
+        path: '/offices',
+        permissions: [],
       },
       {
         icon: Settings2,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lock, Mail, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import Button from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
@@ -33,6 +34,7 @@ const SectionTitle = ({ icon: Icon, children }) => (
  */
 const AddUser = ({ onDone }) => {
   const { notify } = useNotification();
+  const navigate = useNavigate();
   const can = useCan();
   const create = useCreatePerson();
   const [form, setForm] = useState(EMPTY_FORM);
@@ -51,10 +53,11 @@ const AddUser = ({ onDone }) => {
     create.mutate(
       { ...person, ...(createLogin && { account: { username, temporaryPassword, mfaEnforced } }) },
       {
-        onSuccess: () => {
+        onSuccess: ({ data }) => {
           setForm(EMPTY_FORM);
           notify('User created. Give them an office and role next.', 'success');
-          onDone();
+          if (can('user:read')) navigate(`/users/${data.data.id}`);
+          else onDone();
         },
         onError: (error) => setProblem(apiErrorMessage(error, 'Could not create this user.')),
       }

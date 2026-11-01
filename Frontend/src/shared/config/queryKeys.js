@@ -8,6 +8,13 @@ export const queryKeys = {
     list: (params) => [...queryKeys.users.all, 'list', params],
     detail: (id) => [...queryKeys.users.all, 'detail', id],
   },
+  offices: {
+    all: ['offices'],
+    tree: ['offices', 'tree'],
+    list: ['offices', 'list'],
+    types: ['offices', 'types'],
+    part: (officeId, name) => ['offices', officeId, name],
+  },
   roles: {
     all: ['roles'],
     list: (params) => [...queryKeys.roles.all, 'list', params],

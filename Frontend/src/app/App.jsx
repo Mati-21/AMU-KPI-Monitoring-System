@@ -24,7 +24,7 @@ import OfficeReport from '../features/07-performance/pages/OfficeReport';
 import RegisteredKpis from '../features/04-kpi-catalog/pages/RegisteredKpis';
 import AssignedKpisPage from '../features/07-performance/pages/AssignedKpisPage';
 import KpiApprovalsPage from '../features/07-performance/pages/KpiApprovalsPage';
-import SubUnitPage from '../features/02-offices/pages/SubUnitPage';
+import OfficesPage from '../features/02-offices/pages/OfficesPage';
 import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from '../features/01-identity/components/RouteGuards';
 import { NotificationProvider } from '../features/09-notifications/context/NotificationContext';
 import AuthenticatedShell from '../shared/components/layout/AuthenticatedShell';
@@ -83,19 +83,8 @@ function App() {
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'Sub Unit'),
-                            permissionUtils.permissionKey('create', 'Sub Unit'),
-                            permissionUtils.permissionKey('create', 'Child Office Accounts'),
-                          ]}
-                        />
-                      }
-                    >
-                      <Route path="/sub-unit" element={<SubUnitPage />} />
-                    </Route>
+                    <Route path="/offices" element={<OfficesPage />} />
+                    <Route path="/sub-unit" element={<Navigate to="/offices" replace />} />
 
                     <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Registered KPIs')} />}>
                       <Route path="/registered-kpis" element={<RegisteredKpis />} />

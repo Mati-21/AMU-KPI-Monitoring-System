@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, KeyRound, Laptop, Save, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, Building2, KeyRound, Laptop, Save, ShieldCheck, User } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { Link, useParams } from 'react-router-dom';
 
@@ -8,6 +8,7 @@ import Button from '../../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/components/ui/Card';
 import { Input } from '../../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import PlaceMemberDialog from '../../../02-offices/components/PlaceMemberDialog';
 import { useCan } from '../../../03-access-control/hooks/useCan';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
@@ -182,6 +183,7 @@ const UserDetail = () => {
   const { personId } = useParams();
   const can = useCan();
   const { data: person, isLoading, error } = usePerson(personId);
+  const [placing, setPlacing] = useState(false);
 
   return (
     <div className="flex flex-1 overflow-y-auto bg-background">
@@ -206,8 +208,19 @@ const UserDetail = () => {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <DetailsCard key={person.id} person={person} canEdit={can('user:update')} />
               <LoginCard person={person} canManage={can('user:manage')} />
-              <PlacementsCard placements={person.placements} />
+              <PlacementsCard
+                placements={person.placements}
+                action={
+                  can('office:assign') && person.isActive ? (
+                    <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => setPlacing(true)}>
+                      <Building2 className="h-4 w-4" />
+                      Place in Office
+                    </Button>
+                  ) : null
+                }
+              />
             </div>
+            {placing && <PlaceMemberDialog person={person} onClose={() => setPlacing(false)} />}
           </>
         )}
       </main>

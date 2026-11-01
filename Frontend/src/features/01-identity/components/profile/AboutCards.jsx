@@ -88,16 +88,17 @@ export const AboutCard = ({ user }) => {
   );
 };
 
-export const PlacementsCard = ({ placements = [] }) => (
+export const PlacementsCard = ({ placements = [], action }) => (
   <Card className="border-border bg-card">
-    <CardHeader>
+    <CardHeader className="flex flex-row items-center justify-between gap-2">
       <CardTitle className="flex items-center gap-2 text-base">
         <Briefcase className="h-4 w-4 text-primary" />
         Offices and Roles
       </CardTitle>
+      {action}
     </CardHeader>
     <CardContent className="space-y-3">
-      {placements.length === 0 && <p className="text-sm text-muted-foreground">You are not placed in an office yet.</p>}
+      {placements.length === 0 && <p className="text-sm text-muted-foreground">Not placed in an office yet.</p>}
       {placements.map((placement) => (
         <div key={placement.id} className="rounded-lg border border-border p-3">
           <p className="text-sm font-semibold text-foreground">{placement.office.name}</p>
