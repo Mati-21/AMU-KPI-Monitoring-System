@@ -11,6 +11,16 @@ export const createOfficeType = async (req, res) => {
   res.status(201).json({ status: 'success', data: officeType });
 };
 
+export const updateOfficeType = async (req, res) => {
+  const officeType = await officeService.updateOfficeType(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: officeType });
+};
+
+export const deleteOfficeType = async (req, res) => {
+  await officeService.deleteOfficeType(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: 'Office type deleted' });
+};
+
 export const getOfficeTree = async (req, res) => {
   const tree = await officeService.getOfficeTree();
   res.json({ status: 'success', data: tree });
@@ -52,6 +62,16 @@ export const createPosition = async (req, res) => {
   res.status(201).json({ status: 'success', data: position });
 };
 
+export const updatePosition = async (req, res) => {
+  const position = await officeService.updatePosition(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: position });
+};
+
+export const deletePosition = async (req, res) => {
+  await officeService.deletePosition(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: 'Position deleted' });
+};
+
 export const listMembers = async (req, res) => {
   const members = await officeService.listMembers(req.params.id);
   res.json({ status: 'success', data: members });
@@ -62,9 +82,16 @@ export const assignMember = async (req, res) => {
   res.status(201).json({ status: 'success', data: placement });
 };
 
+export const endPlacement = async (req, res) => {
+  const placement = await officeService.endPlacement(req.params.id, req.body || {}, actorOf(req));
+  res.json({ status: 'success', data: placement });
+};
+
 export default {
   listOfficeTypes,
   createOfficeType,
+  updateOfficeType,
+  deleteOfficeType,
   getOfficeTree,
   listOffices,
   getOfficeById,
@@ -73,6 +100,9 @@ export default {
   getOfficeHistory,
   listPositions,
   createPosition,
+  updatePosition,
+  deletePosition,
   listMembers,
   assignMember,
+  endPlacement,
 };

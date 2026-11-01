@@ -42,6 +42,37 @@ router.post('/office-types', protect, requirePermission(PERMISSIONS.OFFICE_MANAG
 
 /**
  * @swagger
+ * /api/v1/office-types/{id}:
+ *   put:
+ *     summary: Update an office type's name, description or level
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               description: { type: string }
+ *               levelOrder: { type: integer }
+ *     responses:
+ *       200: { description: Updated }
+ *   delete:
+ *     summary: Delete an office type no office uses
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: Still used by offices }
+ */
+router.put('/office-types/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.updateOfficeType);
+router.delete('/office-types/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.deleteOfficeType);
+
+/**
+ * @swagger
  * /api/v1/offices/tree:
  *   get:
  *     summary: Complete university office structure as a nested tree
@@ -167,6 +198,36 @@ router.post('/offices/:id/positions', protect, requirePermission(PERMISSIONS.OFF
 
 /**
  * @swagger
+ * /api/v1/positions/{id}:
+ *   put:
+ *     summary: Rename a position or change whether it heads the office
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title: { type: string }
+ *               isHead: { type: boolean }
+ *     responses:
+ *       200: { description: Updated }
+ *   delete:
+ *     summary: Delete a position nobody has ever held
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: Someone has held it }
+ */
+router.put('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.updatePosition);
+router.delete('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.deletePosition);
+
+/**
+ * @swagger
  * /api/v1/offices/{id}/members:
  *   get:
  *     summary: Active staff placed in the office
@@ -198,5 +259,27 @@ router.post('/offices/:id/positions', protect, requirePermission(PERMISSIONS.OFF
  */
 router.get('/offices/:id/members', protect, officeController.listMembers);
 router.post('/offices/:id/members', protect, requirePermission(PERMISSIONS.OFFICE_ASSIGN), officeController.assignMember);
+
+/**
+ * @swagger
+ * /api/v1/office-persons/{id}/end:
+ *   patch:
+ *     summary: Set the last day of a person's placement in an office
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endDate]
+ *             properties:
+ *               endDate: { type: string, format: date }
+ *     responses:
+ *       200: { description: Placement updated }
+ */
+router.patch('/office-persons/:id/end', protect, requirePermission(PERMISSIONS.OFFICE_ASSIGN), officeController.endPlacement);
 
 export default router;

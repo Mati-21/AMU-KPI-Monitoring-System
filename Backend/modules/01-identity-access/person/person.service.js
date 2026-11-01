@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
+import { isActiveToday } from '../../../utils/dates.js';
 import { deleteStoredFile } from '../../08-evidence-documents/file.service.js';
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
@@ -40,6 +41,14 @@ const assertCanChangePerson = async (personId, actor) => {
 };
 
 /**
+ * Placements and roles running today. Ended ones stay in the database as history.
+ */
+const activePlacements = (placements = []) =>
+  placements
+    .filter((placement) => isActiveToday(placement.startDate, placement.endDate))
+    .map((placement) => ({ ...placement, roles: placement.roles.filter((assignment) => isActiveToday(assignment.validFrom, assignment.validTo)) }));
+
+/**
  * Shape a Person (+ optional UserAccount) into the directory profile returned by the API.
  */
 export const formatPerson = (person) => {
@@ -58,7 +67,7 @@ export const formatPerson = (person) => {
     isActive: person.isActive,
     hasAccount: Boolean(account),
     account: account || null,
-    placements: person.officePersons || [],
+    placements: activePlacements(person.officePersons),
   };
 };
 

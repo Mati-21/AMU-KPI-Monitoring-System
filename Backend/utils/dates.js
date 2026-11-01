@@ -23,4 +23,12 @@ export const overlaps = (fromField, toField, start, end) => ({
   AND: [...(end ? [{ [fromField]: { lte: end } }] : []), { OR: [{ [toField]: null }, { [toField]: { gte: start } }] }],
 });
 
-export default { startOfTodayUtc, activeOn, overlaps };
+/**
+ * The same test as activeOn, for a record already in memory.
+ */
+export const isActiveToday = (from, to) => {
+  const today = startOfTodayUtc();
+  return from <= today && (!to || to >= today);
+};
+
+export default { startOfTodayUtc, activeOn, overlaps, isActiveToday };

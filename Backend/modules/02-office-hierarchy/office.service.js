@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
+import { getActiveGrants, isSuperAdmin } from '../03-access-control/access.service.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { activeOn, overlaps, startOfTodayUtc } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
@@ -84,9 +85,7 @@ export const listOfficeTypes = async () => {
 };
 
 export const createOfficeType = async ({ name, description, levelOrder } = {}, actor) => {
-  if (!actor.access.canGlobally(PERMISSIONS.OFFICE_MANAGE)) {
-    throw forbidden('Defining office types requires university-wide office:manage authority');
-  }
+  assertCanDefineOfficeTypes(actor);
 
   const cleanName = requireString(name, 'name');
   const level = parseIntId(levelOrder, 'levelOrder', { required: false }) ?? null;
@@ -97,6 +96,64 @@ export const createOfficeType = async ({ name, description, levelOrder } = {}, a
   const officeType = await prisma.officeType.create({ data: { name: cleanName, description: optionalString(description, 'description') ?? null, levelOrder: level }, select: OFFICE_TYPE_SELECT });
   await auditAction(actor, { action: 'OFFICE_TYPE_CREATED', entityType: 'office_type', entityId: officeType.id, newValues: officeType });
   return officeType;
+};
+
+const getOfficeTypeOrThrow = async (id) => {
+  const officeType = await prisma.officeType.findUnique({ where: { id }, select: OFFICE_TYPE_SELECT });
+  if (!officeType) throw notFound('Office type not found');
+  return officeType;
+};
+
+const assertCanDefineOfficeTypes = (actor) => {
+  if (!actor.access.canGlobally(PERMISSIONS.OFFICE_MANAGE)) {
+    throw forbidden('Defining office types requires university-wide office:manage authority');
+  }
+};
+
+/**
+ * A new level must still fit every office of this type and the offices around it.
+ */
+const assertLevelFitsOffices = async (officeType) => {
+  const offices = await prisma.office.findMany({
+    where: { officeTypeId: officeType.id },
+    include: { parent: { include: { officeType: true } }, children: { include: { officeType: true } } },
+  });
+  for (const office of offices) {
+    if (office.parent) assertTierOrder(officeType, office.parent.officeType);
+    for (const child of office.children) assertTierOrder(child.officeType, officeType);
+  }
+};
+
+export const updateOfficeType = async (id, data = {}, actor) => {
+  assertCanDefineOfficeTypes(actor);
+  const existing = await getOfficeTypeOrThrow(id);
+
+  const update = {};
+  if (data.name !== undefined) {
+    update.name = requireString(data.name, 'name');
+    const duplicate = await prisma.officeType.findFirst({ where: { id: { not: id }, name: { equals: update.name, mode: 'insensitive' } } });
+    if (duplicate) throw conflict(`Office type "${duplicate.name}" already exists`);
+  }
+  if (data.description !== undefined) update.description = optionalString(data.description, 'description') ?? null;
+  if (data.levelOrder !== undefined) {
+    update.levelOrder = parseIntId(data.levelOrder, 'levelOrder', { required: false }) ?? null;
+    await assertLevelFitsOffices({ ...existing, levelOrder: update.levelOrder });
+  }
+  if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
+
+  const officeType = await prisma.officeType.update({ where: { id }, data: update, select: OFFICE_TYPE_SELECT });
+  await auditAction(actor, { action: 'OFFICE_TYPE_UPDATED', entityType: 'office_type', entityId: id, oldValues: existing, newValues: officeType });
+  return officeType;
+};
+
+export const deleteOfficeType = async (id, actor) => {
+  assertCanDefineOfficeTypes(actor);
+  const existing = await getOfficeTypeOrThrow(id);
+  const officeCount = await prisma.office.count({ where: { officeTypeId: id } });
+  if (officeCount > 0) throw conflict(`"${existing.name}" is used by ${officeCount} office(s) and cannot be deleted`);
+
+  await prisma.officeType.delete({ where: { id } });
+  await auditAction(actor, { action: 'OFFICE_TYPE_DELETED', entityType: 'office_type', entityId: id, oldValues: existing });
 };
 
 // ===== Offices =====
@@ -347,9 +404,53 @@ export const createPosition = async (officeId, { title, isHead } = {}, actor) =>
   return position;
 };
 
+const getPositionOrThrow = async (id, actor) => {
+  const position = await prisma.position.findUnique({ where: { id } });
+  if (!position) throw notFound('Position not found');
+  await assertScope(actor, PERMISSIONS.OFFICE_MANAGE, position.officeId);
+  return position;
+};
+
+export const updatePosition = async (id, { title, isHead } = {}, actor) => {
+  const existing = await getPositionOrThrow(id, actor);
+
+  const update = {};
+  if (title !== undefined) {
+    update.title = requireString(title, 'title');
+    const duplicate = await prisma.position.findFirst({ where: { id: { not: id }, officeId: existing.officeId, title: { equals: update.title, mode: 'insensitive' } } });
+    if (duplicate) throw conflict(`Position "${duplicate.title}" already exists in this office`);
+  }
+  const head = parseBoolean(isHead, 'isHead');
+  if (head !== undefined) update.isHead = head;
+  if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
+
+  if (update.isHead && !existing.isHead) {
+    const existingHead = await prisma.position.findFirst({ where: { officeId: existing.officeId, isHead: true } });
+    if (existingHead) throw conflict(`This office already has a head position ("${existingHead.title}")`);
+    const holders = await prisma.officePerson.count({ where: { positionId: id, ...activeOn('startDate', 'endDate') } });
+    if (holders > 1) throw conflict('A head position has a single holder, and this position has several');
+  }
+
+  const position = await prisma.position.update({ where: { id }, data: update });
+  await auditAction(actor, { action: 'POSITION_UPDATED', entityType: 'position', entityId: id, oldValues: existing, newValues: position });
+  return position;
+};
+
+/**
+ * A position anyone has held stays, because past placements point to it.
+ */
+export const deletePosition = async (id, actor) => {
+  const existing = await getPositionOrThrow(id, actor);
+  const placements = await prisma.officePerson.count({ where: { positionId: id } });
+  if (placements > 0) throw conflict(`"${existing.title}" has been held by someone, so it is kept as history`);
+
+  await prisma.position.delete({ where: { id } });
+  await auditAction(actor, { action: 'POSITION_DELETED', entityType: 'position', entityId: id, oldValues: existing });
+};
+
 // ===== Members (OfficePerson placements) =====
 
-const PLACEMENT_INCLUDE = {
+const placementInclude = () => ({
   person: { select: { ...PERSON_REF_SELECT, isActive: true } },
   position: { select: { id: true, title: true, isHead: true } },
   roles: {
@@ -362,7 +463,7 @@ const PLACEMENT_INCLUDE = {
       scopeOffice: { select: OFFICE_REF_SELECT },
     },
   },
-};
+});
 
 const formatPlacement = ({ person, ...placement }) => ({ ...placement, person: { ...personRef(person), isActive: person.isActive } });
 
@@ -374,7 +475,7 @@ export const listMembers = async (officeId) => {
   const placements = await prisma.officePerson.findMany({
     where: { officeId, ...activeOn('startDate', 'endDate') },
     orderBy: [{ position: { isHead: 'desc' } }, { startDate: 'asc' }],
-    include: PLACEMENT_INCLUDE,
+    include: placementInclude(),
   });
   return placements.map(formatPlacement);
 };
@@ -423,7 +524,7 @@ export const assignMember = async (officeId, { personId, positionId, startDate, 
     if (makePrimary) await tx.officePerson.updateMany({ where: { personId, isPrimary: true }, data: { isPrimary: false } });
     return tx.officePerson.create({
       data: { personId, officeId, positionId, startDate: start, endDate: end, isPrimary: makePrimary },
-      include: PLACEMENT_INCLUDE,
+      include: placementInclude(),
     });
   });
 
@@ -436,10 +537,51 @@ export const assignMember = async (officeId, { personId, positionId, startDate, 
   return formatPlacement(placement);
 };
 
+/**
+ * Ending a Super Admin's placement also ends their access, so it has the same protections as revoking the role.
+ */
+const assertCanEndPlacement = async (placement, actor) => {
+  if (!actor.access.isSuperAdmin && isSuperAdmin(await getActiveGrants(placement.personId))) {
+    throw forbidden('Only a Super Admin can end a Super Admin placement');
+  }
+  const superAdminRole = await prisma.officePersonRole.findFirst({ where: { officePersonId: placement.id, role: { isSystem: true }, ...activeOn('validFrom', 'validTo') } });
+  if (!superAdminRole) return;
+  const others = await prisma.officePersonRole.count({
+    where: { roleId: superAdminRole.roleId, officePersonId: { not: placement.id }, ...activeOn('validFrom', 'validTo'), officePerson: activeOn('startDate', 'endDate') },
+  });
+  if (others === 0) throw conflict('This is the last active Super Admin, so this placement cannot end');
+};
+
+/**
+ * Set the last day of a running placement. It stays active through that day, and its roles stop with it.
+ */
+export const endPlacement = async (id, { endDate } = {}, actor) => {
+  const placement = await prisma.officePerson.findUnique({ where: { id }, include: { position: true } });
+  if (!placement) throw notFound('Office placement not found');
+  await assertScope(actor, PERMISSIONS.OFFICE_ASSIGN, placement.officeId);
+  if (placement.endDate && placement.endDate < startOfTodayUtc()) throw badRequest('This placement has already ended');
+
+  const end = parseDate(endDate, 'endDate');
+  if (end < placement.startDate) throw badRequest('endDate must be on or after the start date');
+  await assertCanEndPlacement(placement, actor);
+
+  // A later date can run into whoever took over the position
+  const clash = await prisma.officePerson.findFirst({
+    where: { id: { not: id }, positionId: placement.positionId, ...(placement.position.isHead ? {} : { personId: placement.personId }), ...overlaps('startDate', 'endDate', placement.startDate, end) },
+  });
+  if (clash) throw conflict(`"${placement.position.title}" is already held during this period`);
+
+  const updated = await prisma.officePerson.update({ where: { id }, data: { endDate: end }, include: placementInclude() });
+  await auditAction(actor, { action: 'MEMBER_PLACEMENT_ENDED', entityType: 'office_person', entityId: id, oldValues: { endDate: placement.endDate }, newValues: { endDate: end } });
+  return formatPlacement(updated);
+};
+
 export default {
   getOfficeDescendantIds,
   listOfficeTypes,
   createOfficeType,
+  updateOfficeType,
+  deleteOfficeType,
   getOfficeTree,
   listOffices,
   getOfficeById,
@@ -448,6 +590,9 @@ export default {
   getOfficeHistory,
   listPositions,
   createPosition,
+  updatePosition,
+  deletePosition,
   listMembers,
   assignMember,
+  endPlacement,
 };

@@ -1239,6 +1239,24 @@
             resBody: '{\n  "id": 4,\n  "name": "Research Institute"\n}'
           },
           {
+            method: "PUT",
+            path: "/api/v1/office-types/:id",
+            ctrl: "OfficeTypeController.update",
+            perm: "office:manage",
+            desc: "Update an office type. A new level must still fit its offices.",
+            reqBody: '{\n  "name": "Faculty",\n  "levelOrder": 2\n}',
+            resBody: '{ "id": "uuid", "name": "Faculty", "levelOrder": 2 }'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/office-types/:id",
+            ctrl: "OfficeTypeController.remove",
+            perm: "office:manage",
+            desc: "Delete an office type no office uses.",
+            reqBody: "-",
+            resBody: '{ "status": "success", "message": "Office type deleted" }'
+          },
+          {
             method: "GET",
             path: "/api/v1/offices/tree",
             ctrl: "OfficeController.getOfficeTree",
@@ -1318,6 +1336,33 @@
             desc: "Assign a person to an office and position with start date and primary status.",
             reqBody: '{\n  "personId": "p-uuid",\n  "positionId": "pos-uuid",\n  "startDate": "2026-09-01",\n  "isPrimary": true\n}',
             resBody: '{\n  "id": "op-uuid",\n  "message": "Member assigned to office"\n}'
+          },
+          {
+            method: "PUT",
+            path: "/api/v1/positions/:id",
+            ctrl: "PositionController.update",
+            perm: "office:manage",
+            desc: "Rename a position or change whether it heads the office.",
+            reqBody: '{\n  "title": "Dean",\n  "isHead": true\n}',
+            resBody: '{ "id": "uuid", "title": "Dean", "isHead": true }'
+          },
+          {
+            method: "DELETE",
+            path: "/api/v1/positions/:id",
+            ctrl: "PositionController.remove",
+            perm: "office:manage",
+            desc: "Delete a position nobody has ever held.",
+            reqBody: "-",
+            resBody: '{ "status": "success", "message": "Position deleted" }'
+          },
+          {
+            method: "PATCH",
+            path: "/api/v1/office-persons/:id/end",
+            ctrl: "OfficeMemberController.end",
+            perm: "office:assign",
+            desc: "Set the last day of a placement. Its roles stop with it.",
+            reqBody: '{\n  "endDate": "2027-06-30"\n}',
+            resBody: '{ "id": "uuid", "endDate": "2027-06-30" }'
           },
           {
             method: "GET",

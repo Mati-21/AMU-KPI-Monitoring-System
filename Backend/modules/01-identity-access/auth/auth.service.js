@@ -6,6 +6,7 @@ import { STAGE_TOKEN_TTL, TOKEN_TYPES, signToken, verifyToken } from '../../../c
 import { getActiveGrants, getPermissionCodes } from '../../03-access-control/access.service.js';
 import { REVOKE_REASONS, createSession, revokeAllSessions } from './session.service.js';
 import { auditAction, logActivity } from '../../../utils/auditLogger.js';
+import { isActiveToday } from '../../../utils/dates.js';
 import { badRequest, forbidden, notFound, unauthorized } from '../../../utils/httpError.js';
 import { parseUuid } from '../../../utils/validation.js';
 
@@ -117,6 +118,7 @@ const nextLoginStep = async (account, context) => {
     return {
       status: 'REQUIRE_PASSWORD_CHANGE',
       message: 'Temporary password detected. You must change your password before continuing.',
+      mfaSetupRequired: account.mfaEnforced && !account.mfaEnabled,
       stageToken: issueStage(account.id, STAGES.PASSWORD_CHANGE),
     };
   }
@@ -280,21 +282,25 @@ export const getProfile = async (accountId) => {
   return {
     ...sanitizeAccount(account),
     lastLoginAt: account.lastLoginAt,
-    placements: account.person.officePersons.map((placement) => ({
-      id: placement.id,
-      isPrimary: placement.isPrimary,
-      startDate: placement.startDate,
-      endDate: placement.endDate,
-      office: placement.office,
-      position: placement.position,
-      roles: placement.roles.map((assignment) => ({
-        id: assignment.id,
-        role: assignment.role,
-        scopeOfficeId: assignment.scopeOfficeId,
-        validFrom: assignment.validFrom,
-        validTo: assignment.validTo,
+    placements: account.person.officePersons
+      .filter((placement) => isActiveToday(placement.startDate, placement.endDate))
+      .map((placement) => ({
+        id: placement.id,
+        isPrimary: placement.isPrimary,
+        startDate: placement.startDate,
+        endDate: placement.endDate,
+        office: placement.office,
+        position: placement.position,
+        roles: placement.roles
+          .filter((assignment) => isActiveToday(assignment.validFrom, assignment.validTo))
+          .map((assignment) => ({
+            id: assignment.id,
+            role: assignment.role,
+            scopeOfficeId: assignment.scopeOfficeId,
+            validFrom: assignment.validFrom,
+            validTo: assignment.validTo,
+          })),
       })),
-    })),
     permissions: getPermissionCodes(grants),
   };
 };
