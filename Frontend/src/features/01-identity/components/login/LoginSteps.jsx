@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight, KeyRound, Lock, Mail, ShieldCheck } from 'lucide-react';
 
-import { api } from '../../../../shared/api/axios';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
 import { Input } from '../../../../shared/components/ui/Input';
 
-const MIN_PASSWORD_LENGTH = 8;
 const inputClass = 'pl-10 h-11 w-full text-base';
 
 const IconField = ({ id, label, icon: Icon, ...props }) => (
@@ -69,33 +67,6 @@ export const PasswordStep = ({ mutation }) => {
   );
 };
 
-export const ChangePasswordStep = ({ mutation, onBack }) => {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [problem, setProblem] = useState('');
-
-  const submit = (event) => {
-    event.preventDefault();
-    if (password.length < MIN_PASSWORD_LENGTH) return setProblem(`The password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-    if (password !== confirm) return setProblem('The passwords do not match.');
-    setProblem('');
-    return mutation.mutate(password);
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <StepTitle title="Choose a New Password" text="You signed in with a temporary password. Choose your own to continue." />
-      <IconField id="new-password" label="New Password" icon={Lock} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
-      <IconField id="confirm-password" label="Confirm Password" icon={Lock} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
-      <ErrorText error={mutation.error}>{problem}</ErrorText>
-      <SubmitButton pending={mutation.isPending} pendingText="Saving...">
-        Continue
-      </SubmitButton>
-      <BackToSignIn onClick={onBack} />
-    </form>
-  );
-};
-
 const CodeField = ({ value, onChange }) => (
   <IconField
     id="code"
@@ -110,45 +81,6 @@ const CodeField = ({ value, onChange }) => (
     onChange={(event) => onChange(event.target.value.replace(/\D/g, ''))}
   />
 );
-
-export const MfaSetupStep = ({ mutation, onBack }) => {
-  const [setup, setSetup] = useState(null);
-  const [setupError, setSetupError] = useState(null);
-  const [code, setCode] = useState('');
-
-  useEffect(() => {
-    api
-      .post('/auth/mfa/setup')
-      .then(({ data }) => setSetup(data.data))
-      .catch(setSetupError);
-  }, []);
-
-  const submit = (event) => {
-    event.preventDefault();
-    mutation.mutate(code);
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <StepTitle title="Set Up Two-Factor Authentication" text="Scan this code with an authenticator app, then enter the code it shows." />
-      {setup ? (
-        <div className="flex flex-col items-center gap-2">
-          <img src={setup.qrCodeDataUrl} alt="QR code for your authenticator app" className="h-44 w-44 rounded-lg border border-border bg-white p-1" />
-          <p className="text-xs text-muted-foreground">Or enter this key by hand:</p>
-          <code className="text-xs break-all rounded bg-muted px-2 py-1 select-all">{setup.secret}</code>
-        </div>
-      ) : (
-        !setupError && <p className="text-center text-sm text-muted-foreground">Preparing...</p>
-      )}
-      <CodeField value={code} onChange={setCode} />
-      <ErrorText error={mutation.error || setupError} />
-      <SubmitButton pending={mutation.isPending} pendingText="Verifying...">
-        Verify and Continue
-      </SubmitButton>
-      <BackToSignIn onClick={onBack} />
-    </form>
-  );
-};
 
 export const MfaCodeStep = ({ mutation, onBack }) => {
   const [code, setCode] = useState('');

@@ -24,10 +24,12 @@ export const useLogin = () => {
   const queryClient = useQueryClient();
   const { notify } = useNotification();
   const [step, setStep] = useState('password');
+  const [mfaSetupRequired, setMfaSetupRequired] = useState(false);
 
   const handleResult = async ({ data }) => {
     const next = STEP_OF_STATUS[data.status];
     if (next) {
+      setMfaSetupRequired(Boolean(data.mfaSetupRequired));
       setStep(next);
       return;
     }
@@ -46,6 +48,7 @@ export const useLogin = () => {
 
   return {
     step,
+    mfaSetupRequired,
     restart: () => setStep('password'),
     signIn,
     changePassword,

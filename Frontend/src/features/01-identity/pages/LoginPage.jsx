@@ -5,14 +5,18 @@ import { useSelector } from 'react-redux';
 import kpiImage from '../../../assets/images/kpi.jpeg';
 import Navbar from '../../../shared/components/layout/Navbar';
 import { getFileUrl } from '../../../shared/lib/utils';
-import { ChangePasswordStep, MfaCodeStep, MfaSetupStep, PasswordStep } from '../components/login/LoginSteps';
+import { ChangePasswordStep, MfaSetupStep } from '../components/login/AccountSetup';
+import { MfaCodeStep, PasswordStep } from '../components/login/LoginSteps';
 import { useLogin } from '../hooks/useLogin';
 
 const SignIn = () => {
   const systemSettings = useSelector((state) => state.auth.systemSettings);
   const isMaintenance = useSelector((state) => state.auth.isMaintenance);
   const logoUrl = getFileUrl(systemSettings?.systemLogo);
-  const { step, restart, signIn, changePassword, verifySetupCode, verifyCode } = useLogin();
+  const { step, mfaSetupRequired, restart, signIn, changePassword, verifySetupCode, verifyCode } = useLogin();
+
+  if (step === 'change-password') return <ChangePasswordStep mutation={changePassword} onCancel={restart} mfaSetupRequired={mfaSetupRequired} />;
+  if (step === 'mfa-setup') return <MfaSetupStep mutation={verifySetupCode} onCancel={restart} />;
 
   return (
     <div className="flex-1 bg-background flex flex-col overflow-y-auto w-full min-h-screen">
@@ -41,8 +45,6 @@ const SignIn = () => {
 
             <div className="pt-2 border-t border-border/50">
               {step === 'password' && <PasswordStep mutation={signIn} />}
-              {step === 'change-password' && <ChangePasswordStep mutation={changePassword} onBack={restart} />}
-              {step === 'mfa-setup' && <MfaSetupStep mutation={verifySetupCode} onBack={restart} />}
               {step === 'mfa-code' && <MfaCodeStep mutation={verifyCode} onBack={restart} />}
             </div>
           </div>
