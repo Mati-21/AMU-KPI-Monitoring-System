@@ -129,33 +129,8 @@ function App() {
                       <Route path="/user-management" element={<UserManagment />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'Role Management'),
-                            permissionUtils.permissionKey('create', 'Role Management'),
-                            permissionUtils.permissionKey('manage', 'Roles'),
-                            permissionUtils.permissionKey('manage', 'Permissions'),
-                          ]}
-                        />
-                      }
-                    >
+                    <Route element={<RequirePermission permission="role:read" />}>
                       <Route path="/role-management" element={<RoleManagement />} />
-                    </Route>
-
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'Role Management'),
-                            permissionUtils.permissionKey('create', 'Role Management'),
-                            permissionUtils.permissionKey('manage', 'Permissions'),
-                            permissionUtils.permissionKey('manage', 'Roles'),
-                          ]}
-                        />
-                      }
-                    >
                       <Route path="/permission" element={<PermissionManagement />} />
                     </Route>
 

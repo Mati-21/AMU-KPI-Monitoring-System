@@ -5,6 +5,7 @@ import Button from '../../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/components/ui/Card';
 import { Input } from '../../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import { roleNames } from '../../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import { useUpdateMyProfile } from '../../hooks/useProfile';
 
@@ -88,7 +89,7 @@ export const AboutCard = ({ user }) => {
   );
 };
 
-export const PlacementsCard = ({ placements = [], action }) => (
+export const PlacementsCard = ({ placements = [], action, placementAction }) => (
   <Card className="border-border bg-card">
     <CardHeader className="flex flex-row items-center justify-between gap-2">
       <CardTitle className="flex items-center gap-2 text-base">
@@ -100,10 +101,13 @@ export const PlacementsCard = ({ placements = [], action }) => (
     <CardContent className="space-y-3">
       {placements.length === 0 && <p className="text-sm text-muted-foreground">Not placed in an office yet.</p>}
       {placements.map((placement) => (
-        <div key={placement.id} className="rounded-lg border border-border p-3">
-          <p className="text-sm font-semibold text-foreground">{placement.office.name}</p>
-          {placement.position && <p className="text-xs text-muted-foreground">{placement.position.title}</p>}
-          <p className="mt-1 text-xs text-primary">{placement.roles.map((assignment) => assignment.role.name).join(', ') || 'No role yet'}</p>
+        <div key={placement.id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">{placement.office.name}</p>
+            {placement.position && <p className="text-xs text-muted-foreground">{placement.position.title}</p>}
+            <p className="mt-1 text-xs text-primary">{roleNames(placement.roles)}</p>
+          </div>
+          {placementAction?.(placement)}
         </div>
       ))}
     </CardContent>

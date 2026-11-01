@@ -98,18 +98,13 @@ export const navigationSections = [
         icon: Shield,
         label: 'Role Management',
         path: '/role-management',
-        permissions: [
-          permissionUtils.permissionKey('view', 'Role Management'),
-          permissionUtils.permissionKey('create', 'Role Management'),
-          permissionUtils.permissionKey('manage', 'Roles'),
-          permissionUtils.permissionKey('manage', 'Permissions'),
-        ],
+        permissions: ['role:read'],
       },
       {
         icon: Lock,
         label: 'Permissions',
         path: '/permission',
-        permissions: [permissionUtils.permissionKey('view', 'Role Management'), permissionUtils.permissionKey('manage', 'Permissions')],
+        permissions: ['role:read'],
       },
       {
         icon: Settings,

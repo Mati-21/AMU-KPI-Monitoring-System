@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Eye, Trash2, UserPlus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import Button from '../../../../shared/components/ui/Button';
 import { Badge } from '../../../../shared/components/ui/Badge';
+import CustomSelect from '../../../../shared/components/ui/CustomSelect';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/components/ui/dialog';
 import SearchInput from '../../../../shared/components/ui/SearchInput';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../../shared/components/ui/Table';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
 import { useCan } from '../../../03-access-control/hooks/useCan';
+import { useRolesQuery } from '../../../03-access-control/hooks/useRoles';
+import { roleNames } from '../../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
 import { useDeletePerson, usePersons } from '../../hooks/useUsers';
@@ -31,7 +34,26 @@ const AccountBadge = ({ account }) => {
 };
 
 const officesOf = (person) => person.placements.map((placement) => placement.office.name).join(', ') || 'Not placed';
-const rolesOf = (person) => [...new Set(person.placements.flatMap((placement) => placement.roles.map((assignment) => assignment.role.name)))].join(', ') || 'None';
+const rolesOf = (person) => roleNames(person.placements.flatMap((placement) => placement.roles));
+
+const ALL_ROLES = 'all';
+const NO_ROLE = 'none';
+
+const roleParams = (roleFilter) => {
+  if (!roleFilter) return {};
+  return roleFilter === NO_ROLE ? { hasRole: false } : { roleId: roleFilter };
+};
+
+const RoleFilter = ({ value, onChange }) => {
+  const { data: roles = [] } = useRolesQuery();
+  const options = [{ value: ALL_ROLES, label: 'All roles' }, { value: NO_ROLE, label: 'No role' }, ...roles.map((role) => ({ value: role.id, label: role.name }))];
+
+  return (
+    <div className="w-56">
+      <CustomSelect compact options={options} value={value ?? ALL_ROLES} onChange={onChange} />
+    </div>
+  );
+};
 
 function UserList({ onAdd }) {
   const navigate = useNavigate();
@@ -42,8 +64,17 @@ function UserList({ onAdd }) {
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState(null);
   const deletePerson = useDeletePerson();
-  const { data, isLoading, error } = usePersons({ search: appliedSearch, page, limit: PAGE_SIZE });
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Listing roles takes one of these permissions, so without them there is nothing to filter by
+  const canFilterByRole = can('role:read', 'role:assign');
+  const roleId = canFilterByRole ? searchParams.get('roleId') : null;
+  const { data, isLoading, error } = usePersons({ search: appliedSearch, page, limit: PAGE_SIZE, ...roleParams(roleId) });
   const people = data?.data ?? [];
+
+  const changeRole = (next) => {
+    setSearchParams(next === ALL_ROLES ? {} : { roleId: next }, { replace: true });
+    setPage(1);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -64,9 +95,12 @@ function UserList({ onAdd }) {
 
   return (
     <>
-      <div className="rounded-lg border border-border bg-card">
+      <div className="flex flex-1 flex-col rounded-lg border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, staff number..." className="max-w-sm" />
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+            <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, staff number..." className="max-w-sm" />
+            {canFilterByRole && <RoleFilter value={roleId} onChange={changeRole} />}
+          </div>
           {onAdd && (
             <Button onClick={onAdd} className="gap-2">
               <UserPlus className="h-4 w-4" />
@@ -77,7 +111,7 @@ function UserList({ onAdd }) {
 
         {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load people.')}</p>}
 
-        <div className="overflow-x-auto">
+        <div className="flex-1 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

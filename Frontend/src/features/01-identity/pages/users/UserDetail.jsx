@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/com
 import { Input } from '../../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
 import PlaceMemberDialog from '../../../02-offices/components/PlaceMemberDialog';
+import RoleAssignmentsDialog from '../../../03-access-control/components/RoleAssignmentsDialog';
 import { useCan } from '../../../03-access-control/hooks/useCan';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
@@ -184,6 +185,8 @@ const UserDetail = () => {
   const can = useCan();
   const { data: person, isLoading, error } = usePerson(personId);
   const [placing, setPlacing] = useState(false);
+  const [managingRolesOf, setManagingRolesOf] = useState(null);
+  const managedPlacement = person?.placements.find((placement) => placement.id === managingRolesOf);
 
   return (
     <div className="flex flex-1 overflow-y-auto bg-background">
@@ -218,9 +221,18 @@ const UserDetail = () => {
                     </Button>
                   ) : null
                 }
+                placementAction={(placement) =>
+                  can('role:assign') ? (
+                    <Button type="button" size="sm" variant="outline" className="shrink-0 gap-1" onClick={() => setManagingRolesOf(placement.id)}>
+                      <ShieldCheck className="h-4 w-4" />
+                      Manage Roles
+                    </Button>
+                  ) : null
+                }
               />
             </div>
             {placing && <PlaceMemberDialog person={person} onClose={() => setPlacing(false)} />}
+            {managedPlacement && <RoleAssignmentsDialog placement={managedPlacement} officeName={managedPlacement.office.name} personName={person.fullName} onClose={() => setManagingRolesOf(null)} />}
           </>
         )}
       </main>

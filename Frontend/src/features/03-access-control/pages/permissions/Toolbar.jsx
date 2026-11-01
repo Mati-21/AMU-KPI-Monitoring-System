@@ -1,30 +1,20 @@
 import CustomSelect from '../../../../shared/components/ui/CustomSelect';
 import SearchInput from '../../../../shared/components/ui/SearchInput';
 
-function Toolbar({ handleRoleChange, selectedRole, roles, search, setSearch, loadingRoles }) {
+function Toolbar({ options, selectedId, selectedName, onSelect, search, setSearch, loading }) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-Stretch gap-3 ">
-        {/* Custom Select */}
-        <div className="w-48 h-9">
-          <CustomSelect
-            options={roles}
-            value={selectedRole}
-            onChange={handleRoleChange}
-            compact
-            placeholder={loadingRoles ? 'Loading roles...' : roles.length ? 'Select Role' : 'No registered roles'}
-          />
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-56">
+          <CustomSelect compact options={options} value={selectedId} onChange={onSelect} placeholder={loading ? 'Loading roles...' : options.length ? 'Select Role' : 'No registered roles'} />
         </div>
-
-        {/* Search */}
-
-        <div className="w-56 h-9">
-          <SearchInput placeholder="Search modules..." value={search} onChange={setSearch} className="text-xs" />
+        <div className="w-64">
+          <SearchInput placeholder="Search permissions..." value={search} onChange={setSearch} />
         </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Showing: <span className="font-semibold">{selectedRole || 'None'}</span>
+        Showing: <span className="font-semibold">{selectedName || 'None'}</span>
       </p>
     </div>
   );

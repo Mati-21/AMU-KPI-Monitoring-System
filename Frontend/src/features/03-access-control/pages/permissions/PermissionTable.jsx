@@ -1,94 +1,59 @@
-import { useState } from 'react';
-import { Eye, Edit, Trash2, Check, Plus } from 'lucide-react';
+import { Fragment } from 'react';
 import * as Switch from '@radix-ui/react-switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TablePagination } from '../../../../shared/components/ui/Table';
 
-const permissionHeaders = [
-  { label: 'View', icon: Eye },
-  { label: 'Create', icon: Plus },
-  { label: 'Assign', icon: Check },
-  { label: 'Edit', icon: Edit },
-  { label: 'Delete', icon: Trash2 },
-  { label: 'Approve', icon: Check },
-];
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../shared/components/ui/Table';
+import { groupByModule, matchesPermission } from '../../lib/permissionCatalog';
 
-function PermissionTable({ permissions, setPermissions, search }) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
-  const query = String(search || '')
-    .trim()
-    .toLowerCase();
-
-  const matchesPermissionRow = (permission) => {
-    const moduleLabel = String(permission?.module || '').toLowerCase();
-    const scopeKey = String(permission?.resourceKey || '').toLowerCase();
-
-    if (!query) {
-      return true;
-    }
-
-    if (moduleLabel.includes(query) || scopeKey.includes(query)) {
-      return true;
-    }
-
-    // Allow searching by concrete action key, e.g. "create_role_management".
-    return ['view', 'create', 'assign', 'edit', 'delete', 'approve'].some((action) => `${action}_${scopeKey}`.includes(query));
-  };
-
-  const filteredPermissions = permissions.filter(matchesPermissionRow);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedPermissions = filteredPermissions.slice(startIndex, startIndex + itemsPerPage);
-
-  const togglePermission = (moduleName, field) => {
-    setPermissions((prev) =>
-      prev.map((permission) => (permission.module === moduleName ? { ...permission, [field]: !permission[field] } : permission))
-    );
-  };
+function PermissionTable({ rows, granted, readOnly, search, onToggle }) {
+  const groups = groupByModule(rows.filter((row) => matchesPermission(row, search)));
 
   return (
-    <div>
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <Table>
         <TableHeader>
-          <TableRow className="bg-primary/10">
-            <TableHead className="font-semibold text-foreground w-62.5">Module</TableHead>
-
-            {permissionHeaders.map(({ label, icon: Icon }) => (
-              <TableHead key={label} className="font-semibold text-foreground text-center">
-                <div className="flex flex-col items-center gap-1">
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs">{label}</span>
-                </div>
-              </TableHead>
-            ))}
+          <TableRow>
+            <TableHead>Permission</TableHead>
+            <TableHead>Code</TableHead>
+            <TableHead className="w-28 text-center">Allowed</TableHead>
           </TableRow>
         </TableHeader>
-
         <TableBody>
-          {paginatedPermissions.map((perm) => (
-            <TableRow key={perm.module}>
-              <TableCell>
-                <p className="font-medium text-foreground">{perm.module}</p>
-                {perm.resourceKey ? <p className="text-[11px] text-muted-foreground font-mono">scope: {perm.resourceKey}</p> : null}
-              </TableCell>
-
-              {['view', 'create', 'assign', 'edit', 'delete', 'approve'].map((field) => (
-                <TableCell key={field} className="text-center">
-                  {/* ✅ Proper Radix Switch */}
-                  <Switch.Root
-                    checked={perm[field]}
-                    onCheckedChange={() => togglePermission(perm.module, field)}
-                    className="w-10 h-5 bg-gray-300 rounded-full relative data-[state=checked]:bg-primary transition"
-                  >
-                    <Switch.Thumb className="block w-4 h-4 bg-white rounded-full shadow transform translate-x-0.5 data-[state=checked]:translate-x-5 transition" />
-                  </Switch.Root>
-                </TableCell>
-              ))}
+          {groups.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={3}>No permissions match your search.</TableCell>
             </TableRow>
+          )}
+          {groups.map(({ moduleName, permissions }) => (
+            <Fragment key={moduleName}>
+              <TableRow className="bg-primary/10 hover:bg-primary/10">
+                <TableCell colSpan={3} className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                  {moduleName}
+                </TableCell>
+              </TableRow>
+              {permissions.map((permission) => (
+                <TableRow key={permission.code}>
+                  <TableCell>
+                    <p className="text-sm text-foreground">{permission.description}</p>
+                    <p className="text-[11px] text-muted-foreground">{permission.resourceLabel}</p>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{permission.code}</TableCell>
+                  <TableCell className="text-center">
+                    <Switch.Root
+                      checked={granted.has(permission.code)}
+                      disabled={readOnly}
+                      onCheckedChange={() => onToggle(permission.code)}
+                      aria-label={permission.code}
+                      className="relative h-5 w-10 rounded-full bg-gray-300 transition data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-600 dark:data-[state=checked]:bg-primary"
+                    >
+                      <Switch.Thumb className="block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow transition data-[state=checked]:translate-x-5" />
+                    </Switch.Root>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </Fragment>
           ))}
         </TableBody>
       </Table>
-
-      <TablePagination currentPage={currentPage} totalItems={filteredPermissions.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
     </div>
   );
 }

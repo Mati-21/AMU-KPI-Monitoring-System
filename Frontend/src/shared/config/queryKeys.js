@@ -18,7 +18,7 @@ export const queryKeys = {
   roles: {
     all: ['roles'],
     list: (params) => [...queryKeys.roles.all, 'list', params],
-    categories: ['role-categories'],
+    permissions: ['roles', 'permissions'],
   },
   kpis: {
     all: ['kpis'],

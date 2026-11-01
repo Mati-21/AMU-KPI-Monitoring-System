@@ -16,20 +16,18 @@ const UserManagement = () => {
   const changeTab = (next) => setSearchParams(next === 'add' ? { tab: 'add' } : {}, { replace: true });
 
   return (
-    <div className="flex-1 flex overflow-y-auto bg-background">
-      <div className="flex-1 flex flex-col">
-        <main className="p-6">
-          <h1 className="text-2xl font-bold mb-5">User Management</h1>
+    <div className="flex min-h-full bg-background">
+      <main className="flex min-w-0 flex-1 flex-col p-6">
+        <h1 className="text-2xl font-bold mb-5">User Management</h1>
 
-          <div className="flex gap-2 mb-6">
-            {canViewList && <TabButton label="List of Users" value="list" activeValue={activeTab} onChange={changeTab} />}
-            {canAddUsers && <TabButton label="Add" value="add" activeValue={activeTab} onChange={changeTab} />}
-          </div>
+        <div className="flex gap-2 mb-6">
+          {canViewList && <TabButton label="List of Users" value="list" activeValue={activeTab} onChange={changeTab} />}
+          {canAddUsers && <TabButton label="Add" value="add" activeValue={activeTab} onChange={changeTab} />}
+        </div>
 
-          {activeTab === 'list' && canViewList && <UserList onAdd={canAddUsers ? () => changeTab('add') : null} />}
-          {activeTab === 'add' && canAddUsers && <AddUser onDone={() => changeTab(canViewList ? 'list' : 'add')} />}
-        </main>
-      </div>
+        {activeTab === 'list' && canViewList && <UserList onAdd={canAddUsers ? () => changeTab('add') : null} />}
+        {activeTab === 'add' && canAddUsers && <AddUser onDone={() => changeTab(canViewList ? 'list' : 'add')} />}
+      </main>
     </div>
   );
 };

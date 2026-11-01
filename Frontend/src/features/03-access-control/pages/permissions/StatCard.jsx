@@ -4,8 +4,8 @@ function StatCard({ totalRoles = 0, systemModules = 0, activePermissions = 0, re
       {[
         { label: 'Total Roles', value: String(totalRoles), color: 'bg-primary/10 text-primary' },
         { label: 'System Modules', value: String(systemModules), color: 'bg-accent text-accent-foreground' },
-        { label: 'Active Permissions', value: String(activePermissions), color: 'bg-primary/10 text-primary' },
-        { label: 'Restricted', value: String(restrictedPermissions), color: 'bg-destructive/10 text-destructive' },
+        { label: 'Allowed for This Role', value: String(activePermissions), color: 'bg-primary/10 text-primary' },
+        { label: 'Not Allowed', value: String(restrictedPermissions), color: 'bg-destructive/10 text-destructive' },
       ].map((stat) => (
         <div key={stat.label} className="bg-card border border-border rounded-xl p-4">
           <p className="text-sm text-muted-foreground">{stat.label}</p>
@@ -17,4 +17,3 @@ function StatCard({ totalRoles = 0, systemModules = 0, activePermissions = 0, re
 }
 
 export default StatCard;
-

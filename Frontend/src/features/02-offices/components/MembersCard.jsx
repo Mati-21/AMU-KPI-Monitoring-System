@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarX2, UserPlus, Users } from 'lucide-react';
+import { CalendarX2, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Badge } from '../../../shared/components/ui/Badge';
@@ -7,7 +7,9 @@ import Button from '../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/components/ui/Card';
 import { Input } from '../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
+import RoleAssignmentsDialog from '../../03-access-control/components/RoleAssignmentsDialog';
 import { useCan } from '../../03-access-control/hooks/useCan';
+import { roleNames } from '../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useEndPlacement, useMembers } from '../hooks/useOffices';
 import { formatDate, todayIso } from '../lib/officeTree';
@@ -44,7 +46,7 @@ const EndPlacementDialog = ({ member, onClose }) => {
   );
 };
 
-const MemberRow = ({ member, canAssign, canOpenUser, onEnd }) => (
+const MemberRow = ({ member, canAssign, canAssignRoles, canOpenUser, onEnd, onManageRoles }) => (
   <div className="flex items-center justify-between gap-2 rounded-lg border border-border p-3">
     <div className="min-w-0">
       <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
@@ -61,13 +63,20 @@ const MemberRow = ({ member, canAssign, canOpenUser, onEnd }) => (
         {member.position.title} · From {formatDate(member.startDate)}
         {member.endDate && ` · Last day ${formatDate(member.endDate)}`}
       </p>
-      <p className="mt-0.5 text-xs text-primary">{member.roles.map((assignment) => assignment.role.name).join(', ') || 'No role yet'}</p>
+      <p className="mt-0.5 text-xs text-primary">{roleNames(member.roles)}</p>
     </div>
-    {canAssign && (
-      <button type="button" onClick={() => onEnd(member)} aria-label={`End placement of ${member.person.fullName}`} title="End placement" className="shrink-0 rounded p-1 text-destructive hover:bg-destructive/10">
-        <CalendarX2 className="h-4 w-4" />
-      </button>
-    )}
+    <div className="flex shrink-0 gap-1">
+      {canAssignRoles && (
+        <button type="button" onClick={() => onManageRoles(member)} aria-label={`Manage roles of ${member.person.fullName}`} title="Manage roles" className="rounded p-1 text-primary hover:bg-primary/10">
+          <ShieldCheck className="h-4 w-4" />
+        </button>
+      )}
+      {canAssign && (
+        <button type="button" onClick={() => onEnd(member)} aria-label={`End placement of ${member.person.fullName}`} title="End placement" className="rounded p-1 text-destructive hover:bg-destructive/10">
+          <CalendarX2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
   </div>
 );
 
@@ -76,7 +85,9 @@ const MembersCard = ({ office }) => {
   const { data: members = [], isLoading, error } = useMembers(office.id);
   const [placing, setPlacing] = useState(false);
   const [ending, setEnding] = useState(null);
+  const [managingRolesOf, setManagingRolesOf] = useState(null);
   const canAssign = can('office:assign');
+  const managedMember = members.find((member) => member.id === managingRolesOf);
   const sorted = [...members].sort(headFirstByName);
   const positionFilter = {
     allLabel: 'All positions',
@@ -107,12 +118,13 @@ const MembersCard = ({ office }) => {
           items={sorted}
           searchText={(member) => `${member.person.fullName} ${member.position.title}`}
           filter={positionFilter}
-          renderRow={(member) => <MemberRow member={member} canAssign={canAssign} canOpenUser={can('user:read')} onEnd={setEnding} />}
+          renderRow={(member) => <MemberRow member={member} canAssign={canAssign} canAssignRoles={can('role:assign')} canOpenUser={can('user:read')} onEnd={setEnding} onManageRoles={({ id }) => setManagingRolesOf(id)} />}
         />
       </CardContent>
 
       {placing && <PlaceMemberDialog office={office} onClose={() => setPlacing(false)} />}
       {ending && <EndPlacementDialog member={ending} onClose={() => setEnding(null)} />}
+      {managedMember && <RoleAssignmentsDialog placement={managedMember} officeName={office.name} personName={managedMember.person.fullName} onClose={() => setManagingRolesOf(null)} />}
     </Card>
   );
 };

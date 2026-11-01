@@ -10,7 +10,7 @@ const MY_SESSIONS_KEY = ['my-sessions'];
 /**
  * Reload the signed-in user after a change, so the navbar and every page agree.
  */
-const useRefreshMe = () => {
+export const useRefreshMe = () => {
   const dispatch = useDispatch();
   return async () => {
     const { data } = await api.get('/auth/me');
