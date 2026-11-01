@@ -55,7 +55,7 @@ const TableRow = React.forwardRef((props, ref) => {
     <tr
       ref={ref}
       className={cn(
-        'border-b border-secondary   hover:bg-secondary ', // same bottom border for all rows
+        'border-b border-border hover:bg-secondary', // same bottom border for all rows
         className
       )}
       {...rest}

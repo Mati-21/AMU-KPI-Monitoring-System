@@ -16,7 +16,7 @@ body,
 
   /* Main Colors */
   --color-background: #f6f7f9; /* page background (light gray) */
-  --color-foreground: #24262d; /* primary text (dark charcoal) */
+  --color-foreground: #111318; /* primary text (near black) */
 
   --color-card: #ffffff; /* card background (white) */
   --color-card-foreground: #24262d; /* card text (dark charcoal) */
@@ -31,7 +31,7 @@ body,
   --color-secondary-foreground: #24262d; /* dark text */
 
   --color-muted: #f0f2f6; /* muted light gray */
-  --color-muted-foreground: #757b8c; /* muted text (cool gray) */
+  --color-muted-foreground: #4b5162; /* muted text (dark cool gray) */
 
   --color-accent: #e1f0ff; /* light blue accent */
   --color-accent-foreground: #3b82f6; /* accent text (blue) */
@@ -45,8 +45,8 @@ body,
   --color-warning: #f1c40f; /* yellow (warning) */
   --color-warning-foreground: #ffffff; /* white text */
 
-  --color-border: #e6e8f0; /* light border gray */
-  --color-input: #e6e8f0; /* input border/background */
+  --color-border: #c3c8d4; /* border gray */
+  --color-input: #c3c8d4; /* input border/background */
   --color-ring: #3b82f6; /* focus ring (blue) */
 
   --color-radius: 0.75rem; /* border radius */
@@ -147,6 +147,17 @@ body,
   --navbar-background: #111827;
   --navbar-foreground: #e2e8f0;
   --navbar-border: #334155;
+}
+
+/* A table that ends its card follows the card's rounded corners. Rounding its scroll area clips the rows
+   without clipping the card, which would cut off filter menus. A table with paging below it stays square. */
+.overflow-x-auto:last-child:has(> table) {
+  border-bottom-left-radius: calc(var(--radius-lg) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg) - 1px);
+}
+
+.overflow-x-auto:last-child > table > tbody > tr:last-child {
+  border-bottom-width: 0;
 }
 
 /* Report sub-total row: compact height + dark mode support */

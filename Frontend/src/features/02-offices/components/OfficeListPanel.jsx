@@ -42,7 +42,7 @@ const OfficeListPanel = ({ onOpen }) => {
   const typeOptions = [{ value: 'all', label: 'All types' }, ...types.map((type) => ({ value: type.id, label: type.name }))];
 
   return (
-    <div className="flex flex-1 flex-col rounded-lg border border-border bg-card">
+    <div className="rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
         <div className="min-w-56 flex-1">
           <SearchInput value={filters.search} onChange={setFilter('search')} placeholder="Search by name or code..." />
@@ -57,7 +57,7 @@ const OfficeListPanel = ({ onOpen }) => {
 
       {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load offices.')}</p>}
 
-      <div className="flex-1 overflow-x-auto">
+      <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

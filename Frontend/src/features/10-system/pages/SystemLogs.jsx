@@ -50,7 +50,7 @@ const SystemLogs = () => {
           <p className="text-sm text-muted-foreground">Who did what and when, newest first.</p>
         </div>
 
-        <div className="flex flex-1 flex-col rounded-lg border border-border bg-card">
+        <div className="rounded-lg border border-border bg-card">
           <div className="flex flex-wrap items-end gap-3 border-b border-border p-4">
             <FilterSelect allLabel="All actions" options={(choices?.actions ?? []).map((action) => ({ value: action, label: actionLabel(action) }))} value={filters.action} onChange={setFilter('action')} />
             <FilterSelect allLabel="All items" options={(choices?.entityTypes ?? []).map((type) => ({ value: type, label: entityLabel(type) }))} value={filters.entityType} onChange={setFilter('entityType')} />
@@ -72,7 +72,7 @@ const SystemLogs = () => {
 
           {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load the logs.')}</p>}
 
-          <div className="flex-1 overflow-x-auto">
+          <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>

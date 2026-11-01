@@ -67,7 +67,7 @@ const OfficeTypesPanel = () => {
     });
 
   return (
-    <div className="flex-1 rounded-lg border border-border bg-card">
+    <div className="rounded-lg border border-border bg-card">
       {canManage && (
         <div className="flex justify-end border-b border-border p-4">
           <Button type="button" className="gap-2" onClick={() => setEditing({})}>

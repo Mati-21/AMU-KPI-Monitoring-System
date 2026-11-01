@@ -95,7 +95,7 @@ function UserList({ onAdd }) {
 
   return (
     <>
-      <div className="flex flex-1 flex-col rounded-lg border border-border bg-card">
+      <div className="rounded-lg border border-border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             <SearchInput value={search} onChange={setSearch} placeholder="Search by name, email, staff number..." className="max-w-sm" />
@@ -111,7 +111,7 @@ function UserList({ onAdd }) {
 
         {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load people.')}</p>}
 
-        <div className="flex-1 overflow-x-auto">
+        <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>

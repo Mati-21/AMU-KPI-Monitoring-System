@@ -8,7 +8,7 @@ function PermissionList({ rows }) {
   const shown = rows.filter((row) => matchesPermission(row, search));
 
   return (
-    <div className="flex flex-1 flex-col rounded-lg border border-border bg-card">
+    <div className="rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div>
           <h3 className="text-sm font-semibold text-foreground">{shown.length} Permissions</h3>

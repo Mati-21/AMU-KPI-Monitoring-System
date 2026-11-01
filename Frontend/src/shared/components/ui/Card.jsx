@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 // Main Card
 export const Card = ({ className = '', children, ...props }) => {
   return (
-    <div className={cn('rounded-lg  bg-card text-card-foreground shadow-sm', className)} {...props}>
+    <div className={cn('rounded-lg border border-border bg-card text-card-foreground shadow-sm', className)} {...props}>
       {children}
     </div>
   );
