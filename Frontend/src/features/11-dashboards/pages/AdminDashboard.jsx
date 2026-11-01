@@ -34,7 +34,7 @@ function AdminDashboard() {
   const error = queryError?.response?.data?.message || '';
   const navigate = useNavigate();
   const userPermissions = useSelector((state) => state.auth?.user?.permissions || []);
-  const canViewSystemLogs = permissionUtils.hasPermission(userPermissions, permissionUtils.permissionKey('view', 'System Logs'));
+  const canViewSystemLogs = permissionUtils.hasPermission(userPermissions, 'audit:read');
 
   if (loading) {
     return (
@@ -127,12 +127,12 @@ function AdminDashboard() {
         <ActivityLog
           title="Recent System Activity"
           activities={data?.systemActivities}
-          onViewAll={canViewSystemLogs ? () => navigate('/system-logs?tab=system') : undefined}
+          onViewAll={canViewSystemLogs ? () => navigate('/system-logs') : undefined}
         />
         <ActivityLog
           title="Administrator Log"
           activities={data?.adminActivities}
-          onViewAll={canViewSystemLogs ? () => navigate('/system-logs?tab=admin') : undefined}
+          onViewAll={canViewSystemLogs ? () => navigate('/system-logs') : undefined}
         />
       </div>
     </main>

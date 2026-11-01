@@ -110,7 +110,7 @@ export const navigationSections = [
         icon: Settings,
         label: 'Configuration',
         path: '/configuration',
-        permissions: [permissionUtils.permissionKey('view', 'Configuration')],
+        permissions: ['settings:manage'],
       },
       {
         icon: Bell,
@@ -122,7 +122,7 @@ export const navigationSections = [
         icon: ScrollText,
         label: 'System Logs',
         path: '/system-logs',
-        permissions: [permissionUtils.permissionKey('view', 'System Logs')],
+        permissions: ['audit:read'],
       },
       {
         icon: MessageSquare,

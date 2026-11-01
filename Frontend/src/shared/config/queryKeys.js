@@ -40,6 +40,7 @@ export const queryKeys = {
   },
   system: {
     settings: ['system-settings'],
+    audit: ['audit-logs'],
   },
   dashboard: {
     admin: ['dashboard', 'admin'],

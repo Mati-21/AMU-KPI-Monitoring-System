@@ -7,6 +7,7 @@ import useTheme from '../../hooks/useTheme';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../ui/DropDown';
 import { logout } from '../../../features/01-identity/store/authSlice';
 import PersonAvatar from '../../../features/01-identity/components/PersonAvatar';
+import { useCan } from '../../../features/03-access-control/hooks/useCan';
 import { api } from '../../api/axios';
 import { useNotification } from '../../../features/09-notifications/context/NotificationContext';
 import { useSocket } from '../../context/SocketContext';
@@ -16,6 +17,7 @@ const navLinks = ['About', 'Features', 'Benefits'];
 
 const Navbar = () => {
   const { isDark, toggleTheme } = useTheme();
+  const can = useCan();
 
   const { notify } = useNotification();
 
@@ -458,12 +460,14 @@ const Navbar = () => {
               My Profile
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Link to="/configuration" className="flex items-center w-full">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </Link>
-          </DropdownMenuItem>
+          {can('settings:manage') && (
+            <DropdownMenuItem>
+              <Link to="/configuration" className="flex items-center w-full">
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="text-red-500 flex">
             <LogOut className="w-4 h-4 mr-2" />

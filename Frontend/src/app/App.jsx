@@ -134,13 +134,13 @@ function App() {
                       <Route path="/permission" element={<PermissionManagement />} />
                     </Route>
 
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Configuration')} />}>
+                    <Route element={<RequirePermission permission="settings:manage" />}>
                       <Route path="/configuration" element={<Configuration />} />
                     </Route>
 
                     <Route path="/alert-notification" element={<AlertsNotifications />} />
 
-                    <Route element={<RequirePermission permissions={[permissionUtils.permissionKey('view', 'System Logs')]} />}>
+                    <Route element={<RequirePermission permission="audit:read" />}>
                       <Route path="/system-logs" element={<SystemLogs />} />
                     </Route>
                     <Route element={<RequirePermission permission="support:manage" />}>

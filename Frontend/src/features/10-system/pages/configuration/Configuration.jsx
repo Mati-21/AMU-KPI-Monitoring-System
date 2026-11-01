@@ -1,130 +1,99 @@
-import { useState, useEffect } from "react";
-import { api } from "../../../../shared/api/axios";
-import GeneralSystemSetting from "./GeneralSystemSetting";
-import KpiSystemConfiguration from "./KpiSystemConfiguration";
-import PageTitle from "./PageTitle";
-import CycleManagement from "../../../06-reporting-periods/pages/CycleManagement";
-import Footer from "./Footer";
-import { Save, Loader2 } from "lucide-react";
-import { useDispatch } from "react-redux";
-import { setMaintenance, setSystemSettings } from "../../../01-identity/store/authSlice";
-import { useNotification } from "../../../09-notifications/context/NotificationContext";
+import { useState } from 'react';
+
+import TabButton from '../../../../shared/components/ui/TabButton';
+import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import { ConfirmDialog } from '../../../02-offices/components/FormParts';
+import { useNotification } from '../../../09-notifications/context/NotificationContext';
+import { useSaveSettings, useSettings } from '../../hooks/useSystem';
+import { fromFormValue, settingError, toFormValue } from '../../lib/settingValues';
+import Footer from './Footer';
+import LogoField from './LogoField';
+import PageTitle from './PageTitle';
+import SettingField from './SettingField';
+
+const MAINTENANCE_KEY = 'maintenance_mode';
 
 const Configuration = () => {
-  const dispatch = useDispatch();
   const { notify } = useNotification();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const { data: groups = [], isLoading, error } = useSettings();
+  const save = useSaveSettings();
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [drafts, setDrafts] = useState({});
+  const [confirming, setConfirming] = useState(null);
 
-  const [settings, setSettings] = useState({
-    displayName: "AMU KPI Monitoring System",
-    orgName: "ArbaMinch University",
-    dateFormat: "MM/DD/YYYY",
-    systemVersion: "v1.0.0 (Stable Build)",
-    kpiWeightValidation: "Strict (100% Cumulative)",
-    maxKpisPerUser: "10",
-    evidenceFileSize: "5MB",
-    periodFrequency: "Quarterly",
-    kpiDeadline: "",
-  });
+  const group = groups.find((candidate) => candidate.group === selectedGroup) ?? groups[0];
+  const draft = drafts[group?.group] ?? {};
+  const valueOf = (setting) => draft[setting.key] ?? toFormValue(setting);
+  const changedIn = (candidate) => candidate.settings.filter((setting) => setting.key in (drafts[candidate.group] ?? {}) && drafts[candidate.group][setting.key] !== toFormValue(setting));
+  const changed = group ? changedIn(group) : [];
+  // Messages about one setting show beside it, anything else shows above the buttons
+  const hasFieldErrors = group?.settings.some((setting) => settingError(save.error, setting.key));
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  const update = (key, value) => {
+    save.reset();
+    setDrafts({ ...drafts, [group.group]: { ...draft, [key]: value } });
+  };
 
-  const fetchSettings = async () => {
-    try {
-      const response = await api.get('/settings');
-      if (response.data.success) {
-        const data = response.data.data;
-        setMaintenanceMode(data.maintenance_mode || false);
-        // Strip boolean toggle keys and system_online so they don't leak into the generic settings object
-        const { maintenance_mode, system_online, ...rest } = data;
-        setSettings(prev => ({
-          ...prev,
-          ...rest
-        }));
+  const chooseGroup = (next) => {
+    save.reset();
+    setSelectedGroup(next);
+  };
+
+  const send = (settings, message) =>
+    save.mutate(
+      { group: group.group, settings },
+      {
+        onSuccess: () => {
+          setDrafts({ ...drafts, [group.group]: {} });
+          setConfirming(null);
+          notify(message, 'success');
+        },
+        onError: () => setConfirming(null),
       }
-    } catch (error) {
-      console.error("Failed to fetch settings:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const excludeKeys = new Set(['maintenance_mode', 'system_online', 'system_logo']);
-      const settingsToSave = [
-        { key: 'maintenance_mode', value: maintenanceMode, type: 'boolean' },
-        ...Object.entries(settings)
-          .filter(([key]) => !excludeKeys.has(key))
-          .map(([key, value]) => ({ key, value, type: 'string' }))
-      ];
-
-      await api.post('/settings', settingsToSave);
-
-      dispatch(setMaintenance(maintenanceMode));
-      dispatch(setSystemSettings({
-        displayName: settings.displayName,
-        orgName: settings.orgName,
-        systemLogo: settings.system_logo || settings.systemLogo || null,
-      }));
-
-      notify("Configuration saved successfully!", "success");
-    } catch (error) {
-      console.error("Failed to save settings:", error);
-      notify("Error saving settings. Please try again.", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
     );
-  }
+
+  const saveChanges = () => send(changed.map((setting) => ({ key: setting.key, value: fromFormValue(setting, valueOf(setting)) })), 'Settings saved.');
+  const resetToDefaults = () => send(group.settings.filter((setting) => setting.type !== 'file').map(({ key }) => ({ key, value: null })), 'Settings reset to their defaults.');
+  const turningMaintenanceOn = changed.some((setting) => setting.key === MAINTENANCE_KEY) && draft[MAINTENANCE_KEY] === true;
 
   return (
-    <div className="flex bg-background overflow-y-auto">
-      <div className="flex-1 flex flex-col">
-        <main className="flex-1 p-6 overflow-y-auto">
-          <div className="space-y-8 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <PageTitle />
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                <span>{saving ? "Saving..." : "Save Configuration"}</span>
-              </button>
+    <div className="flex min-h-full bg-background">
+      <main className="flex min-w-0 flex-1 flex-col space-y-5 p-6">
+        <PageTitle />
+
+        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
+        {error && <p className="text-sm text-red-500">{apiErrorMessage(error, 'Could not load the settings.')}</p>}
+
+        {group && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {groups.map((candidate) => (
+                <TabButton key={candidate.group} label={`${candidate.label}${changedIn(candidate).length > 0 ? ' •' : ''}`} value={candidate.group} activeValue={group.group} onChange={chooseGroup} />
+              ))}
             </div>
 
-            <CycleManagement />
+            <div className="flex flex-1 flex-col space-y-5 rounded-xl border border-border bg-card p-6">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">{group.label}</h2>
+                <p className="text-xs text-muted-foreground">{group.description}</p>
+              </div>
 
-            <GeneralSystemSetting
-              maintenanceMode={maintenanceMode}
-              setMaintenanceMode={setMaintenanceMode}
-              settings={settings}
-              setSettings={setSettings}
-            />
+              <div className="grid flex-1 grid-cols-1 content-start items-start gap-x-6 gap-y-5 sm:grid-cols-2">
+                {group.settings.map((setting) =>
+                  setting.type === 'file' ? <LogoField key={setting.key} setting={setting} /> : <SettingField key={setting.key} setting={setting} value={valueOf(setting)} error={settingError(save.error, setting.key)} onChange={(value) => update(setting.key, value)} />
+                )}
+              </div>
 
-            <KpiSystemConfiguration
-              setSettings={setSettings}
-              settings={settings}
-            />
+              {save.error && !hasFieldErrors && <p className="text-sm text-red-500">{apiErrorMessage(save.error, 'Could not save the settings.')}</p>}
 
-            <Footer />
-          </div>
-        </main>
-      </div>
+              <Footer settings={group.settings} isDirty={changed.length > 0} pending={save.isPending} onSave={() => (turningMaintenanceOn ? setConfirming('maintenance') : saveChanges())} onReset={() => setConfirming('reset')} />
+            </div>
+          </>
+        )}
+
+        <ConfirmDialog open={confirming === 'maintenance'} onClose={() => setConfirming(null)} title="Turn On Maintenance Mode" description="Everyone except university-wide settings managers is locked out until you turn it off." onConfirm={saveChanges} pending={save.isPending} confirmLabel="Turn On" />
+        <ConfirmDialog open={confirming === 'reset'} onClose={() => setConfirming(null)} title="Reset to Defaults" description={`Put every setting in "${group?.label}" back to its default${group?.settings.some((setting) => setting.type === 'file') ? ', apart from the logo' : ''}? Your current values are lost.`} onConfirm={resetToDefaults} pending={save.isPending} confirmLabel="Reset" />
+      </main>
     </div>
   );
 };

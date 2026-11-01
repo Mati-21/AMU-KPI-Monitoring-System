@@ -4,7 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../../../shared/api/axios';
-import { logout, setAuthLoading, setUser, setMaintenance, setSystemSettings } from '../store/authSlice';
+import { logout, setAuthLoading, setUser } from '../store/authSlice';
+import { applyPublicSettings } from '../../10-system/lib/publicSettings';
 import { normalizeAuthUser } from '../lib/authUser';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 
@@ -73,14 +74,7 @@ export const AuthBootstrap = ({ children }) => {
 
         // 1. Sync branding and maintenance state
         if (systemRes.status === 'fulfilled') {
-          const { system, branding, general } = systemRes.value.data.data;
-          dispatch(setMaintenance(Boolean(system?.maintenance_mode)));
-          dispatch(setSystemSettings({
-            displayName: branding?.system_name,
-            orgName: branding?.university_name,
-            systemLogo: branding?.logo ? `/api/v1/files/${branding.logo}/public` : null,
-            supportEmail: general?.contact_email ?? null,
-          }));
+          applyPublicSettings(dispatch, systemRes.value.data.data);
         }
 
         // 2. Handle Auth Session
