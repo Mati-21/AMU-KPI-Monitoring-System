@@ -22,17 +22,18 @@ export const deleteOfficeType = async (req, res) => {
 };
 
 export const getOfficeTree = async (req, res) => {
-  const tree = await officeService.getOfficeTree();
+  const tree = await officeService.getOfficeTree(actorOf(req));
   res.json({ status: 'success', data: tree });
 };
 
 export const listOffices = async (req, res) => {
   const { officeTypeId, parentOfficeId, isActive, search } = req.query;
-  const offices = await officeService.listOffices({ officeTypeId, parentOfficeId, isActive, search });
+  const offices = await officeService.listOffices({ officeTypeId, parentOfficeId, isActive, search }, actorOf(req));
   res.json({ status: 'success', data: offices });
 };
 
 export const getOfficeById = async (req, res) => {
+  await officeService.assertOfficeVisible(req.params.id, actorOf(req));
   const office = await officeService.getOfficeById(req.params.id);
   res.json({ status: 'success', data: office });
 };
@@ -47,12 +48,19 @@ export const updateOffice = async (req, res) => {
   res.json({ status: 'success', data: office });
 };
 
+export const deleteOffice = async (req, res) => {
+  await officeService.deleteOffice(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: 'Office deleted' });
+};
+
 export const getOfficeHistory = async (req, res) => {
+  await officeService.assertOfficeVisible(req.params.id, actorOf(req));
   const history = await officeService.getOfficeHistory(req.params.id);
   res.json({ status: 'success', data: history });
 };
 
 export const listPositions = async (req, res) => {
+  await officeService.assertOfficeVisible(req.params.id, actorOf(req));
   const positions = await officeService.listPositions(req.params.id);
   res.json({ status: 'success', data: positions });
 };
@@ -73,6 +81,7 @@ export const deletePosition = async (req, res) => {
 };
 
 export const listMembers = async (req, res) => {
+  await officeService.assertOfficeVisible(req.params.id, actorOf(req));
   const members = await officeService.listMembers(req.params.id);
   res.json({ status: 'success', data: members });
 };
@@ -97,6 +106,7 @@ export default {
   getOfficeById,
   createOffice,
   updateOffice,
+  deleteOffice,
   getOfficeHistory,
   listPositions,
   createPosition,

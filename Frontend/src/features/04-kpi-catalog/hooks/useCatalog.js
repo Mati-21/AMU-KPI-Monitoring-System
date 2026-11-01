@@ -35,7 +35,10 @@ const useCatalogAction = (send) => {
  */
 export const useSaveRecord = (path) => useCatalogAction(({ id, values }) => (id ? api.put(`/${path}/${id}`, values) : api.post(`/${path}`, values)).then(unwrap));
 
-export const useSetScaleScoring = () => useCatalogAction(({ id, approved }) => api.patch(`/kpi-scales/${id}/scoring`, { approved }).then(unwrap));
+export const useCheckKpiImport = () => useMutation({ mutationFn: (rows) => api.post('/kpis/import', { rows, dryRun: true }).then(unwrap) });
+export const useImportKpis = () => useCatalogAction((rows) => api.post('/kpis/import', { rows }).then(unwrap));
+
+export const useSetScaleScoring =() => useCatalogAction(({ id, approved }) => api.patch(`/kpi-scales/${id}/scoring`, { approved }).then(unwrap));
 
 /**
  * Every KPI matching the filters, page by page, for the Excel file.

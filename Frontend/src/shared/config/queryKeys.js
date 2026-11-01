@@ -32,6 +32,12 @@ export const queryKeys = {
     all: ['catalog'],
     part: (name, params) => ['catalog', name, ...(params ? [params] : [])],
   },
+  contracts: {
+    all: ['contracts'],
+    list: (fiscalYearId) => ['contracts', 'list', fiscalYearId],
+    detail: (id) => ['contracts', 'detail', id],
+    rejections: (fiscalYearId) => ['contracts', 'rejections', fiscalYearId],
+  },
   messaging: {
     all: ['messages'],
     conversations: ['messages', 'conversations'],

@@ -58,7 +58,8 @@ const assertOfficeScope = async (actor, code, officeId) => {
 
 export const listEvidence = async (performanceValueId, actor) => {
   const value = await getValueOrThrow(performanceValueId);
-  await assertOfficeScope(actor, PERMISSIONS.EVIDENCE_READ, value.report.contract.officeId);
+  // Whoever verifies an office's evidence has to be able to read it
+  if (!(await actor.access.can(PERMISSIONS.EVIDENCE_VERIFY, value.report.contract.officeId))) await assertOfficeScope(actor, PERMISSIONS.EVIDENCE_READ, value.report.contract.officeId);
   return prisma.performanceEvidence.findMany({ where: { performanceValueId: value.id }, include: EVIDENCE_INCLUDE, orderBy: { createdAt: 'asc' } });
 };
 

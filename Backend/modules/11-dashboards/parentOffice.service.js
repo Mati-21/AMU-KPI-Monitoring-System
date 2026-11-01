@@ -1,4 +1,5 @@
 import { prisma } from '../../config/database.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 import { startOfTodayUtc } from '../../utils/dates.js';
 import { requiredImprovement, toNumber } from '../05-contract-cascading/measurement.js';
 import { OFFICE_REF, assertCanView, findOffice, formatMeasured, loadContracts, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
@@ -86,7 +87,9 @@ export const getParentOfficeDashboard = async (officeId, query, actor) => {
   await assertCanView(actor, office.id);
 
   const view = await resolveView(query);
-  const subordinates = await prisma.office.findMany({ where: { parentOfficeId: office.id, isActive: true }, ...OFFICE_REF });
+  // Without dashboard:read_all the page holds only the office's own results
+  const seesBelow = await actor.access.reaches(PERMISSIONS.DASHBOARD_READ_ALL, office.id);
+  const subordinates = seesBelow ? await prisma.office.findMany({ where: { parentOfficeId: office.id, isActive: true }, ...OFFICE_REF }) : [];
   const contracts = await loadContracts(view.fiscalYear.id, [office.id, ...subordinates.map((row) => row.id)]);
   const snapshots = new Map(contracts.map((contract) => [contract.officeId, toSnapshot(contract, view.fiscalYear, view.period)]));
   const childSnapshots = subordinates.map((row) => snapshots.get(row.id)).filter(Boolean);
@@ -100,7 +103,7 @@ export const getParentOfficeDashboard = async (officeId, query, actor) => {
     score: own?.score ?? null,
     summary: own?.summary ?? summarize([]),
     kpis: (own?.lines ?? []).map(publicLine),
-    responsibilities: own ? await loadResponsibilities(own.lines) : [],
+    responsibilities: own && seesBelow ? await loadResponsibilities(own.lines) : [],
     subordinates: compareOffices(subordinates.map((row) => toOfficeRow(row, snapshots.get(row.id)))),
     reports: {
       awaitingReview: awaitingReview(childSnapshots, view.period),

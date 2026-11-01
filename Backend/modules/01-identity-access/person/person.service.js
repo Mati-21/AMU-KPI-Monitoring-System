@@ -4,7 +4,6 @@ import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
 import { activeOn, isActiveToday, startOfTodayUtc } from '../../../utils/dates.js';
-import { deleteStoredFile } from '../../08-evidence-documents/file.service.js';
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
 import { parseBoolean, parseBooleanQuery, parseUuid } from '../../../utils/validation.js';
@@ -246,28 +245,25 @@ export const updatePerson = async (id, data, actor) => {
 };
 
 /**
- * Delete a person; if they are referenced by institutional records, deactivate them instead.
+ * Archive a person: nothing is deleted, so their history stays. Login stops, sessions end, and their placements end
+ * yesterday, which frees their positions and takes them off office and role lists.
  */
-export const deletePerson = async (id, actor) => {
+export const archivePerson = async (id, actor) => {
   const existing = await getPersonOrThrow(id);
-  if (id === actor?.personId) throw badRequest('You cannot delete yourself');
+  if (id === actor?.personId) throw badRequest('You cannot archive yourself');
+  if (!existing.isActive) throw conflict('This person is already archived');
   await assertCanChangePerson(id, actor);
-  const picture = existing.profilePictureFileId ? await prisma.fileUpload.findUnique({ where: { id: existing.profilePictureFileId } }) : null;
-  const oldValues = { firstName: existing.firstName, lastName: existing.lastName, email: existing.email };
-  try {
-    await prisma.person.delete({ where: { id } });
-    if (picture) await deleteStoredFile(picture);
-    await auditAction(actor, { action: 'PERSON_DELETED', entityType: 'person', entityId: id, oldValues });
-    return { deactivated: false, message: 'Person deleted successfully' };
-  } catch (error) {
-    if (error.code !== 'P2003') throw error;
-    await prisma.$transaction([
-      prisma.person.update({ where: { id }, data: { isActive: false } }),
-      prisma.userAccount.updateMany({ where: { personId: id }, data: { isActive: false } }),
-    ]);
-    await auditAction(actor, { action: 'PERSON_DEACTIVATED', entityType: 'person', entityId: id, oldValues });
-    return { deactivated: true, message: 'Person is referenced by institutional records and was deactivated instead' };
-  }
+
+  const yesterday = new Date(startOfTodayUtc().getTime() - 24 * 60 * 60 * 1000);
+  const running = await prisma.officePerson.findMany({ where: { personId: id, OR: [{ endDate: null }, { endDate: { gte: startOfTodayUtc() } }] }, select: { id: true, startDate: true } });
+  await prisma.$transaction([
+    prisma.person.update({ where: { id }, data: { isActive: false } }),
+    prisma.userAccount.updateMany({ where: { personId: id }, data: { isActive: false } }),
+    // A placement cannot end before it began, so one that began today or has not begun ends on its first day
+    ...running.map((placement) => prisma.officePerson.update({ where: { id: placement.id }, data: { endDate: placement.startDate > yesterday ? placement.startDate : yesterday } })),
+  ]);
+  if (existing.userAccount) await revokeAllSessions(existing.userAccount.id, REVOKE_REASONS.ACCOUNT_DEACTIVATED);
+  await auditAction(actor, { action: 'PERSON_ARCHIVED', entityType: 'person', entityId: id, oldValues: { firstName: existing.firstName, lastName: existing.lastName, email: existing.email, isActive: true }, newValues: { isActive: false } });
 };
 
 /**
@@ -373,7 +369,7 @@ export default {
   getPersonById,
   createPerson,
   updatePerson,
-  deletePerson,
+  archivePerson,
   upsertAccount,
   setAccountActive,
   resetPassword,

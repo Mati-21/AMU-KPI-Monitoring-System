@@ -35,6 +35,7 @@ const useOfficeAction = (send) => {
 };
 
 export const useSaveOffice = () => useOfficeAction(({ id, values }) => (id ? api.put(`/offices/${id}`, values) : api.post('/offices', values)).then(unwrap));
+export const useDeleteOffice = () => useOfficeAction((id) => api.delete(`/offices/${id}`));
 export const useSaveOfficeType = () => useOfficeAction(({ id, values }) => (id ? api.put(`/office-types/${id}`, values) : api.post('/office-types', values)).then(unwrap));
 export const useDeleteOfficeType = () => useOfficeAction((id) => api.delete(`/office-types/${id}`));
 export const useSavePosition = () => useOfficeAction(({ id, officeId, values }) => (id ? api.put(`/positions/${id}`, values) : api.post(`/offices/${officeId}/positions`, values)).then(unwrap));

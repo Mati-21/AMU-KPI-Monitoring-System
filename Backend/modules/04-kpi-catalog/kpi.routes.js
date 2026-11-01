@@ -605,6 +605,29 @@ router.post('/kpis', protect, requirePermission(PERMISSIONS.KPI_CREATE), kpiCont
 
 /**
  * @swagger
+ * /api/v1/kpis/import:
+ *   post:
+ *     summary: Register many KPIs at once, all or nothing
+ *     tags: [KPI Catalog]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rows]
+ *             properties:
+ *               rows: { type: array, maxItems: 500, items: { type: object, description: Same fields as registering one KPI } }
+ *               dryRun: { type: boolean, description: Only check the rows and report their problems }
+ *     responses:
+ *       200: { description: "Checked; problems lists each bad row's index and errors" }
+ *       201: { description: All rows saved }
+ *       400: { description: "Nothing saved; details.rows lists each bad row's index and errors" }
+ */
+router.post('/kpis/import', protect, requirePermission(PERMISSIONS.KPI_CREATE), kpiController.importKpis);
+
+/**
+ * @swagger
  * /api/v1/kpis/{id}:
  *   get:
  *     summary: KPI definition with isLocked and the KPIs it replaces or was replaced by

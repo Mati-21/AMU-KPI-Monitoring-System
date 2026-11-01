@@ -92,16 +92,16 @@ router.post('/persons', protect, requirePermission(PERMISSIONS.USER_CREATE), per
  *     responses:
  *       200: { description: Updated }
  *   delete:
- *     summary: Delete a person (deactivated instead when referenced by institutional records)
+ *     summary: Archive a person. Nothing is deleted; login stops and their placements end
  *     tags: [Persons]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Deleted or archived }
+ *       200: { description: Archived }
  */
 router.get('/persons/:id', protect, requirePermission(PERMISSIONS.USER_READ), personController.getPersonById);
 router.put('/persons/:id', protect, requirePermission(PERMISSIONS.USER_UPDATE), personController.updatePerson);
-router.delete('/persons/:id', protect, requirePermission(PERMISSIONS.USER_DELETE), personController.deletePerson);
+router.delete('/persons/:id', protect, requirePermission(PERMISSIONS.USER_DELETE), personController.archivePerson);
 
 /**
  * @swagger

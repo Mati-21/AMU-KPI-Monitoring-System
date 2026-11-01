@@ -76,7 +76,7 @@ const assertCanDownload = async (file, actor) => {
   if (file.uploadedByPersonId === actor.personId) return;
   if (actor.access.canGlobally(PERMISSIONS.FILE_READ)) return;
   for (const officeId of await officesUsingFile(file.id)) {
-    if (await actor.access.can(PERMISSIONS.FILE_READ, officeId)) return;
+    if ((await actor.access.can(PERMISSIONS.FILE_READ, officeId)) || (await actor.access.can(PERMISSIONS.EVIDENCE_VERIFY, officeId))) return;
   }
   throw forbidden('You do not have access to this file');
 };

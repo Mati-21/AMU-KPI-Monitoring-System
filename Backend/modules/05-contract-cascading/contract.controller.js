@@ -13,8 +13,8 @@ export const listContracts = async (req, res) => {
 };
 export const getContractById = async (req, res) => send(res, await contractService.getContractById(req.params.id, actorOf(req)));
 export const createContract = async (req, res) => send(res, await contractService.createContract(req.body || {}, actorOf(req)), 201);
-export const submitContract = async (req, res) => send(res, await contractService.submitContract(req.params.id, actorOf(req)));
-export const approveContract = async (req, res) => send(res, await contractService.approveContract(req.params.id, actorOf(req)));
+export const listRejections = async (req, res) => send(res, await contractService.listRejections({ fiscalYearId: req.query.fiscalYearId }, actorOf(req)));
+export const assignContract = async (req, res) => send(res, await contractService.assignContract(req.params.id, actorOf(req)));
 export const rejectContract = async (req, res) => send(res, await contractService.rejectContract(req.params.id, req.body || {}, actorOf(req)));
 export const signContract = async (req, res) => send(res, await contractService.signContract(req.params.id, actorOf(req)));
 
@@ -26,10 +26,7 @@ export const getAssignmentTree = async (req, res) => {
 };
 export const getAssignmentById = async (req, res) => send(res, await assignmentService.getAssignmentById(req.params.id, actorOf(req)));
 export const updateAssignment = async (req, res) => send(res, await assignmentService.updateAssignment(req.params.id, req.body || {}, actorOf(req)));
-export const submitAssignment = async (req, res) => send(res, await assignmentService.submitAssignment(req.params.id, actorOf(req)));
-export const approveAssignment = async (req, res) => send(res, await assignmentService.approveAssignment(req.params.id, actorOf(req)));
-export const rejectAssignment = async (req, res) => send(res, await assignmentService.rejectAssignment(req.params.id, req.body || {}, actorOf(req)));
-export const acknowledgeAssignment = async (req, res) => send(res, await assignmentService.acknowledgeAssignment(req.params.id, actorOf(req)));
+export const flagAssignment = async (req, res) => send(res, await assignmentService.flagAssignment(req.params.id, req.body || {}, actorOf(req)));
 export const cancelAssignment = async (req, res) => send(res, await assignmentService.cancelAssignment(req.params.id, req.body || {}, actorOf(req)));
 export const verifyBaseline = async (req, res) => send(res, await assignmentService.verifyBaseline(req.params.id, actorOf(req)));
 export const addBaselineEvidence = async (req, res) => send(res, await assignmentService.addBaselineEvidence(req.params.id, req.body || {}, actorOf(req)), 201);

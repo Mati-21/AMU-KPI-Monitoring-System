@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import LandingPage from '../features/00-landing/pages/LandingPage';
 
+import ContractPage from '../features/05-contracts/pages/ContractPage';
 import KpiAllocationPage from '../features/05-contracts/pages/KpiAllocationPage';
 import SignIn from '../features/01-identity/pages/LoginPage';
 import NotFoundPage from '../shared/pages/PageNotFound';
@@ -69,19 +70,9 @@ function App() {
                       <Route path="/kpi-approvals" element={<KpiApprovalsPage />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'KPI Allocation'),
-                            permissionUtils.permissionKey('create', 'KPI Allocation'),
-                            permissionUtils.permissionKey('assign', 'KPI Allocation'),
-                            permissionUtils.permissionKey('delete', 'KPI Allocation'),
-                          ]}
-                        />
-                      }
-                    >
+                    <Route element={<RequirePermission permission="contract:read" />}>
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
+                      <Route path="/assign-kpi/:contractId" element={<ContractPage />} />
                     </Route>
 
                     <Route path="/offices" element={<OfficesPage />} />

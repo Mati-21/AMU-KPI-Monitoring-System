@@ -82,10 +82,14 @@ const FIELD_LABELS = {
 };
 
 /**
+ * One of the backend's messages about a KPI, in the words the form uses.
+ */
+export const friendlyProblem = (text) => {
+  const friendly = Object.entries(FIELD_LABELS).reduce((message, [key, label]) => message.replace(new RegExp(`\\b${key}\\b`, 'g'), label), text);
+  return friendly.charAt(0).toUpperCase() + friendly.slice(1);
+};
+
+/**
  * The backend's list of problems with a KPI, in readable words.
  */
-export const kpiErrors = (error) =>
-  (error?.response?.data?.details?.errors ?? []).map((text) => {
-    const friendly = Object.entries(FIELD_LABELS).reduce((message, [key, label]) => message.replace(new RegExp(`\\b${key}\\b`, 'g'), label), text);
-    return friendly.charAt(0).toUpperCase() + friendly.slice(1);
-  });
+export const kpiErrors = (error) => (error?.response?.data?.details?.errors ?? []).map(friendlyProblem);

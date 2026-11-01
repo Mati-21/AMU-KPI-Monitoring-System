@@ -73,7 +73,7 @@ const assertCanDelegate = async (actor, role, scopeOfficeId) => {
   const codes = roleCodes(role);
   if (codes.includes(SUPER_ADMIN_PERMISSION)) throw forbidden('Only a Super Admin can assign or revoke roles that include the * permission');
 
-  const holds = (code) => (scopeOfficeId ? actor.access.can(code, scopeOfficeId) : actor.access.canGlobally(code));
+  const holds = (code) => actor.access.reaches(code, scopeOfficeId);
   if (!(await holds(PERMISSIONS.ROLE_ASSIGN))) {
     throw forbidden(scopeOfficeId ? 'This office is outside your role:assign scope' : 'University-wide assignments need university-wide role:assign');
   }

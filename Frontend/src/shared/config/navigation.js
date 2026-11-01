@@ -48,9 +48,9 @@ export const navigationSections = [
       },
       {
         icon: ClipboardList,
-        label: 'KPI Allocation',
+        label: 'KPI Assignment',
         path: '/assign-kpi',
-        permissions: [permissionUtils.permissionKey('view', 'KPI Allocation'), permissionUtils.permissionKey('create', 'KPI Allocation')],
+        permissions: ['contract:read'],
       },
       {
         icon: Building2,

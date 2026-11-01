@@ -67,26 +67,26 @@ router.get('/contracts/:id', protect, canRead, contractController.getContractByI
 
 /**
  * @swagger
- * /api/v1/contracts/{id}/submit:
+ * /api/v1/contract-rejections:
+ *   get:
+ *     summary: Past rejections of contracts, with their notes and flagged KPIs, for the offices the user can read
+ *     tags: [Contracts & Cascading]
+ *     parameters:
+ *       - { in: query, name: fiscalYearId, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Rejections, newest first }
+ * /api/v1/contracts/{id}/assign:
  *   patch:
- *     summary: Submit once every assignment is submitted and weights reach the required total
+ *     summary: The office above sends a draft contract to the receiving office, once weights reach the required total
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Submitted }
- *       409: { description: Assignments not ready, or weights do not reach the total }
- * /api/v1/contracts/{id}/approve:
- *   patch:
- *     summary: Approve a submitted contract once all its assignments are approved
- *     tags: [Contracts & Cascading]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     responses:
- *       200: { description: Approved }
+ *       200: { description: Assigned }
+ *       409: { description: A baseline is pending, or weights do not reach the total }
  * /api/v1/contracts/{id}/reject:
  *   patch:
- *     summary: Send a submitted contract back to draft with a comment
+ *     summary: The receiving office rejects an assigned contract. Needs a flagged KPI or a comment
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -94,21 +94,22 @@ router.get('/contracts/:id', protect, canRead, contractController.getContractByI
  *       required: true
  *       content:
  *         application/json:
- *           schema: { type: object, required: [comment], properties: { comment: { type: string } } }
+ *           schema: { type: object, properties: { comment: { type: string } } }
  *     responses:
- *       200: { description: Back in draft }
+ *       200: { description: Rejected }
  * /api/v1/contracts/{id}/sign:
  *   patch:
- *     summary: The receiving office signs an approved contract once it has acknowledged every assignment
+ *     summary: The receiving office accepts an assigned contract and every KPI on it
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
  *       200: { description: Signed }
+ *       409: { description: Some KPIs are flagged }
  */
-router.patch('/contracts/:id/submit', protect, canManage, contractController.submitContract);
-router.patch('/contracts/:id/approve', protect, canApprove, contractController.approveContract);
-router.patch('/contracts/:id/reject', protect, canApprove, contractController.rejectContract);
+router.get('/contract-rejections', protect, canRead, contractController.listRejections);
+router.patch('/contracts/:id/assign', protect, canManage, contractController.assignContract);
+router.patch('/contracts/:id/reject', protect, canAcknowledge, contractController.rejectContract);
 router.patch('/contracts/:id/sign', protect, canAcknowledge, contractController.signContract);
 
 /**
@@ -172,7 +173,7 @@ router.get('/assignments/tree', protect, canRead, contractController.getAssignme
  *     responses:
  *       200: { description: Assignment with history }
  *   put:
- *     summary: Edit a draft or rejected assignment
+ *     summary: Edit a draft assignment
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -190,53 +191,28 @@ router.get('/assignments/tree', protect, canRead, contractController.getAssignme
  *               weight: { type: number }
  *     responses:
  *       200: { description: Updated }
- *       409: { description: Approved assignments change only through a change request }
+ *       409: { description: After assigning, values change only through the contract being rejected or a change request }
  */
 router.get('/assignments/:id', protect, canRead, contractController.getAssignmentById);
 router.put('/assignments/:id', protect, canManage, contractController.updateAssignment);
 
 /**
  * @swagger
- * /api/v1/assignments/{id}/submit:
+ * /api/v1/assignments/{id}/flag:
  *   patch:
- *     summary: Submit a draft assignment for approval
- *     tags: [Contracts & Cascading]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     responses:
- *       200: { description: Submitted }
- * /api/v1/assignments/{id}/approve:
- *   patch:
- *     summary: Approve a submitted assignment. A pending baseline blocks it, and so does an unverified one if the setting requires verification
- *     tags: [Contracts & Cascading]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     responses:
- *       200: { description: Approved }
- * /api/v1/assignments/{id}/reject:
- *   patch:
- *     summary: Reject a submitted assignment with a comment
+ *     summary: The receiving office flags a KPI with a note while reviewing its contract, or clears the flag with no note
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     requestBody:
- *       required: true
  *       content:
  *         application/json:
- *           schema: { type: object, required: [comment], properties: { comment: { type: string } } }
+ *           schema: { type: object, properties: { note: { type: string, nullable: true } } }
  *     responses:
- *       200: { description: Rejected }
- * /api/v1/assignments/{id}/acknowledge:
- *   patch:
- *     summary: The receiving office acknowledges an approved assignment
- *     tags: [Contracts & Cascading]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     responses:
- *       200: { description: Acknowledged }
+ *       200: { description: Flag saved or cleared }
  * /api/v1/assignments/{id}/cancel:
  *   patch:
- *     summary: Cancel an assignment that is not yet approved and has nothing cascaded from it
+ *     summary: Cancel a draft assignment that has nothing cascaded from it
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -248,10 +224,7 @@ router.put('/assignments/:id', protect, canManage, contractController.updateAssi
  *     responses:
  *       200: { description: Cancelled }
  */
-router.patch('/assignments/:id/submit', protect, canManage, contractController.submitAssignment);
-router.patch('/assignments/:id/approve', protect, canApprove, contractController.approveAssignment);
-router.patch('/assignments/:id/reject', protect, canApprove, contractController.rejectAssignment);
-router.patch('/assignments/:id/acknowledge', protect, canAcknowledge, contractController.acknowledgeAssignment);
+router.patch('/assignments/:id/flag', protect, canAcknowledge, contractController.flagAssignment);
 router.patch('/assignments/:id/cancel', protect, canManage, contractController.cancelAssignment);
 
 /**
@@ -293,15 +266,15 @@ router.post('/assignments/:id/baseline/evidence', protect, canManage, contractCo
  * @swagger
  * /api/v1/assignments/{id}/allocations:
  *   get:
- *     summary: Distributed, retained and unallocated responsibility with the reconciliation status
+ *     summary: How this KPI is shared between the offices below, with the offices that could still get a share
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Responsibility summary }
+ *       200: { description: "Sharing; shareable is false for rates and other KPIs that cannot be split" }
  *   put:
- *     summary: Record how this office splits its responsibility, replacing the previous split
- *     description: FULL distributes everything, EQUAL shares it evenly, CUSTOM uses the amounts given, NONE keeps it all. A child with no amount gets its own assigned improvement. Differences are flagged, not corrected.
+ *     summary: Save how this KPI is shared, replacing the previous split
+ *     description: Shares and the kept amount must reach at least the improvement. More is allowed. A KPI still in draft on an office's contract takes its new target from its share.
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -311,23 +284,22 @@ router.post('/assignments/:id/baseline/evidence', protect, canManage, contractCo
  *         application/json:
  *           schema:
  *             type: object
- *             required: [distributionMethod]
+ *             required: [distributionMethod, shares]
  *             properties:
- *               distributionMethod: { type: string, enum: [EQUAL, CUSTOM, FULL, NONE] }
+ *               distributionMethod: { type: string, enum: [EQUAL, CUSTOM] }
  *               retainedAmount: { type: number, example: 10 }
- *               retainedNote: { type: string }
- *               allocations:
+ *               shares:
  *                 type: array
  *                 items:
  *                   type: object
- *                   required: [childAssignmentId]
+ *                   required: [officeId, amount]
  *                   properties:
- *                     childAssignmentId: { type: string, format: uuid }
+ *                     officeId: { type: string, format: uuid }
  *                     amount: { type: number, example: 20 }
- *                     note: { type: string }
  *     responses:
- *       200: { description: Saved, with the reconciliation status }
- *       400: { description: Invalid split, or over the over-allocation cap }
+ *       200: { description: Saved }
+ *       400: { description: "Short of the improvement, or an invalid split" }
+ *       409: { description: "An office already has this KPI, or the KPI cannot be shared" }
  * /api/v1/assignments/{id}/reconciliation:
  *   patch:
  *     summary: Formally justify a difference that stays

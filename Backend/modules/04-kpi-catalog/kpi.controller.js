@@ -58,4 +58,5 @@ export const listKpis = async (req, res) => {
 };
 export const getKpiById = async (req, res) => send(res, await kpiService.getKpiById(req.params.id));
 export const createKpi = async (req, res) => send(res, await kpiService.createKpi(req.body || {}, actorOf(req)), 201);
+export const importKpis = async (req, res) => send(res, await kpiService.importKpis(req.body || {}, actorOf(req)), req.body?.dryRun ? 200 : 201);
 export const updateKpi = async (req, res) => send(res, await kpiService.updateKpi(req.params.id, req.body || {}, actorOf(req)));

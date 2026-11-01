@@ -74,6 +74,30 @@ export const getOfficeDescendantIds = async (officeId) => {
   return rows.map((row) => row.id);
 };
 
+/**
+ * Ids of the offices a person may see: where they are placed today. office:read_all adds everything below, while
+ * contract:manage adds just the offices directly below, because that is who it gives contracts to. A Super Admin sees
+ * all (null).
+ */
+const visibleOfficeIds = async (actor) => {
+  const grants = await getActiveGrants(actor.personId);
+  if (isSuperAdmin(grants)) return null;
+  const placements = await prisma.officePerson.findMany({ where: { personId: actor.personId, ...activeOn('startDate', 'endDate') }, select: { officeId: true } });
+  const own = [...new Set(placements.map((placement) => placement.officeId))];
+  const holds = (code) => grants.some((grant) => grant.code === code);
+
+  if (holds(PERMISSIONS.OFFICE_READ_ALL)) return [...new Set((await Promise.all(own.map(getOfficeDescendantIds))).flat())];
+  if (!holds(PERMISSIONS.CONTRACT_MANAGE)) return own;
+  const directlyBelow = await prisma.office.findMany({ where: { parentOfficeId: { in: own } }, select: { id: true } });
+  return [...own, ...directlyBelow.map((office) => office.id)];
+};
+
+// Not found rather than forbidden, so an office outside the person's part of the tree stays unknown to them
+export const assertOfficeVisible = async (id, actor) => {
+  const visible = await visibleOfficeIds(actor);
+  if (visible && !visible.includes(id)) throw notFound('Office not found');
+};
+
 // ===== Office types =====
 
 export const listOfficeTypes = async () => {
@@ -158,8 +182,10 @@ export const deleteOfficeType = async (id, actor) => {
 
 // ===== Offices =====
 
-export const listOffices = async ({ officeTypeId, parentOfficeId, isActive, search } = {}) => {
+export const listOffices = async ({ officeTypeId, parentOfficeId, isActive, search } = {}, actor) => {
   const where = {};
+  const visible = await visibleOfficeIds(actor);
+  if (visible) where.id = { in: visible };
   const typeId = parseUuid(officeTypeId, 'officeTypeId', { required: false });
   const active = parseBooleanQuery(isActive, 'isActive');
   if (typeId) where.officeTypeId = typeId;
@@ -355,8 +381,10 @@ export const getOfficeHistory = async (id) => {
 /**
  * The whole office structure as a nested tree (one query, assembled in memory).
  */
-export const getOfficeTree = async () => {
+export const getOfficeTree = async (actor) => {
+  const visible = await visibleOfficeIds(actor);
   const offices = await prisma.office.findMany({
+    where: visible ? { id: { in: visible } } : {},
     select: { ...OFFICE_REF_SELECT, isActive: true, parentOfficeId: true, officeType: { select: OFFICE_TYPE_SELECT } },
     orderBy: { name: 'asc' },
   });
@@ -371,6 +399,58 @@ export const getOfficeTree = async () => {
   // offices are already sorted by name, so children arrays are too
   const strip = ({ parentOfficeId, children, ...node }) => ({ ...node, children: children.map(strip) });
   return roots.map(strip);
+};
+
+/**
+ * What still depends on an office, in words. Each of these would lose its meaning without the office.
+ */
+const officeDependencies = async (id) => {
+  const today = startOfTodayUtc();
+  const stillRunning = { OR: [{ endDate: null }, { endDate: { gte: today } }] };
+  const counts = await Promise.all([
+    prisma.office.count({ where: { parentOfficeId: id } }),
+    prisma.officePerson.count({ where: { officeId: id, ...stillRunning } }),
+    prisma.officePersonRole.count({ where: { scopeOfficeId: id, OR: [{ validTo: null }, { validTo: { gte: today } }], officePerson: stillRunning } }),
+    prisma.performanceContract.count({ where: { OR: [{ officeId: id }, { assigningOfficeId: id }] } }),
+    prisma.kpi.count({ where: { coordinatingOfficeId: id } }),
+    prisma.performanceReview.count({ where: { reviewerOfficeId: id } }),
+    prisma.document.count({ where: { ownerOfficeId: id } }),
+    prisma.responsibilityAllocation.count({ where: { childOfficeId: id } }),
+    // Offices that used to sit under this one and have since moved away
+    prisma.officeHierarchyHistory.count({ where: { parentOfficeId: id, office: { NOT: { parentOfficeId: id } } } }),
+  ]);
+  const words = ['sub-office(s)', 'person(s) placed in it', 'role assignment(s) limited to it', 'contract(s)', 'KPI(s) it coordinates', 'report review(s)', 'document(s)', 'KPI share(s)', 'past sub-office record(s)'];
+  return counts.flatMap((count, index) => (count > 0 ? [`${count} ${words[index]}`] : []));
+};
+
+/**
+ * Delete an office nothing depends on. Its positions and ended placements go with it; the system log keeps the record.
+ * An office that was really used keeps its history, so it can only be deactivated.
+ */
+export const deleteOffice = async (id, actor) => {
+  const office = await getOfficeOrThrow(parseUuid(id, 'id'));
+  await assertScope(actor, PERMISSIONS.OFFICE_MANAGE, id);
+  if (!office.parentOfficeId) throw conflict('The top office cannot be deleted');
+
+  const dependencies = await officeDependencies(id);
+  if (dependencies.length > 0) throw conflict(`${office.name} cannot be deleted because it still has ${dependencies.join(', ')}. Remove them first, or deactivate the office instead.`, { dependencies });
+
+  const placements = await prisma.officePerson.findMany({ where: { officeId: id }, select: { id: true, personId: true, positionId: true, startDate: true, endDate: true } });
+  const inOffice = { officePerson: { officeId: id } };
+  try {
+    await prisma.$transaction([
+      prisma.officePersonRole.deleteMany({ where: { OR: [inOffice, { scopeOfficeId: id }] } }),
+      prisma.officePerson.deleteMany({ where: { officeId: id } }),
+      prisma.position.deleteMany({ where: { officeId: id } }),
+      prisma.officeHierarchyHistory.deleteMany({ where: { officeId: id } }),
+      prisma.notification.updateMany({ where: { targetOfficeId: id }, data: { targetOfficeId: null } }),
+      prisma.office.delete({ where: { id } }),
+    ]);
+  } catch (error) {
+    if (error.code !== 'P2003') throw error;
+    throw conflict(`${office.name} cannot be deleted because other records still use it. Deactivate the office instead.`);
+  }
+  await auditAction(actor, { action: 'OFFICE_DELETED', entityType: 'office', entityId: id, oldValues: { name: office.name, code: office.code, parentOfficeId: office.parentOfficeId, officeTypeId: office.officeTypeId, placements } });
 };
 
 // ===== Positions =====
@@ -474,7 +554,7 @@ const formatPlacement = ({ person, ...placement }) => ({ ...placement, person: {
 export const listMembers = async (officeId) => {
   await getOfficeOrThrow(officeId);
   const placements = await prisma.officePerson.findMany({
-    where: { officeId, ...activeOn('startDate', 'endDate') },
+    where: { officeId, person: { isActive: true }, ...activeOn('startDate', 'endDate') },
     orderBy: [{ position: { isHead: 'desc' } }, { startDate: 'asc' }],
     include: placementInclude(),
   });
@@ -579,6 +659,8 @@ export const endPlacement = async (id, { endDate } = {}, actor) => {
 
 export default {
   getOfficeDescendantIds,
+  assertOfficeVisible,
+  deleteOffice,
   listOfficeTypes,
   createOfficeType,
   updateOfficeType,

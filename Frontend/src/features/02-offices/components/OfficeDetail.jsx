@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, Edit3, History, Plus, Power } from 'lucide-react';
+import { Building2, Edit3, History, Plus, Power, Trash2 } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/compon
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { useOffice, useOfficeHistory, useSaveOffice } from '../hooks/useOffices';
+import { useDeleteOffice, useOffice, useOfficeHistory, useSaveOffice } from '../hooks/useOffices';
 import { formatDate } from '../lib/officeTree';
+import { ConfirmDialog } from './FormParts';
 import MembersCard from './MembersCard';
 import PositionsCard from './PositionsCard';
 import PreviewList from './PreviewList';
@@ -81,15 +82,30 @@ const HistoryCard = ({ officeId }) => {
   );
 };
 
-const OfficeDetail = ({ officeId, onSelect, onEdit, onAddSubOffice }) => {
+const OfficeDetail = ({ officeId, onSelect, onDeleted, onEdit, onAddSubOffice }) => {
   const can = useCan();
   const { notify } = useNotification();
   const { data: office, isLoading, error } = useOffice(officeId);
   const save = useSaveOffice();
+  const remove = useDeleteOffice();
+  const [deleting, setDeleting] = useState(false);
   const [problem, setProblem] = useState(null);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading...</p>;
   if (error) return <p className="text-sm text-red-500">{apiErrorMessage(error, 'Could not load this office.')}</p>;
+
+  const closeDelete = () => {
+    remove.reset();
+    setDeleting(false);
+  };
+
+  const confirmDelete = () =>
+    remove.mutate(office.id, {
+      onSuccess: () => {
+        notify(`${office.name} was deleted.`, 'success');
+        onDeleted();
+      },
+    });
 
   const setActive = (isActive) => {
     setProblem(null);
@@ -139,9 +155,17 @@ const OfficeDetail = ({ officeId, onSelect, onEdit, onAddSubOffice }) => {
               )}
             </>
           )}
+          {can('office:manage') && office.parent && (
+            <Button type="button" size="sm" variant="destructive" className="gap-1" onClick={() => setDeleting(true)}>
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
         {problem && <p className="w-full text-sm text-red-500">{apiErrorMessage(problem, 'Could not change this office.')}</p>}
       </div>
+
+      <ConfirmDialog open={deleting} onClose={closeDelete} title="Delete Office" description={`Delete ${office.name} for good, with its positions and past placements? This cannot be undone. An office that is still in use cannot be deleted.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <MembersCard office={office} />

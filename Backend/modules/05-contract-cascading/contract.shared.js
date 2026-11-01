@@ -13,6 +13,9 @@ import { numericValue, requiredImprovement, toNumber } from './measurement.js';
 
 export const LIVE_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'ACKNOWLEDGED'];
 export const APPROVED_STATUSES = ['APPROVED', 'ACKNOWLEDGED'];
+// The contract is with the office above, which can still change it
+export const OPEN_CONTRACT_STATUSES = ['DRAFT', 'REJECTED'];
+const ASSIGNED_STATUSES = ['SUBMITTED', ...APPROVED_STATUSES];
 
 const hasAuthorityFromAbove = (actor, code, contract) =>
   contract.assigningOfficeId ? actor.access.can(code, contract.assigningOfficeId) : actor.access.canGlobally(code);
@@ -36,12 +39,28 @@ export const assertSeparateApprover = async (actor, preparedByPersonId) => {
   }
 };
 
+// The office that sent the contract, or the office itself for a self contract, which nobody sends
+const readsFromAbove = (actor, contract) => actor.access.can(PERMISSIONS.CONTRACT_READ, contract.assigningOfficeId ?? contract.officeId);
+
 /**
- * Reading: the assigning side sees everything. The receiving office sees an assignment only once it is approved.
+ * Either side of a contract, whatever its status.
+ */
+export const canReadEitherSide = async (actor, contract) => (await readsFromAbove(actor, contract)) || actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+
+/**
+ * A draft or rejected contract is with the office above, so the receiving office sees it only once it is assigned.
+ */
+export const canSeeContract = async (actor, contract) => {
+  if (await readsFromAbove(actor, contract)) return true;
+  return !OPEN_CONTRACT_STATUSES.includes(contract.status) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+};
+
+/**
+ * Reading: the assigning side sees everything. The receiving office sees an assignment once it is assigned to them.
  */
 export const canSeeAssignment = async (actor, contract, status) => {
-  if (await hasAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_READ, contract)) return true;
-  return APPROVED_STATUSES.includes(status) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+  if (await readsFromAbove(actor, contract)) return true;
+  return ASSIGNED_STATUSES.includes(status) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
 };
 
 const OFFICE_REF = { select: { id: true, name: true, code: true } };

@@ -16,7 +16,7 @@ const quietly = (send) => async (...args) => {
 
 const event = (notification, actor) => sendNotification({ ...notification, excludePersonId: actor?.personId ?? null, createdByPersonId: actor?.personId ?? null });
 
-const assignmentEntity = (assignment) => ({ entityType: 'kpi_assignment', entityId: assignment.id });
+const contractEntity = (contract) => ({ entityType: 'performance_contract', entityId: contract.id });
 const reportEntity = (report) => ({ entityType: 'performance_report', entityId: report.id });
 
 // The office above decides. The top office has none, so those with university-wide authority do.
@@ -39,18 +39,18 @@ export const supportRequestReceived = quietly((request) =>
   })
 );
 
-// ===== Assignments =====
+// ===== Contracts =====
 
-export const assignmentSubmitted = quietly((assignment, actor) =>
-  event({ title: 'Assignment awaiting approval', message: `${kpiLabel(assignment)} for ${officeName(assignment.contract)} is waiting for approval.`, notificationType: 'ASSIGNMENT_SUBMITTED', ...assignmentEntity(assignment), ...fromAbove(assignment.contract, PERMISSIONS.CONTRACT_APPROVE) }, actor)
+export const contractAssigned = quietly((contract, actor) =>
+  event({ title: 'Contract to review', message: `A contract for ${officeName(contract)}, ${contract.fiscalYear.name}, is waiting for you to review and sign.`, notificationType: 'CONTRACT_ASSIGNED', ...contractEntity(contract), ...receivingOffice(contract, PERMISSIONS.CONTRACT_ACKNOWLEDGE) }, actor)
 );
 
-export const assignmentApproved = quietly((assignment, actor) =>
-  event({ title: 'New KPI assigned', message: `${kpiLabel(assignment)} has been assigned to your office. Please review and acknowledge it.`, notificationType: 'ASSIGNMENT_APPROVED', ...assignmentEntity(assignment), ...receivingOffice(assignment.contract, PERMISSIONS.CONTRACT_ACKNOWLEDGE) }, actor)
+export const contractRejected = quietly((contract, reason, actor) =>
+  event({ title: 'Contract rejected', message: `${officeName(contract)} rejected its contract for ${contract.fiscalYear.name}: ${reason}`, notificationType: 'CONTRACT_REJECTED', ...contractEntity(contract), ...fromAbove(contract, PERMISSIONS.CONTRACT_MANAGE) }, actor)
 );
 
-export const assignmentRejected = quietly((assignment, comment, actor) =>
-  event({ title: 'Assignment rejected', message: `${kpiLabel(assignment)} for ${officeName(assignment.contract)} was rejected: ${comment}`, notificationType: 'ASSIGNMENT_REJECTED', ...assignmentEntity(assignment), ...fromAbove(assignment.contract, PERMISSIONS.CONTRACT_MANAGE) }, actor)
+export const contractSigned = quietly((contract, actor) =>
+  event({ title: 'Contract signed', message: `${officeName(contract)} signed its contract for ${contract.fiscalYear.name}.`, notificationType: 'CONTRACT_SIGNED', ...contractEntity(contract), ...fromAbove(contract, PERMISSIONS.CONTRACT_MANAGE) }, actor)
 );
 
 // ===== Change requests =====

@@ -1,7 +1,7 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
-import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
+import { HttpError, badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseBoolean, parseBooleanQuery, parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 
@@ -52,6 +52,8 @@ const KPI_INCLUDE = {
 };
 
 const formatKpi = ({ _count, ...kpi }) => ({ ...kpi, liveAssignmentCount: _count.assignments, isLocked: _count.assignments > 0 });
+
+const MAX_IMPORT_ROWS = 500;
 
 const assertGlobal = (actor, code, what) => {
   if (!actor.access.canGlobally(code)) throw forbidden(`${what} requires university-wide ${code} authority`);
@@ -195,13 +197,11 @@ export const getKpiById = async (id) => {
 // ===== Changes =====
 
 /**
- * Register a KPI. Methods left out get the usual choice for its measurement type; the scoring method defaults to
- * the university's official basis. With replacesKpiId the old KPI is retired in the same transaction.
+ * A complete, checked KPI definition. Methods left out get the usual choice for its measurement type; the scoring
+ * method defaults to the university's official basis.
  */
-export const createKpi = async (data = {}, actor) => {
-  assertGlobal(actor, PERMISSIONS.KPI_CREATE, 'Registering KPIs');
+const buildDefinition = async (data) => {
   const fields = parseKpiInput(data);
-  const replacesKpiId = parseUuid(data.replacesKpiId, 'replacesKpiId', { required: false }) ?? null;
   const rules = RULES_BY_TYPE[fields.measurementType];
 
   const definition = {
@@ -224,6 +224,18 @@ export const createKpi = async (data = {}, actor) => {
     ...fields,
   };
   await validateDefinition(definition);
+  return definition;
+};
+
+const auditValues = ({ _count, theme, strategicObjective, unit, scale, currency, defaultFrequency, coordinatingOffice, replaces, replacedBy, ...values }) => values;
+
+/**
+ * Register a KPI. With replacesKpiId the old KPI is retired in the same transaction.
+ */
+export const createKpi = async (data = {}, actor) => {
+  assertGlobal(actor, PERMISSIONS.KPI_CREATE, 'Registering KPIs');
+  const replacesKpiId = parseUuid(data.replacesKpiId, 'replacesKpiId', { required: false }) ?? null;
+  const definition = await buildDefinition(data);
 
   if (await prisma.kpi.findUnique({ where: { code: definition.code } })) throw conflict(`KPI code "${definition.code}" is already used`);
 
@@ -239,9 +251,50 @@ export const createKpi = async (data = {}, actor) => {
     return tx.kpi.create({ data: { ...definition, replacesKpiId, createdByPersonId: actor.personId }, include: KPI_INCLUDE });
   });
 
-  const { _count, theme, strategicObjective, unit, scale, currency, defaultFrequency, coordinatingOffice, replaces, replacedBy, ...values } = kpi;
-  await auditAction(actor, { action: replaced ? 'KPI_REPLACED' : 'KPI_CREATED', entityType: 'kpi', entityId: kpi.id, newValues: values });
+  await auditAction(actor, { action: replaced ? 'KPI_REPLACED' : 'KPI_CREATED', entityType: 'kpi', entityId: kpi.id, newValues: auditValues(kpi) });
   return formatKpi(kpi);
+};
+
+/**
+ * Check every row of a mass registration, reporting all problems at once by row position.
+ */
+const checkImportRows = async (rows) => {
+  const seen = new Set();
+  const checked = [];
+  for (const row of rows) {
+    const errors = [];
+    let definition = null;
+    try {
+      definition = await buildDefinition(row ?? {});
+      if (seen.has(definition.code)) errors.push(`Code "${definition.code}" appears more than once in this file`);
+      else if (await prisma.kpi.findUnique({ where: { code: definition.code }, select: { id: true } })) errors.push(`KPI code "${definition.code}" is already used`);
+      seen.add(definition.code);
+    } catch (failure) {
+      if (!(failure instanceof HttpError)) throw failure;
+      errors.push(...(failure.details?.errors ?? [failure.message]));
+    }
+    checked.push({ definition, errors });
+  }
+  return checked;
+};
+
+/**
+ * Mass registration, all or nothing: with dryRun it only reports each row's problems. Otherwise it saves every row,
+ * or none if any row has a problem.
+ */
+export const importKpis = async ({ rows, dryRun = false } = {}, actor) => {
+  assertGlobal(actor, PERMISSIONS.KPI_CREATE, 'Registering KPIs');
+  if (!Array.isArray(rows) || rows.length === 0) throw badRequest('rows must list at least one KPI');
+  if (rows.length > MAX_IMPORT_ROWS) throw badRequest(`A file can hold at most ${MAX_IMPORT_ROWS} KPIs`);
+
+  const checked = await checkImportRows(rows);
+  const problems = checked.flatMap(({ errors }, index) => (errors.length > 0 ? [{ index, errors }] : []));
+  if (dryRun) return { total: rows.length, problems };
+  if (problems.length > 0) throw badRequest('Some rows have problems, so nothing was saved', { rows: problems });
+
+  const kpis = await prisma.$transaction(checked.map(({ definition }) => prisma.kpi.create({ data: { ...definition, createdByPersonId: actor.personId }, include: KPI_INCLUDE })));
+  for (const kpi of kpis) await auditAction(actor, { action: 'KPI_CREATED', entityType: 'kpi', entityId: kpi.id, newValues: auditValues(kpi) });
+  return { total: kpis.length, problems: [] };
 };
 
 /**
@@ -280,4 +333,4 @@ export const updateKpi = async (id, data = {}, actor) => {
   return formatKpi(kpi);
 };
 
-export default { listKpis, getKpiById, createKpi, updateKpi };
+export default { listKpis, getKpiById, createKpi, importKpis, updateKpi };

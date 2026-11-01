@@ -22,9 +22,9 @@ export const updatePerson = async (req, res) => {
   res.json({ status: 'success', message: 'Person updated successfully', data: person });
 };
 
-export const deletePerson = async (req, res) => {
-  const result = await personService.deletePerson(req.params.id, actorOf(req));
-  res.json({ status: 'success', ...result });
+export const archivePerson = async (req, res) => {
+  await personService.archivePerson(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: 'Person archived' });
 };
 
 export const upsertAccount = async (req, res) => {
@@ -69,7 +69,7 @@ export default {
   getPersonById,
   createPerson,
   updatePerson,
-  deletePerson,
+  archivePerson,
   upsertAccount,
   toggleActive,
   resetPassword,

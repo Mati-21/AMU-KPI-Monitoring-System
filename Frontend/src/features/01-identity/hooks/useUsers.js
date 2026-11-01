@@ -28,7 +28,7 @@ export const usePerson = (personId) =>
 
 export const useCreatePerson = () => useAccountAction((values) => api.post('/persons', values));
 export const useUpdatePerson = () => useAccountAction(({ personId, values }) => api.put(`/persons/${personId}`, values));
-export const useDeletePerson = () => useAccountAction((personId) => api.delete(`/persons/${personId}`).then(({ data }) => data));
+export const useArchivePerson = () => useAccountAction((personId) => api.delete(`/persons/${personId}`));
 export const useSaveAccount = () => useAccountAction(({ personId, values }) => api.post(`/persons/${personId}/account`, values));
 export const useSetAccountActive = () => useAccountAction(({ accountId, isActive }) => api.patch(`/users/${accountId}/toggle-active`, { isActive }));
 export const useResetPassword = () => useAccountAction(({ accountId, temporaryPassword }) => api.post(`/users/${accountId}/reset-password`, { temporaryPassword }));

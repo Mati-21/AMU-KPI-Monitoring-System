@@ -1,9 +1,11 @@
 import { PERMISSIONS } from '../../../config/permissions.js';
+import { ownOfficeOf } from '../../03-access-control/access.service.js';
 import { forbidden, notFound } from '../../../utils/httpError.js';
 
 /**
  * Module 07 — Who may see and work on a report.
- * The reporting office sees its own draft. An office above sees a report only once it is submitted.
+ * The reporting office sees its own draft. An office above sees a report only once it is submitted, with report:read_all
+ * or because it reviews that office.
  */
 
 const VISIBLE_TO_OFFICES_ABOVE = ['SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUIRED', 'APPROVED', 'REJECTED', 'OVERDUE'];
@@ -11,14 +13,15 @@ const VISIBLE_TO_OFFICES_ABOVE = ['SUBMITTED', 'UNDER_REVIEW', 'REVISION_REQUIRE
 /**
  * True when the actor's own grant sits on this office rather than on an office above it.
  */
-export const holdsOnThisOffice = (actor, code, officeId) => actor.access.grants.some((grant) => grant.code === code && grant.scopeOfficeId === officeId);
+export const holdsOnThisOffice = (actor, code, officeId) => actor.access.grants.some((grant) => grant.code === code && ownOfficeOf(grant) === officeId);
 
 export const canSeeReport = async (actor, report) => {
   const { officeId } = report.contract;
   if (report.preparedByPersonId === actor.personId) return true;
   if (actor.access.canGlobally(PERMISSIONS.REPORT_READ)) return true;
   if (holdsOnThisOffice(actor, PERMISSIONS.REPORT_READ, officeId)) return true;
-  return VISIBLE_TO_OFFICES_ABOVE.includes(report.status) && actor.access.can(PERMISSIONS.REPORT_READ, officeId);
+  if (!VISIBLE_TO_OFFICES_ABOVE.includes(report.status)) return false;
+  return (await actor.access.can(PERMISSIONS.REPORT_READ, officeId)) || actor.access.can(PERMISSIONS.REPORT_REVIEW, officeId);
 };
 
 export const assertCanSeeReport = async (actor, report) => {

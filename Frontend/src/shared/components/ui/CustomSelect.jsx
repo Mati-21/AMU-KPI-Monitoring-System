@@ -40,7 +40,8 @@ function CustomSelect({ options, value, onChange, placeholder, compact = false, 
 
   const menuClassName = useMemo(() => {
     const placementClass = menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1';
-    return `absolute z-10 w-full bg-card border border-border rounded-md shadow-md max-h-60 overflow-y-auto overflow-x-hidden ${placementClass}`;
+    // Inside a dialog the menu takes up room, so the dialog grows instead of adding a second scrollbar beside the menu's
+    return `absolute z-10 w-full bg-card border border-border rounded-md shadow-md max-h-60 overflow-y-auto overflow-x-hidden in-[[role=dialog]]:static in-[[role=dialog]]:mt-1 in-[[role=dialog]]:max-h-48 ${placementClass}`;
   }, [menuPlacement]);
 
   const displayValue = useMemo(() => {

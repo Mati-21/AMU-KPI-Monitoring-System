@@ -37,10 +37,17 @@ const PeriodsTable = ({ year }) => {
   const reopen = usePeriodStatus('reopen');
   const remove = useDeletePeriod();
   const [frequencyId, setFrequencyId] = useState('');
+  const [shownFrequencyId, setShownFrequencyId] = useState('');
   const [dialog, setDialog] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const canManage = can('period:manage') && year.status !== 'CLOSED';
   const generated = frequencies.filter((frequency) => !frequency.isCustom);
+  const shownPeriods = shownFrequencyId ? periods.filter((period) => period.frequency.id === shownFrequencyId) : periods;
+  const frequencyFilter = (
+    <div className="w-52">
+      <CustomSelect compact options={[{ value: '', label: 'All frequencies' }, ...frequencies.map((frequency) => ({ value: frequency.id, label: frequency.name }))]} value={shownFrequencyId} onChange={setShownFrequencyId} placeholder="All frequencies" />
+    </div>
+  );
 
   const runGenerate = () =>
     generate.mutate(
@@ -126,7 +133,7 @@ const PeriodsTable = ({ year }) => {
         </div>
       )}
 
-      <RecordTable title={`Reporting Periods of ${year.name}`} description={year.status === 'CLOSED' ? 'This year is closed, so its periods are read-only.' : 'When offices report, and by which deadline.'} columns={columns} rows={periods} isLoading={isLoading} error={error} emptyText="No periods yet." />
+      <RecordTable title={`Reporting Periods of ${year.name}`} description={year.status === 'CLOSED' ? 'This year is closed, so its periods are read-only.' : 'When offices report, and by which deadline.'} filter={frequencyFilter} columns={columns} rows={shownPeriods} isLoading={isLoading} error={error} emptyText={shownFrequencyId ? 'No periods for this frequency.' : 'No periods yet.'} />
 
       {dialog?.type === 'edit' && <RecordDialog title={dialog.period ? `Edit ${dialog.period.name}` : 'Add Period'} description="Once reports depend on a period, only its deadline can change." fields={periodFields(frequencies, !dialog.period)} record={dialog.period} mutation={dialog.period ? save : { ...save, mutate: ({ values }, options) => save.mutate({ values: { ...values, fiscalYearId: year.id } }, options) }} onClose={() => { save.reset(); setDialog(null); }} />}
       {dialog?.type === 'reopen' && <RecordDialog title={`Reopen ${dialog.period.name}`} description="Offices can work on it again." fields={REOPEN_FIELDS} mutation={{ ...reopen, mutate: ({ values }, options) => reopen.mutate({ id: dialog.period.id, values }, options) }} submitLabel="Reopen" successMessage="Period reopened." onClose={() => { reopen.reset(); setDialog(null); }} />}

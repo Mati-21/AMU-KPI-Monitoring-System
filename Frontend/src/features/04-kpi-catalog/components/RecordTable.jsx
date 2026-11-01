@@ -7,13 +7,14 @@ import { apiErrorMessage } from '../../../shared/lib/apiError';
 /**
  * A titled card with an optional Add button and a table of records.
  */
-const RecordTable = ({ title, description, addLabel, onAdd, columns, rows, isLoading, error, emptyText = 'Nothing here yet.' }) => (
+const RecordTable = ({ title, description, addLabel, onAdd, filter, columns, rows, isLoading, error, emptyText = 'Nothing here yet.', rowClassName }) => (
   <div className="rounded-lg border border-border bg-card">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
       <div>
         <h2 className="text-base font-semibold text-foreground">{title}</h2>
         {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
       </div>
+      {filter}
       {onAdd && (
         <Button type="button" className="gap-2" onClick={onAdd}>
           <Plus className="h-4 w-4" />
@@ -45,7 +46,7 @@ const RecordTable = ({ title, description, addLabel, onAdd, columns, rows, isLoa
             </TableRow>
           )}
           {rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow key={row.id} className={rowClassName?.(row)}>
               {columns.map((column) => (
                 <TableCell key={column.label} className={column.className}>
                   {column.render(row)}

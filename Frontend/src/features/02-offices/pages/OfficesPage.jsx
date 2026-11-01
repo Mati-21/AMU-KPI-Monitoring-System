@@ -75,7 +75,7 @@ const OfficesPage = () => {
             </div>
 
             {shownId ? (
-              <OfficeDetail key={shownId} officeId={shownId} onSelect={setSelectedId} onEdit={(office) => setDialog({ office })} onAddSubOffice={(parentId) => setDialog({ parentId })} />
+              <OfficeDetail key={shownId} officeId={shownId} onSelect={setSelectedId} onDeleted={() => setSelectedId(null)} onEdit={(office) => setDialog({ office })} onAddSubOffice={(parentId) => setDialog({ parentId })} />
             ) : (
               !isLoading && <p className="text-sm text-muted-foreground">Add the first office to begin.</p>
             )}

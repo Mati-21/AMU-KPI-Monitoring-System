@@ -72,6 +72,7 @@ enum FiscalYearStatus {
 enum ContractStatus {
   DRAFT
   SUBMITTED
+  REJECTED
   APPROVED
   SIGNED
   CLOSED
@@ -232,6 +233,7 @@ model Person {
   notificationsCreated    Notification[]
   notificationRecipients  NotificationRecipient[]
   auditLogs               AuditLog[]
+  contractRejections ContractRejection[] @relation("ContractRejector")
 
   @@map("person")
 }
@@ -320,6 +322,7 @@ model Office {
   reviews           PerformanceReview[]
   documents         Document[]
   notifications     Notification[]
+  kpiShares         ResponsibilityAllocation[]
 
   @@index([parentOfficeId])
   @@map("office")
@@ -687,11 +690,28 @@ model PerformanceContract {
   assignments KpiAssignment[]
   reports     PerformanceReport[]
   scores      ContractScore[]
+  rejections  ContractRejection[]
 
   @@unique([fiscalYearId, officeId, versionNo])
   @@index([officeId])
   @@index([assigningOfficeId])
   @@map("performance_contract")
+}
+
+// One rejection of a contract, kept as history after the contract is corrected and assigned again
+model ContractRejection {
+  id                 String   @id @default(uuid()) @db.Uuid
+  contractId         String   @map("contract_id") @db.Uuid
+  rejectedByPersonId String?  @map("rejected_by_person_id") @db.Uuid
+  rejectedAt         DateTime @default(now()) @map("rejected_at") @db.Timestamptz(6)
+  note               String?
+  flaggedKpis        Json     @default("[]") @map("flagged_kpis")
+
+  contract   PerformanceContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  rejectedBy Person?             @relation("ContractRejector", fields: [rejectedByPersonId], references: [id])
+
+  @@index([contractId])
+  @@map("contract_rejection")
 }
 
 model KpiAssignment {
@@ -829,10 +849,12 @@ model KpiTarget {
 }
 
 // child_assignment_id is null on the RETAINED row (at most one per parent, see the migration).
+// child_office_id names who a share is for, so it can be set before that office has a contract.
 model ResponsibilityAllocation {
   id                 String         @id @default(uuid()) @db.Uuid
   parentAssignmentId String         @map("parent_assignment_id") @db.Uuid
   childAssignmentId  String?        @map("child_assignment_id") @db.Uuid
+  childOfficeId      String?        @map("child_office_id") @db.Uuid
   allocationType     AllocationType @map("allocation_type")
   allocatedAmount    Decimal        @map("allocated_amount") @db.Decimal(18, 4)
   note               String?
@@ -841,9 +863,11 @@ model ResponsibilityAllocation {
 
   parentAssignment KpiAssignment  @relation("AllocationParent", fields: [parentAssignmentId], references: [id])
   childAssignment  KpiAssignment? @relation("AllocationChild", fields: [childAssignmentId], references: [id])
+  childOffice      Office?        @relation(fields: [childOfficeId], references: [id])
   createdBy        Person?        @relation(fields: [createdByPersonId], references: [id])
 
   @@unique([parentAssignmentId, childAssignmentId])
+  @@unique([parentAssignmentId, childOfficeId])
   @@index([childAssignmentId])
   @@map("responsibility_allocation")
 }

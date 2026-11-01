@@ -32,6 +32,7 @@
           "label": "Offices, office types, positions & placements",
           "covers": ["Office", "OfficeType", "Position", "OfficePerson"],
           "permissions": [
+            { "action": "read_all", "description": "Also see the profile, positions and people of every office below, within the role's scope. Without it only the person's own office" },
             { "action": "create", "description": "Create offices under an office in scope" },
             { "action": "update", "description": "Rename, re-code, move or deactivate offices in scope" },
             { "action": "manage", "description": "Define office types (university-wide only) and positions of offices in scope" },
@@ -83,7 +84,8 @@
           "label": "Performance contracts and KPI assignments",
           "covers": ["PerformanceContract", "KpiAssignment", "KpiWeight", "KpiBaseline", "KpiTarget", "ResponsibilityAllocation", "AssignmentChangeRequest"],
           "permissions": [
-            { "action": "read", "description": "View contracts, assignments, baselines, targets, weights and change requests in scope" },
+            { "action": "read", "description": "View the contracts of the person's own office: those it received and those it sent" },
+            { "action": "read_all", "description": "Also see the contracts of every office below, including those between lower offices, within the role's scope. Without it only the person's own office" },
             { "action": "manage", "description": "Create contracts for subordinate offices, assign KPIs, set baselines, targets and weights, distribute responsibility" },
             { "action": "approve", "description": "Approve or reject contracts and assignments, verify baselines, review change requests" },
             { "action": "acknowledge", "description": "Acknowledge assignments and sign contracts for the receiving office" },
@@ -116,7 +118,8 @@
           "covers": ["PerformanceReport", "PerformanceValue", "PerformanceReview"],
           "permissions": [
             { "action": "create", "description": "Start an office's report and enter its results" },
-            { "action": "read", "description": "View reports in scope; offices above see them once submitted" },
+            { "action": "read", "description": "View the reports of the person's own office" },
+            { "action": "read_all", "description": "Also see the reports of every office below once submitted, within the role's scope" },
             { "action": "submit", "description": "Submit an office's report for review" },
             { "action": "review", "description": "Approve, reject or ask for revision of a subordinate office's report" }
           ]
@@ -126,7 +129,8 @@
           "label": "Achievements and scores",
           "covers": ["KpiAchievement", "ContractScore", "PerformanceStatusThreshold"],
           "permissions": [
-            { "action": "read", "description": "View scorecards, performance and KPI history of offices in scope" },
+            { "action": "read", "description": "View the scorecard, performance and KPI history of the person's own office" },
+            { "action": "read_all", "description": "Also see the scorecards and performance of every office below, within the role's scope. Without it only the person's own office" },
             { "action": "manage", "description": "Manage the university's performance bands" }
           ]
         }
@@ -141,7 +145,8 @@
           "label": "Stored files",
           "covers": ["FileUpload"],
           "permissions": [
-            { "action": "read", "description": "List documents and download files of offices in scope" }
+            { "action": "read", "description": "List documents and download files of the person's own office" },
+            { "action": "read_all", "description": "Also see the documents and files of every office below, within the role's scope. Without it only the person's own office" }
           ]
         },
         {
@@ -158,7 +163,8 @@
           "label": "Performance evidence",
           "covers": ["PerformanceEvidence"],
           "permissions": [
-            { "action": "read", "description": "View the evidence behind reported results" },
+            { "action": "read", "description": "View the evidence behind the results of the person's own office" },
+            { "action": "read_all", "description": "Also see the evidence of every office below, within the role's scope. Without it only the person's own office" },
             { "action": "link", "description": "Attach evidence to reported results and remove it while the report can change" },
             { "action": "verify", "description": "Verify or reject evidence during report review" }
           ]
@@ -210,7 +216,8 @@
           "label": "Dashboards",
           "covers": [],
           "permissions": [
-            { "action": "read", "description": "View university, parent office and office dashboards in scope" }
+            { "action": "read", "description": "View the dashboard of the person's own office" },
+            { "action": "read_all", "description": "Also see the university dashboard and the dashboards and comparison of every office below, within the role's scope" }
           ]
         }
       ]

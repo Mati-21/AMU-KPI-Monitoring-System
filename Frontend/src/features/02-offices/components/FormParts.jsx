@@ -25,9 +25,9 @@ export const Field = ({ label, required, hint, group, children }) => {
 /**
  * A dialog holding a form, with the usual error line and buttons.
  */
-export const FormDialog = ({ open, onClose, title, description, onSubmit, error, pending, submitLabel = 'Save', submitDisabled, children }) => (
+export const FormDialog = ({ open, onClose, title, description, onSubmit, error, pending, submitLabel = 'Save', submitDisabled, className = '', children }) => (
   <Dialog open={open} onOpenChange={(next) => !next && !pending && onClose()}>
-    <DialogContent className="max-h-[90vh] overflow-y-auto bg-card">
+    <DialogContent className={`max-h-[90vh] overflow-y-auto bg-card ${className}`}>
       <DialogHeader>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
@@ -48,7 +48,7 @@ export const FormDialog = ({ open, onClose, title, description, onSubmit, error,
   </Dialog>
 );
 
-export const ConfirmDialog = ({ open, onClose, title, description, onConfirm, error, pending, confirmLabel = 'Delete' }) => (
+export const ConfirmDialog = ({ open, onClose, title, description, onConfirm, error, pending, confirmLabel = 'Delete', confirmVariant = 'destructive' }) => (
   <Dialog open={open} onOpenChange={(next) => !next && !pending && onClose()}>
     <DialogContent className="bg-card">
       <DialogHeader>
@@ -60,7 +60,7 @@ export const ConfirmDialog = ({ open, onClose, title, description, onConfirm, er
         <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
-        <Button type="button" variant="destructive" onClick={onConfirm} disabled={pending}>
+        <Button type="button" variant={confirmVariant} onClick={onConfirm} disabled={pending}>
           {confirmLabel}
         </Button>
       </DialogFooter>

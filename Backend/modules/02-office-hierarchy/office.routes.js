@@ -153,6 +153,20 @@ router.put('/offices/:id', protect, requirePermission(PERMISSIONS.OFFICE_UPDATE)
 
 /**
  * @swagger
+ * /api/v1/offices/{id}:
+ *   delete:
+ *     summary: Delete an office with no sub-offices, current people, contracts or other records that depend on it
+ *     tags: [Offices]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: "Still in use; details.dependencies lists what depends on it" }
+ */
+router.delete('/offices/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.deleteOffice);
+
+/**
+ * @swagger
  * /api/v1/offices/{id}/history:
  *   get:
  *     summary: Parents this office has had and when, newest first

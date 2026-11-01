@@ -4,12 +4,13 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, notFound } from '../../utils/httpError.js';
 import { optionalString, parseDate, parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
-import { assignmentApproved, assignmentRejected, assignmentSubmitted } from '../09-notifications/notification.events.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import {
   APPROVED_STATUSES,
   ASSIGNMENT_INCLUDE,
   LIVE_STATUSES,
+  OPEN_CONTRACT_STATUSES,
+  addVersion,
   assertAuthorityFromAbove,
   assertAuthorityOnOffice,
   assertSeparateApprover,
@@ -18,12 +19,14 @@ import {
   getAssignmentOrThrow,
   requireComment,
 } from './contract.shared.js';
-import { parseBaseline, parseTarget, parseWeight } from './measurement.js';
+import { assertChildShare, recordChildShare, releaseChildShare } from './allocation.service.js';
+import { parseBaseline, parseTarget, parseWeight, requiredImprovement } from './measurement.js';
 
 /**
  * Module 05 — KPI assignments: a KPI on an office's contract, cascaded from the assignment above it.
- * Workflow: DRAFT -> SUBMITTED -> APPROVED -> ACKNOWLEDGED, or REJECTED (editable again) or CANCELLED.
- * While in draft the baseline, target and weight are edited in place. After approval they change only through a
+ * It follows its contract: DRAFT while the office above builds it, SUBMITTED once assigned, ACKNOWLEDGED once the
+ * receiving office signs, or REJECTED if that office flagged it. It can also be CANCELLED before assigning.
+ * While in draft the baseline, target and weight are edited in place. After signing they change only through a
  * change request, which adds a new version.
  */
 
@@ -45,10 +48,6 @@ const setStatus = async (assignment, status, data, actor, action, reason) => {
   const updated = await prisma.kpiAssignment.update({ where: { id: assignment.id }, data: { status, ...data }, include: ASSIGNMENT_INCLUDE });
   await audit(actor, assignment, action, status, reason);
   return formatAssignment(updated);
-};
-
-const assertStatus = (assignment, expected) => {
-  if (assignment.status !== expected) throw conflict(`This action needs a ${expected} assignment; this one is ${assignment.status}`);
 };
 
 const parseScopeRelation = (value, kpi) => (value === undefined ? (kpi.isAdditive ? 'EXCLUSIVE_COMPLETE' : 'OVERLAPPING') : parseEnum(value, 'scopeRelation', SCOPE_RELATIONS));
@@ -130,7 +129,7 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   if (!contract) throw notFound('Contract not found');
   await assertFiscalYearOpen(contract.fiscalYearId);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
-  if (contract.status !== 'DRAFT') throw conflict(`KPIs can be added only to a draft contract; this one is ${contract.status}`);
+  if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) throw conflict(`KPIs can be added only to a draft or rejected contract; this one is ${contract.status}`);
 
   const kpiId = parseUuid(data.kpiId, 'kpiId');
   const kpi = await prisma.kpi.findUnique({ where: { id: kpiId }, include: { scale: { include: { levels: true } } } });
@@ -138,7 +137,7 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   if (!kpi.isActive) throw badRequest(`KPI ${kpi.code} is retired`);
 
   const existing = await prisma.kpiAssignment.findUnique({ where: { contractId_kpiId: { contractId: contract.id, kpiId } } });
-  if (existing) throw conflict(`KPI ${kpi.code} is already on this contract`);
+  if (existing && existing.status !== 'CANCELLED') throw conflict(`KPI ${kpi.code} is already on this contract`);
 
   const parentAssignmentId = parseUuid(data.parentAssignmentId, 'parentAssignmentId', { required: false }) ?? null;
   await assertParentAssignment(contract, kpiId, parentAssignmentId);
@@ -150,22 +149,40 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   const target = parseTarget(kpi, data.target);
   const weight = parseWeight(data.weight);
   const personId = actor.personId;
+  const improvement = requiredImprovement(kpi, baseline, target);
+  await assertChildShare(parentAssignmentId, contract.officeId, improvement);
+  const fields = {
+    parentAssignmentId,
+    reportingFrequencyId,
+    scopeRelation: parseScopeRelation(data.scopeRelation, kpi),
+    maxOverAllocationPercent: parseNumber(data.maxOverAllocationPercent, 'maxOverAllocationPercent') ?? (await getSetting('kpi', 'default_max_over_allocation_percent')),
+    createdByPersonId: personId,
+  };
 
-  const assignment = await prisma.kpiAssignment.create({
-    data: {
-      contractId: contract.id,
-      kpiId,
-      parentAssignmentId,
-      reportingFrequencyId,
-      scopeRelation: parseScopeRelation(data.scopeRelation, kpi),
-      maxOverAllocationPercent: parseNumber(data.maxOverAllocationPercent, 'maxOverAllocationPercent') ?? (await getSetting('kpi', 'default_max_over_allocation_percent')),
-      createdByPersonId: personId,
-      baselines: { create: { ...baseline, createdByPersonId: personId } },
-      targets: { create: { ...target, createdByPersonId: personId } },
-      weights: { create: { weight, createdByPersonId: personId } },
-    },
-    include: ASSIGNMENT_INCLUDE,
-  });
+  // A cancelled KPI comes back on its own record: a contract holds a KPI once, and the old values stay as versions
+  const assignment = existing
+    ? await prisma.$transaction(async (tx) => {
+        await addVersion(tx, tx.kpiBaseline, existing.id, { ...baseline, createdByPersonId: personId });
+        await addVersion(tx, tx.kpiTarget, existing.id, { ...target, createdByPersonId: personId });
+        await addVersion(tx, tx.kpiWeight, existing.id, { weight, createdByPersonId: personId });
+        return tx.kpiAssignment.update({
+          where: { id: existing.id },
+          data: { ...fields, status: 'DRAFT', reviewComment: null, approvedByPersonId: null, approvedAt: null, acknowledgedByPersonId: null, acknowledgedAt: null },
+          include: ASSIGNMENT_INCLUDE,
+        });
+      })
+    : await prisma.kpiAssignment.create({
+        data: {
+          contractId: contract.id,
+          kpiId,
+          ...fields,
+          baselines: { create: { ...baseline, createdByPersonId: personId } },
+          targets: { create: { ...target, createdByPersonId: personId } },
+          weights: { create: { weight, createdByPersonId: personId } },
+        },
+        include: ASSIGNMENT_INCLUDE,
+      });
+  await recordChildShare(parentAssignmentId, contract.officeId, assignment.id, improvement, personId);
   await auditAction(actor, {
     action: 'ASSIGNMENT_CREATED',
     entityType: 'kpi_assignment',
@@ -176,7 +193,7 @@ export const createAssignment = async (contractId, data = {}, actor) => {
 };
 
 /**
- * Edit a draft or rejected assignment in place. Saving a rejected one returns it to draft.
+ * Edit a draft or rejected assignment in place. A rejected one stays rejected until its contract is assigned again.
  * The baseline goes back to unverified when it changes.
  */
 export const updateAssignment = async (id, data = {}, actor) => {
@@ -201,12 +218,15 @@ export const updateAssignment = async (id, data = {}, actor) => {
   if (Object.keys(update).length === 0 && !baseline && !target && weight === undefined) throw badRequest('No updatable fields provided');
 
   const [before, targetBefore, weightBefore] = [assignment.baselines[0], assignment.targets[0], assignment.weights[0]];
+  const improvement = requiredImprovement(assignment.kpi, baseline ?? before, target ?? targetBefore);
+  await assertChildShare(assignment.parentAssignmentId, assignment.contract.officeId, improvement);
   const updated = await prisma.$transaction(async (tx) => {
     if (baseline) await tx.kpiBaseline.update({ where: { id: before.id }, data: { ...baseline, verifiedByPersonId: null, verifiedAt: null } });
     if (target) await tx.kpiTarget.update({ where: { id: targetBefore.id }, data: target });
     if (weight !== undefined) await tx.kpiWeight.update({ where: { id: weightBefore.id }, data: { weight } });
-    return tx.kpiAssignment.update({ where: { id: assignment.id }, data: { ...update, status: 'DRAFT', reviewComment: null }, include: ASSIGNMENT_INCLUDE });
+    return tx.kpiAssignment.update({ where: { id: assignment.id }, data: update, include: ASSIGNMENT_INCLUDE });
   });
+  await recordChildShare(assignment.parentAssignmentId, assignment.contract.officeId, assignment.id, improvement, actor.personId);
   await auditAction(actor, {
     action: 'ASSIGNMENT_UPDATED',
     entityType: 'kpi_assignment',
@@ -219,61 +239,20 @@ export const updateAssignment = async (id, data = {}, actor) => {
 
 // ===== Workflow =====
 
-export const submitAssignment = async (id, actor) => {
-  const assignment = await getAssignmentOrThrow(id);
-  await assertEditableYear(assignment);
-  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract);
-  assertStatus(assignment, 'DRAFT');
-  const submitted = await setStatus(assignment, 'SUBMITTED', {}, actor, 'ASSIGNMENT_SUBMITTED');
-  await assignmentSubmitted(assignment, actor);
-  return submitted;
-};
-
 /**
- * Approving also approves the current target and weight. A pending baseline blocks approval, and so does an
- * unverified one when the university requires verification (SRS 5.5). A declared unknown baseline may pass (SRS 5.6).
+ * While reviewing a contract, the receiving office flags a KPI with a note for the office above, or clears the flag
+ * with no note. Notes stay until the contract is assigned again.
  */
-export const approveAssignment = async (id, actor) => {
-  const assignment = await getAssignmentOrThrow(id);
-  await assertEditableYear(assignment);
-  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_APPROVE, assignment.contract);
-  assertStatus(assignment, 'SUBMITTED');
-  await assertSeparateApprover(actor, assignment.createdByPersonId);
-
-  const baseline = assignment.baselines[0];
-  if (baseline.baselineStatus === 'PENDING_VERIFICATION') throw conflict('The baseline is pending verification');
-  if (baseline.baselineStatus === 'KNOWN' && (await getSetting('kpi', 'require_baseline_verification'))) {
-    throw conflict('The baseline must be verified before approval');
-  }
-
-  const now = new Date();
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.kpiTarget.update({ where: { id: assignment.targets[0].id }, data: { approvedByPersonId: actor.personId, approvedAt: now } });
-    await tx.kpiWeight.update({ where: { id: assignment.weights[0].id }, data: { approvedByPersonId: actor.personId, approvedAt: now } });
-    return tx.kpiAssignment.update({ where: { id: assignment.id }, data: { status: 'APPROVED', approvedByPersonId: actor.personId, approvedAt: now, reviewComment: null }, include: ASSIGNMENT_INCLUDE });
-  });
-  await audit(actor, assignment, 'ASSIGNMENT_APPROVED', 'APPROVED');
-  await assignmentApproved(assignment, actor);
-  return formatAssignment(updated);
-};
-
-export const rejectAssignment = async (id, { comment } = {}, actor) => {
-  const assignment = await getAssignmentOrThrow(id);
-  await assertEditableYear(assignment);
-  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_APPROVE, assignment.contract);
-  assertStatus(assignment, 'SUBMITTED');
-  const reason = requireComment(comment);
-  const rejected = await setStatus(assignment, 'REJECTED', { reviewComment: reason }, actor, 'ASSIGNMENT_REJECTED', reason);
-  await assignmentRejected(assignment, reason, actor);
-  return rejected;
-};
-
-export const acknowledgeAssignment = async (id, actor) => {
+export const flagAssignment = async (id, { note } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
   await assertEditableYear(assignment);
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, assignment.contract.officeId);
-  assertStatus(assignment, 'APPROVED');
-  return setStatus(assignment, 'ACKNOWLEDGED', { acknowledgedByPersonId: actor.personId, acknowledgedAt: new Date() }, actor, 'ASSIGNMENT_ACKNOWLEDGED');
+  if (assignment.contract.status !== 'SUBMITTED' || assignment.status !== 'SUBMITTED') throw conflict('KPIs can be flagged only while their contract is waiting for a signature');
+
+  const reviewComment = note === null || note === undefined ? null : requireComment(note);
+  const updated = await prisma.kpiAssignment.update({ where: { id: assignment.id }, data: { reviewComment }, include: ASSIGNMENT_INCLUDE });
+  await auditAction(actor, { action: reviewComment ? 'ASSIGNMENT_FLAGGED' : 'ASSIGNMENT_UNFLAGGED', entityType: 'kpi_assignment', entityId: assignment.id, oldValues: { reviewComment: assignment.reviewComment }, newValues: { reviewComment } });
+  return formatAssignment(updated);
 };
 
 /**
@@ -283,11 +262,13 @@ export const cancelAssignment = async (id, { comment } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
   await assertEditableYear(assignment);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract);
-  if (!['DRAFT', 'SUBMITTED', 'REJECTED'].includes(assignment.status)) throw conflict(`A ${assignment.status} assignment cannot be cancelled`);
+  if (!['DRAFT', 'REJECTED'].includes(assignment.status)) throw conflict(`A ${assignment.status} assignment cannot be cancelled`);
   const children = await prisma.kpiAssignment.count({ where: { parentAssignmentId: assignment.id, status: { in: LIVE_STATUSES } } });
   if (children > 0) throw conflict('This assignment has cascaded assignments below it');
   const reason = requireComment(comment);
-  return setStatus(assignment, 'CANCELLED', { reviewComment: reason }, actor, 'ASSIGNMENT_CANCELLED', reason);
+  const cancelled = await setStatus(assignment, 'CANCELLED', { reviewComment: reason }, actor, 'ASSIGNMENT_CANCELLED', reason);
+  await releaseChildShare(assignment.parentAssignmentId, assignment.contract.officeId);
+  return cancelled;
 };
 
 // ===== Baseline verification and evidence =====
@@ -341,10 +322,7 @@ export default {
   getAssignmentTree,
   createAssignment,
   updateAssignment,
-  submitAssignment,
-  approveAssignment,
-  rejectAssignment,
-  acknowledgeAssignment,
+  flagAssignment,
   cancelAssignment,
   verifyBaseline,
   addBaselineEvidence,

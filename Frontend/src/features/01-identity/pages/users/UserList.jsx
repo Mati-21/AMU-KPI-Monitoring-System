@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Eye, Trash2, UserPlus } from 'lucide-react';
+import { Archive, Eye, UserPlus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import Button from '../../../../shared/components/ui/Button';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import CustomSelect from '../../../../shared/components/ui/CustomSelect';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../../shared/components/ui/dialog';
 import SearchInput from '../../../../shared/components/ui/SearchInput';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../../shared/components/ui/Table';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import { ConfirmDialog } from '../../../02-offices/components/FormParts';
 import { useCan } from '../../../03-access-control/hooks/useCan';
 import { useRolesQuery } from '../../../03-access-control/hooks/useRoles';
 import { roleNames } from '../../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
-import { useDeletePerson, usePersons } from '../../hooks/useUsers';
+import { useArchivePerson, usePersons } from '../../hooks/useUsers';
 
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
@@ -62,13 +62,13 @@ function UserList({ onAdd }) {
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [deleting, setDeleting] = useState(null);
-  const deletePerson = useDeletePerson();
+  const [archiving, setArchiving] = useState(null);
+  const archivePerson = useArchivePerson();
   const [searchParams, setSearchParams] = useSearchParams();
   // Listing roles takes one of these permissions, so without them there is nothing to filter by
   const canFilterByRole = can('role:read', 'role:assign');
   const roleId = canFilterByRole ? searchParams.get('roleId') : null;
-  const { data, isLoading, error } = usePersons({ search: appliedSearch, page, limit: PAGE_SIZE, ...roleParams(roleId) });
+  const { data, isLoading, error } = usePersons({ search: appliedSearch, page, limit: PAGE_SIZE, isActive: true, ...roleParams(roleId) });
   const people = data?.data ?? [];
 
   const changeRole = (next) => {
@@ -84,13 +84,17 @@ function UserList({ onAdd }) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const confirmDelete = () =>
-    deletePerson.mutate(deleting.id, {
-      onSuccess: (result) => {
-        setDeleting(null);
-        notify(result.message, result.deactivated ? 'warning' : 'success');
+  const closeArchive = () => {
+    archivePerson.reset();
+    setArchiving(null);
+  };
+
+  const confirmArchive = () =>
+    archivePerson.mutate(archiving.id, {
+      onSuccess: () => {
+        notify(`${archiving.fullName} was archived.`, 'success');
+        closeArchive();
       },
-      onError: (failure) => notify(apiErrorMessage(failure, 'Could not delete this person.'), 'error'),
     });
 
   return (
@@ -157,8 +161,8 @@ function UserList({ onAdd }) {
                         <Eye className="h-4 w-4" />
                       </button>
                       {can('user:delete') && (
-                        <button onClick={() => setDeleting(person)} className="rounded p-1 text-destructive hover:bg-destructive/10" title="Delete" aria-label={`Delete ${person.fullName}`}>
-                          <Trash2 className="h-4 w-4" />
+                        <button onClick={() => setArchiving(person)} className="rounded p-1 text-destructive hover:bg-destructive/10" title="Archive" aria-label={`Archive ${person.fullName}`}>
+                          <Archive className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -172,24 +176,7 @@ function UserList({ onAdd }) {
         <TablePagination currentPage={page} totalItems={data?.pagination?.total ?? 0} itemsPerPage={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
-      <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && !deletePerson.isPending && setDeleting(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
-            <DialogDescription>
-              Delete <span className="font-semibold">{deleting?.fullName}</span>? Someone referenced by institutional records is deactivated instead, so their history stays.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={deletePerson.isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={deletePerson.isPending}>
-              {deletePerson.isPending ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog open={Boolean(archiving)} onClose={closeArchive} title="Archive User" description={`Archive ${archiving?.fullName}? They can no longer sign in, and they leave this list, their offices and their roles. Their history stays.`} onConfirm={confirmArchive} error={archivePerson.error} pending={archivePerson.isPending} confirmLabel="Archive" />
     </>
   );
 }

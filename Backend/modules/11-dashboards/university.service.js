@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database.js';
-import { notFound } from '../../utils/httpError.js';
-import { OFFICE_REF, assertCanView, loadContracts, loadYearHistory, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
+import { PERMISSIONS } from '../../config/permissions.js';
+import { forbidden, notFound } from '../../utils/httpError.js';
+import { OFFICE_REF, loadContracts, loadYearHistory, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
 import { compareOffices, groupByObjective, summarize } from './dashboard.rules.js';
 
 /**
@@ -24,7 +25,7 @@ const byOfficeType = (rows) => {
 export const getUniversityDashboard = async (query, actor) => {
   const root = await prisma.office.findFirst({ where: { parentOfficeId: null }, ...OFFICE_REF });
   if (!root) throw notFound('The university office has not been set up');
-  await assertCanView(actor, root.id);
+  if (!(await actor.access.reaches(PERMISSIONS.DASHBOARD_READ_ALL, root.id))) throw forbidden('The university dashboard needs dashboard:read_all');
 
   const view = await resolveView(query);
   const contracts = await loadContracts(view.fiscalYear.id);

@@ -1,7 +1,7 @@
 import { TOKEN_TYPES, verifyToken } from '../config/jwt.js';
 import { validateSession } from '../modules/01-identity-access/auth/session.service.js';
 import { SUPER_ADMIN_PERMISSION } from '../config/permissions.js';
-import { getActiveGrants, hasGlobalPermission, hasPermission, isSuperAdmin } from '../modules/03-access-control/access.service.js';
+import { getActiveGrants, hasGlobalPermission, hasPermission, isSuperAdmin, reachesOffice } from '../modules/03-access-control/access.service.js';
 import { forbidden, unauthorized } from '../utils/httpError.js';
 
 /**
@@ -59,6 +59,7 @@ export const loadAccess = async (req) => {
       isSuperAdmin: isSuperAdmin(grants),
       can: (code, targetOfficeId) => hasPermission(grants, code, targetOfficeId),
       canGlobally: (code) => hasGlobalPermission(grants, code),
+      reaches: (code, scopeOfficeId) => reachesOffice(grants, code, scopeOfficeId),
     };
   }
   return req.access;

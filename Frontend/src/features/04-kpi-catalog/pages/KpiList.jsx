@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Edit3, Eye, FileSpreadsheet, Power, Replace } from 'lucide-react';
+import { ClipboardPlus, Edit3, Eye, FileSpreadsheet, Power, Replace } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import { Badge } from '../../../shared/components/ui/Badge';
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, T
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { ConfirmDialog } from '../../02-offices/components/FormParts';
 import { useCan } from '../../03-access-control/hooks/useCan';
+import AddToContractDialog from '../../05-contracts/components/AddToContractDialog';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import KpiDetailDialog from '../components/KpiDetailDialog';
@@ -19,7 +20,6 @@ import { MEASUREMENT_TYPES, themeNames, themeOptions, toOptions } from '../lib/k
 
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
-const COLUMN_COUNT = 8;
 const ALL = 'all';
 const NO_FILTERS = { themeId: ALL, strategicObjectiveId: ALL, measurementType: ALL, isActive: ALL };
 const STATUS_OPTIONS = [
@@ -61,9 +61,16 @@ function KpiList({ onEdit, onReplace }) {
   const [viewing, setViewing] = useState(null);
   const [retiring, setRetiring] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [selected, setSelected] = useState({});
+  const [addingToContract, setAddingToContract] = useState(false);
   const params = { ...sentFilters(filters), ...(appliedSearch && { search: appliedSearch }) };
   const { data, isLoading, error } = useKpis({ ...params, page, limit: PAGE_SIZE });
   const kpis = data?.data ?? [];
+  const canSelect = can('contract:manage');
+  const columnCount = canSelect ? 9 : 8;
+  const selectedKpis = Object.values(selected);
+  const selectable = kpis.filter((kpi) => kpi.isActive);
+  const allOnPageSelected = selectable.length > 0 && selectable.every((kpi) => selected[kpi.id]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -77,6 +84,23 @@ function KpiList({ onEdit, onReplace }) {
     setFilters({ ...filters, [field]: value });
     setPage(1);
   };
+
+  // Retired KPIs cannot go on a contract. The selection stays while moving between pages and filters.
+  const toggleKpi = (kpi) => {
+    const { [kpi.id]: wasSelected, ...others } = selected;
+    setSelected(wasSelected ? others : { ...selected, [kpi.id]: kpi });
+  };
+
+  const togglePage = () => {
+    const next = { ...selected };
+    selectable.forEach((kpi) => {
+      if (allOnPageSelected) delete next[kpi.id];
+      else next[kpi.id] = kpi;
+    });
+    setSelected(next);
+  };
+
+  const removeFromSelection = (ids) => setSelected(Object.fromEntries(Object.entries(selected).filter(([id]) => !ids.includes(id))));
 
   const closeRetire = () => {
     save.reset();
@@ -127,6 +151,12 @@ function KpiList({ onEdit, onReplace }) {
           <FileSpreadsheet className="h-4 w-4" />
           {exporting ? 'Exporting...' : 'Export Excel'}
         </Button>
+        {canSelect && (
+          <Button type="button" className="gap-2" disabled={selectedKpis.length === 0} onClick={() => setAddingToContract(true)}>
+            <ClipboardPlus className="h-4 w-4" />
+            Add to Contract ({selectedKpis.length})
+          </Button>
+        )}
       </div>
 
       {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load the KPIs.')}</p>}
@@ -135,6 +165,11 @@ function KpiList({ onEdit, onReplace }) {
         <Table>
           <TableHeader>
             <TableRow>
+              {canSelect && (
+                <TableHead>
+                  <input type="checkbox" aria-label="Select all KPIs on this page" checked={allOnPageSelected} disabled={selectable.length === 0} onChange={togglePage} />
+                </TableHead>
+              )}
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Theme</TableHead>
@@ -148,16 +183,21 @@ function KpiList({ onEdit, onReplace }) {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT}>Loading KPIs...</TableCell>
+                <TableCell colSpan={columnCount}>Loading KPIs...</TableCell>
               </TableRow>
             )}
             {!isLoading && !error && kpis.length === 0 && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT}>No KPIs found.</TableCell>
+                <TableCell colSpan={columnCount}>No KPIs found.</TableCell>
               </TableRow>
             )}
             {kpis.map((kpi) => (
               <TableRow key={kpi.id}>
+                {canSelect && (
+                  <TableCell>
+                    <input type="checkbox" aria-label={`Select ${kpi.code}`} checked={Boolean(selected[kpi.id])} disabled={!kpi.isActive} onChange={() => toggleKpi(kpi)} />
+                  </TableCell>
+                )}
                 <TableCell className="font-medium text-foreground">{kpi.code}</TableCell>
                 <TableCell>{kpi.name}</TableCell>
                 <TableCell>{themeNames(themes, kpi.themeId).theme ?? kpi.theme?.name ?? '-'}</TableCell>
@@ -186,6 +226,7 @@ function KpiList({ onEdit, onReplace }) {
 
       <TablePagination currentPage={page} totalItems={data?.pagination?.total ?? 0} itemsPerPage={PAGE_SIZE} onPageChange={setPage} className="px-4" />
 
+      {addingToContract && <AddToContractDialog kpis={selectedKpis} onAdded={removeFromSelection} onClose={() => setAddingToContract(false)} />}
       {viewing && <KpiDetailDialog kpi={viewing} onClose={() => setViewing(null)} />}
       <ConfirmDialog open={Boolean(retiring)} onClose={closeRetire} title="Retire KPI" description={`Retire ${retiring?.code}? It stays in the history and can be reactivated, but it can no longer be chosen for new work.`} onConfirm={() => setActive(retiring, false)} error={save.error} pending={save.isPending} confirmLabel="Retire" />
     </div>
