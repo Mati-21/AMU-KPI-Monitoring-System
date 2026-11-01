@@ -3,11 +3,11 @@ import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
-import { isActiveToday } from '../../../utils/dates.js';
+import { activeOn, isActiveToday, startOfTodayUtc } from '../../../utils/dates.js';
 import { deleteStoredFile } from '../../08-evidence-documents/file.service.js';
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
-import { parseBoolean, parseBooleanQuery } from '../../../utils/validation.js';
+import { parseBoolean, parseBooleanQuery, parseUuid } from '../../../utils/validation.js';
 
 const ACCOUNT_SELECT = {
   id: true,
@@ -23,7 +23,7 @@ const ACCOUNT_SELECT = {
 const PLACEMENT_INCLUDE = {
   office: { select: { id: true, name: true, code: true } },
   position: { select: { id: true, title: true, isHead: true } },
-  roles: { include: { role: { select: { id: true, name: true } } } },
+  roles: { include: { role: { select: { id: true, name: true } }, scopeOffice: { select: { id: true, name: true, code: true } } } },
 };
 
 const PERSON_INCLUDE = {
@@ -41,12 +41,12 @@ const assertCanChangePerson = async (personId, actor) => {
 };
 
 /**
- * Placements and roles running today. Ended ones stay in the database as history.
+ * Placements running today, with their roles that have not ended. Ended ones stay in the database as history.
  */
 const activePlacements = (placements = []) =>
   placements
     .filter((placement) => isActiveToday(placement.startDate, placement.endDate))
-    .map((placement) => ({ ...placement, roles: placement.roles.filter((assignment) => isActiveToday(assignment.validFrom, assignment.validTo)) }));
+    .map((placement) => ({ ...placement, roles: placement.roles.filter((assignment) => !assignment.validTo || assignment.validTo >= startOfTodayUtc()) }));
 
 /**
  * Shape a Person (+ optional UserAccount) into the directory profile returned by the API.
@@ -100,7 +100,7 @@ const getPersonOrThrow = async (id) => {
 /**
  * List persons with pagination, search (name, email, phone, username) and filters.
  */
-export const listPersons = async ({ search = '', isActive, officeId, hasAccount, page = 1, limit = 20 } = {}) => {
+export const listPersons = async ({ search = '', isActive, officeId, roleId, hasRole, hasAccount, page = 1, limit = 20 } = {}) => {
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20));
 
@@ -108,6 +108,12 @@ export const listPersons = async ({ search = '', isActive, officeId, hasAccount,
   const active = parseBooleanQuery(isActive, 'isActive');
   if (active !== undefined) where.isActive = active;
   if (officeId) where.officePersons = { some: { officeId } };
+  // Holding a role means today, the same rule that decides whether it gives them access
+  const holdingRole = (roleFilter = {}) => ({ officePersons: { some: { ...activeOn('startDate', 'endDate'), roles: { some: { ...roleFilter, ...activeOn('validFrom', 'validTo') } } } } });
+  if (roleId) where.AND = [holdingRole({ roleId: parseUuid(roleId, 'roleId') })];
+  const holdsAnyRole = parseBooleanQuery(hasRole, 'hasRole');
+  if (holdsAnyRole === true) where.AND = [...(where.AND ?? []), holdingRole()];
+  if (holdsAnyRole === false) where.NOT = holdingRole();
   if (hasAccount !== undefined && hasAccount !== '') {
     where.userAccount = String(hasAccount).toLowerCase() === 'true' ? { isNot: null } : { is: null };
   }
@@ -130,7 +136,8 @@ export const listPersons = async ({ search = '', isActive, officeId, hasAccount,
       where,
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      // The id keeps people with the same name in one order, so paging never repeats or skips anyone
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
       include: PERSON_INCLUDE,
     }),
   ]);

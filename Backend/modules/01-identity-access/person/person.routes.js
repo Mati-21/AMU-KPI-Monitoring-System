@@ -22,6 +22,8 @@ const router = Router();
  *       - { in: query, name: search, schema: { type: string }, description: Name, email, phone or username }
  *       - { in: query, name: isActive, schema: { type: boolean } }
  *       - { in: query, name: officeId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: roleId, schema: { type: string, format: uuid }, description: People holding this role today }
+ *       - { in: query, name: hasRole, schema: { type: boolean }, description: Whether they hold any role today }
  *       - { in: query, name: hasAccount, schema: { type: boolean } }
  *       - { in: query, name: page, schema: { type: integer, default: 1 } }
  *       - { in: query, name: limit, schema: { type: integer, default: 20, maximum: 100 } }

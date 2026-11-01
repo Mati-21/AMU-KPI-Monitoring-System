@@ -98,10 +98,14 @@ const formatRole = (role, activeAssignments) => ({
 export const listRoles = async () => {
   const roles = await prisma.role.findMany({
     orderBy: { name: 'asc' },
-    include: { _count: { select: { permissions: true, officePersonRoles: { where: activeAssignmentWhere() } } } },
+    include: {
+      permissions: { include: { permission: true } },
+      _count: { select: { permissions: true, officePersonRoles: { where: activeAssignmentWhere() } } },
+    },
   });
-  return roles.map(({ _count, ...role }) => ({
+  return roles.map(({ _count, permissions, ...role }) => ({
     ...role,
+    permissionCodes: roleCodes({ permissions }),
     permissionCount: _count.permissions,
     activeAssignments: _count.officePersonRoles,
   }));

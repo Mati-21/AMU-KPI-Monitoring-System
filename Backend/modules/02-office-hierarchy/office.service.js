@@ -453,8 +453,9 @@ export const deletePosition = async (id, actor) => {
 const placementInclude = () => ({
   person: { select: { ...PERSON_REF_SELECT, isActive: true } },
   position: { select: { id: true, title: true, isHead: true } },
+  // Includes roles starting later, so they can be seen and revoked before they begin
   roles: {
-    where: activeOn('validFrom', 'validTo'),
+    where: { OR: [{ validTo: null }, { validTo: { gte: startOfTodayUtc() } }] },
     select: {
       id: true,
       validFrom: true,

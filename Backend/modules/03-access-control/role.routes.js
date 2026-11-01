@@ -16,7 +16,7 @@ const router = Router();
  * @swagger
  * /api/v1/roles:
  *   get:
- *     summary: List roles with permission and member counts
+ *     summary: List roles with their permission codes and member counts (role:read or role:assign)
  *     tags: [Access Control]
  *     responses:
  *       200: { description: Roles }
@@ -38,7 +38,8 @@ const router = Router();
  *       201: { description: Created }
  *       403: { description: Includes permissions you do not hold yourself }
  */
-router.get('/roles', protect, requirePermission(PERMISSIONS.ROLE_READ), roleController.listRoles);
+// role:assign holders need the list to choose which role to give
+router.get('/roles', protect, requirePermission(PERMISSIONS.ROLE_READ, PERMISSIONS.ROLE_ASSIGN), roleController.listRoles);
 router.post('/roles', protect, requirePermission(PERMISSIONS.ROLE_CREATE), roleController.createRole);
 
 /**
