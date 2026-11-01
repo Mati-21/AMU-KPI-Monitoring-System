@@ -13,21 +13,6 @@
       "name": "Count",
       "symbol": "#",
       "description": "A quantity of something"
-    },
-    {
-      "name": "Percent",
-      "symbol": "%",
-      "description": "A proportion out of 100"
-    },
-    {
-      "name": "Ratio",
-      "symbol": ":",
-      "description": "One quantity per another"
-    },
-    {
-      "name": "Birr",
-      "symbol": "Br",
-      "description": "Ethiopian Birr"
     }
   ],
   "reportingFrequencies": [

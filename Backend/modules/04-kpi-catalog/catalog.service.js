@@ -226,7 +226,7 @@ export const updateFrequency = async (id, data = {}, actor) => {
   }
   if (data.intervalMonths !== undefined || data.isCustom !== undefined) {
     if (_count.periods > 0 || _count.assignments > 0) throw conflict(`"${existing.name}" is in use, so its interval cannot change. Create a new frequency instead`);
-    Object.assign(update, parseFrequency(data.intervalMonths ?? before.intervalMonths, data.isCustom ?? before.isCustom));
+    Object.assign(update, parseFrequency(data.intervalMonths === undefined ? before.intervalMonths : data.intervalMonths, data.isCustom ?? before.isCustom));
   }
   if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
 

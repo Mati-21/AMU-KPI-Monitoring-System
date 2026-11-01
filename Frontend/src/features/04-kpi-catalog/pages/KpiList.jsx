@@ -1,1402 +1,193 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Edit, Trash2, Eye, Target, AlertTriangle, FileText, FileJson, FileSpreadsheet, Download } from 'lucide-react';
-
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '../../../shared/components/ui/Table';
-import { Input } from '../../../shared/components/ui/Input';
-import SearchInput from '../../../shared/components/ui/SearchInput';
-import Button from '../../../shared/components/ui/Button';
-import Checkbox from '../../../shared/components/ui/Checkbox';
+import { useEffect, useState } from 'react';
+import { Edit3, Eye, FileSpreadsheet, Power, Replace } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import html2pdf from 'html2pdf.js';
+
 import { Badge } from '../../../shared/components/ui/Badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../shared/components/ui/dialog';
-import { api } from '../../../shared/api/axios';
+import Button from '../../../shared/components/ui/Button';
+import CustomSelect from '../../../shared/components/ui/CustomSelect';
+import SearchInput from '../../../shared/components/ui/SearchInput';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../shared/components/ui/Table';
+import { apiErrorMessage } from '../../../shared/lib/apiError';
+import { ConfirmDialog } from '../../02-offices/components/FormParts';
+import { useCan } from '../../03-access-control/hooks/useCan';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
+import { optionLabel } from '../../10-system/lib/settingValues';
+import KpiDetailDialog from '../components/KpiDetailDialog';
+import { IconAction } from '../components/RecordTable';
+import { fetchAllKpis, useKpis, useObjectives, useSaveRecord, useThemeTree } from '../hooks/useCatalog';
+import { MEASUREMENT_TYPES, themeNames, themeOptions, toOptions } from '../lib/kpiRules';
 
-const formatValue = (value) => {
-  if (value === null || value === undefined || value === '') return '—';
-  const numeric = Number(value);
-  return Number.isNaN(numeric) ? String(value) : numeric.toString();
-};
+const PAGE_SIZE = 10;
+const SEARCH_DELAY_MS = 300;
+const COLUMN_COUNT = 8;
+const ALL = 'all';
+const NO_FILTERS = { themeId: ALL, strategicObjectiveId: ALL, measurementType: ALL, isActive: ALL };
+const STATUS_OPTIONS = [
+  { value: ALL, label: 'All statuses' },
+  { value: 'true', label: 'Active' },
+  { value: 'false', label: 'Retired' },
+];
 
-const emptyEditKpi = {
-  id: '',
-  kpiTypeId: '',
-  kpiName: '',
-  themeId: '',
-  subThemeId: '',
-  unitId: '',
-  weight: '',
-  baseline: '',
-  target: '',
-  remark: '',
-  description: '',
-  isEvidenceRequired: false,
-};
+const Filter = ({ allLabel, options, value, onChange }) => (
+  <div className="w-48">
+    <CustomSelect compact options={[{ value: ALL, label: allLabel }, ...options]} value={value} onChange={onChange} />
+  </div>
+);
 
-const emptyEditTheme = {
-  id: '',
-  name: '',
-  description: '',
-};
+const sentFilters = (filters) => Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ALL));
 
-const emptyEditSubTheme = {
-  id: '',
-  name: '',
-  description: '',
-  themeId: '',
-};
+const toSheetRow = (kpi, themes) => ({
+  Code: kpi.code,
+  Name: kpi.name,
+  Theme: themeNames(themes, kpi.themeId).theme ?? kpi.theme?.name ?? '',
+  'Sub-Theme': themeNames(themes, kpi.themeId).subTheme ?? '',
+  'Strategic Objective': kpi.strategicObjective?.name ?? '',
+  'Measurement Type': optionLabel(kpi.measurementType),
+  Direction: optionLabel(kpi.direction),
+  'Reporting Frequency': kpi.defaultFrequency?.name ?? '',
+  Status: kpi.isActive ? 'Active' : 'Retired',
+});
 
-const emptyEditUnit = {
-  id: '',
-  name: '',
-  code: '',
-  description: '',
-};
-
-function KpiList({ refreshKey }) {
-  const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [kpis, setKpis] = useState([]);
-  const [kpiTypes, setKpiTypes] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [saving, setSaving] = useState(false);
-
-  const [editingKpi, setEditingKpi] = useState(false);
-  const [editingTheme, setEditingTheme] = useState(false);
-  const [editingSubTheme, setEditingSubTheme] = useState(false);
-  const [editingUnit, setEditingUnit] = useState(false);
-
-  const [deletingKpi, setDeletingKpi] = useState(null);
-  const [deletingTheme, setDeletingTheme] = useState(null);
-  const [deletingSubTheme, setDeletingSubTheme] = useState(null);
-  const [deletingUnit, setDeletingUnit] = useState(null);
-  const [viewingKpi, setViewingKpi] = useState(null);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [deletingSelected, setDeletingSelected] = useState(false);
-  const [deletingAll, setDeletingAll] = useState(false);
-
-  const [editKpiForm, setEditKpiForm] = useState(emptyEditKpi);
-  const [editThemeForm, setEditThemeForm] = useState(emptyEditTheme);
-  const [editSubThemeForm, setEditSubThemeForm] = useState(emptyEditSubTheme);
-  const [editUnitForm, setEditUnitForm] = useState(emptyEditUnit);
-
-  const itemsPerPage = 10;
+function KpiList({ onEdit, onReplace }) {
+  const can = useCan();
   const { notify } = useNotification();
-
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [kpiRes, typeRes, unitRes] = await Promise.all([
-        api.get('/kpis', { params: { t: Date.now(), includeArchived: 'true' } }),
-        api.get('/kpi-types'),
-        api.get('/units'),
-      ]);
-      setKpis(kpiRes.data?.data || []);
-      setKpiTypes(typeRes.data?.data || []);
-      setUnits(unitRes.data?.data || []);
-    } catch (loadErr) {
-      setError(loadErr?.response?.data?.message || 'Failed to load KPI data from database.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: themes = [] } = useThemeTree();
+  const { data: objectives = [] } = useObjectives();
+  const save = useSaveRecord('kpis');
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [filters, setFilters] = useState(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  const [viewing, setViewing] = useState(null);
+  const [retiring, setRetiring] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const params = { ...sentFilters(filters), ...(appliedSearch && { search: appliedSearch }) };
+  const { data, isLoading, error } = useKpis({ ...params, page, limit: PAGE_SIZE });
+  const kpis = data?.data ?? [];
 
   useEffect(() => {
-    loadData();
-  }, [refreshKey]);
+    const timer = setTimeout(() => {
+      setAppliedSearch(search.trim());
+      setPage(1);
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const typeById = useMemo(() => new Map(kpiTypes.map((type) => [type.Id, type])), [kpiTypes]);
-  const childrenByParent = useMemo(() => {
-    const map = new Map();
-    kpiTypes.forEach((type) => {
-      const key = type.ParentKPIID || '__root__';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(type);
-    });
-
-    map.forEach((items, key) => {
-      items.sort((a, b) => {
-        const leftTime = new Date(a.CreatedAt || 0).getTime();
-        const rightTime = new Date(b.CreatedAt || 0).getTime();
-        if (leftTime !== rightTime) return leftTime - rightTime;
-        return String(a.Id || '').localeCompare(String(b.Id || ''));
-      });
-      map.set(key, items);
-    });
-
-    return map;
-  }, [kpiTypes]);
-
-  const kpiTypeIdSet = useMemo(() => new Set(kpis.map((kpi) => kpi.KPITypeId)), [kpis]);
-
-  const themes = useMemo(() => kpiTypes.filter((type) => !type.ParentKPIID && !kpiTypeIdSet.has(type.Id)), [kpiTypes, kpiTypeIdSet]);
-
-  const subThemes = useMemo(
-    () => kpiTypes.filter((type) => type.ParentKPIID && !kpiTypeIdSet.has(type.Id) && themes.some((theme) => theme.Id === type.ParentKPIID)),
-    [kpiTypes, kpiTypeIdSet, themes]
-  );
-
-  const buildCode = (kpiTypeId) => {
-    const lineage = [];
-    let current = typeById.get(kpiTypeId);
-
-    while (current) {
-      lineage.unshift(current);
-      current = current.ParentKPIID ? typeById.get(current.ParentKPIID) : null;
-    }
-
-    const parts = lineage.map((node) => {
-      const siblings = childrenByParent.get(node.ParentKPIID || '__root__') || [];
-      return siblings.findIndex((sibling) => sibling.Id === node.Id) + 1;
-    });
-
-    return parts.join('.');
+  const setFilter = (field) => (value) => {
+    setFilters({ ...filters, [field]: value });
+    setPage(1);
   };
 
-  const compareCodes = (leftCode, rightCode) => {
-    const leftParts = String(leftCode || '')
-      .split('.')
-      .map((part) => Number(part));
-    const rightParts = String(rightCode || '')
-      .split('.')
-      .map((part) => Number(part));
-
-    const maxLength = Math.max(leftParts.length, rightParts.length);
-    for (let index = 0; index < maxLength; index += 1) {
-      const leftPart = leftParts[index] || 0;
-      const rightPart = rightParts[index] || 0;
-      if (leftPart !== rightPart) return leftPart - rightPart;
-    }
-
-    return 0;
+  const closeRetire = () => {
+    save.reset();
+    setRetiring(null);
   };
 
-  const kpiRankById = useMemo(() => {
-    const bySubTheme = new Map();
+  const setActive = (kpi, isActive) =>
+    save.mutate(
+      { id: kpi.id, values: { isActive } },
+      {
+        onSuccess: () => {
+          notify(isActive ? `${kpi.code} is active again.` : `${kpi.code} was retired.`, 'success');
+          closeRetire();
+        },
+        onError: (failure) => {
+          if (isActive) notify(apiErrorMessage(failure, 'Could not change this KPI.'), 'error');
+        },
+      }
+    );
 
-    kpis.forEach((kpi) => {
-      const leaf = typeById.get(kpi.KPITypeId);
-      const subThemeId = leaf?.ParentKPIID;
-      if (!subThemeId) return;
-
-      if (!bySubTheme.has(subThemeId)) bySubTheme.set(subThemeId, []);
-      bySubTheme.get(subThemeId).push(kpi);
-    });
-
-    const rankMap = new Map();
-
-    bySubTheme.forEach((items) => {
-      items
-        .sort((left, right) => {
-          const leftTime = new Date(left.CreatedAt || 0).getTime();
-          const rightTime = new Date(right.CreatedAt || 0).getTime();
-          if (leftTime !== rightTime) return leftTime - rightTime;
-          return String(left.Id || '').localeCompare(String(right.Id || ''));
-        })
-        .forEach((item, index) => {
-          rankMap.set(item.Id, index + 1);
-        });
-    });
-
-    return rankMap;
-  }, [kpis, typeById]);
-
-  const kpiRows = useMemo(() => {
-    return kpis
-      .map((kpi) => {
-        const leaf = typeById.get(kpi.KPITypeId);
-        const subTheme = leaf?.ParentKPIID ? typeById.get(leaf.ParentKPIID) : null;
-        const theme = subTheme?.ParentKPIID ? typeById.get(subTheme.ParentKPIID) : null;
-        const subThemeCode = subTheme?.Id ? buildCode(subTheme.Id) : '';
-        const sequentialRank = kpiRankById.get(kpi.Id);
-        const kpiCode = subThemeCode && sequentialRank ? `${subThemeCode}.${sequentialRank}` : buildCode(kpi.KPITypeId);
-
-        return {
-          id: kpi.Id,
-          kpiTypeId: kpi.KPITypeId,
-          no: kpiCode,
-          kpiName: leaf?.KPIName || kpi.KPIType?.KPIName || '—',
-          themeId: theme?.Id || '',
-          theme: theme?.KPIName || '—',
-          subThemeId: subTheme?.Id || '',
-          subTheme: subTheme?.KPIName || '—',
-          unitId: kpi.UnitId,
-          unit: kpi.Unit?.Code || kpi.Unit?.Name || '—',
-          weight: formatValue(kpi.Weight),
-          baseline: formatValue(kpi.Baseline),
-          target: formatValue(kpi.Target),
-          description: kpi.Description || '',
-          isEvidenceRequired: kpi.IsEvedenceRequired || false,
-        };
-      })
-      .sort((left, right) => compareCodes(left.no, right.no));
-  }, [kpis, typeById, childrenByParent, kpiRankById]);
-
-  const unitRows = useMemo(
-    () =>
-      units.map((unit) => ({
-        id: unit.Id,
-        name: unit.Name,
-        code: unit.Code,
-        description: unit.Description || '—',
-      })),
-    [units]
-  );
-
-  const filteredKpis = useMemo(() => {
-    const term = search.toLowerCase();
-    return kpiRows
-      .filter((row) => row.no && !row.no.includes('NaN'))
-      .filter((row) => `${row.no} ${row.kpiName} ${row.theme} ${row.subTheme} ${row.unit} ${row.remark}`.toLowerCase().includes(term));
-  }, [kpiRows, search]);
-
-  const filteredThemes = useMemo(() => {
-    const term = search.toLowerCase();
-    return themes
-      .map((row) => ({
-        ...row,
-        no: buildCode(row.Id),
-      }))
-      .filter((row) => `${row.no} ${row.KPIName} ${row.Description || ''}`.toLowerCase().includes(term))
-      .sort((left, right) => compareCodes(left.no, right.no));
-  }, [themes, search]);
-
-  const filteredSubThemes = useMemo(() => {
-    const term = search.toLowerCase();
-    return subThemes
-      .map((row) => ({
-        ...row,
-        no: buildCode(row.Id),
-      }))
-      .filter((row) => {
-        const parentName = typeById.get(row.ParentKPIID)?.KPIName || '';
-        return `${row.no} ${row.KPIName} ${row.Description || ''} ${parentName}`.toLowerCase().includes(term);
-      })
-      .sort((left, right) => compareCodes(left.no, right.no));
-  }, [subThemes, search, typeById]);
-
-  const filteredUnits = useMemo(() => {
-    const term = search.toLowerCase();
-    return unitRows.filter((row) => `${row.name} ${row.code} ${row.description}`.toLowerCase().includes(term));
-  }, [unitRows, search]);
-
-  const paginatedKpis = filteredKpis.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, refreshKey]);
-
-  const openKpiEditor = (row) => {
-    setEditKpiForm({
-      id: row.id,
-      kpiTypeId: row.kpiTypeId,
-      kpiName: row.kpiName,
-      themeId: row.themeId,
-      subThemeId: row.subThemeId,
-      unitId: row.unitId,
-      weight: row.weight === '—' ? '' : row.weight,
-      baseline: row.baseline === '—' ? '' : row.baseline,
-      target: row.target === '—' ? '' : row.target,
-      remark: row.remark === '—' ? '' : row.remark,
-      description: row.description,
-      isEvidenceRequired: row.isEvidenceRequired,
-    });
-    setEditingKpi(true);
-  };
-
-  const toggleRow = (id) => {
-    setSelectedIds((prev) => {
-      const s = new Set(prev.map(String));
-      if (s.has(String(id))) s.delete(String(id));
-      else s.add(String(id));
-      return Array.from(s);
-    });
-  };
-
-  const selectAll = () => setSelectedIds(filteredKpis.map((r) => String(r.id)));
-  const deselectAll = () => setSelectedIds([]);
-  const exportCsv = (rows) => {
-    if (!rows || !rows.length) return;
-    const headers = ['No', 'KPI', 'Theme', 'SubTheme', 'Unit', 'Weight', 'Baseline', 'Target', 'Remark'];
-    const csv = [headers.join(',')]
-      .concat(
-        rows.map((r) =>
-          [
-            r.no,
-            `"${(r.kpiName || '').replace(/"/g, '""')}"`,
-            `"${(r.theme || '').replace(/"/g, '""')}"`,
-            `"${(r.subTheme || '').replace(/"/g, '""')}"`,
-            r.unit,
-            r.weight,
-            r.baseline,
-            r.target,
-            `"${(r.remark || '').replace(/"/g, '""')}"`,
-          ].join(',')
-        )
-      )
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'kpis.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportJson = (rows) => {
-    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'kpis.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportXlsx = (rows) => {
-    if (!rows || !rows.length) return;
-    const data = rows.map((r) => ({
-      No: r.no,
-      KPI: r.kpiName,
-      Theme: r.theme,
-      SubTheme: r.subTheme,
-      Unit: r.unit,
-      Weight: r.weight,
-      Baseline: r.baseline,
-      Target: r.target,
-      Remark: r.remark,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'KPIs');
-    XLSX.writeFile(wb, 'kpis.xlsx');
-  };
-
-  const exportPdf = async (rows) => {
-    if (!rows || !rows.length) return;
-    const table = document.createElement('table');
-    table.style.borderCollapse = 'collapse';
-    table.style.width = '100%';
-
-    const thead = document.createElement('thead');
-    const headerRow = document.createElement('tr');
-    ['No', 'KPI', 'Theme', 'SubTheme', 'Unit', 'Weight', 'Baseline', 'Target', 'Remark'].forEach((h) => {
-      const th = document.createElement('th');
-      th.style.border = '1px solid #ddd';
-      th.style.padding = '6px';
-      th.style.textAlign = 'left';
-      th.style.background = '#f6f6f6';
-      th.textContent = h;
-      headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    rows.forEach((r) => {
-      const tr = document.createElement('tr');
-      [r.no, r.kpiName, r.theme, r.subTheme, r.unit, r.weight, r.baseline, r.target, r.remark].forEach((cell) => {
-        const td = document.createElement('td');
-        td.style.border = '1px solid #ddd';
-        td.style.padding = '6px';
-        td.style.fontSize = '12px';
-        td.textContent = cell;
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-
-    const container = document.createElement('div');
-    container.style.padding = '10px';
-    container.appendChild(table);
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    document.body.appendChild(container);
-
+  const exportExcel = async () => {
+    setExporting(true);
     try {
-      await html2pdf()
-        .from(container)
-        .set({ margin: 10, filename: 'kpis.pdf', html2canvas: { scale: 2 } })
-        .save();
-    } catch (e) {
-      // ignore
+      const sheet = XLSX.utils.json_to_sheet((await fetchAllKpis(params)).map((kpi) => toSheetRow(kpi, themes)));
+      const book = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(book, sheet, 'KPIs');
+      XLSX.writeFile(book, 'kpis.xlsx');
+    } catch (failure) {
+      notify(apiErrorMessage(failure, 'Could not export the KPIs.'), 'error');
     } finally {
-      document.body.removeChild(container);
+      setExporting(false);
     }
   };
-
-  const confirmDeleteSelected = async () => {
-    if (!selectedIds || selectedIds.length === 0) return;
-
-    setSaving(true);
-    try {
-      await Promise.all(selectedIds.map((id) => api.delete(`/kpis/${id}`)));
-      notify(`Deleted ${selectedIds.length} KPI(s) successfully.`, 'success');
-      setSelectedIds([]);
-      setDeletingSelected(false);
-      await loadData();
-    } catch (err) {
-      notify(err?.response?.data?.message || 'Failed to delete selected KPIs.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const openThemeEditor = (row) => {
-    setEditThemeForm({
-      id: row.Id,
-      name: row.KPIName,
-      description: row.Description || '',
-    });
-    setEditingTheme(true);
-  };
-
-  const openSubThemeEditor = (row) => {
-    setEditSubThemeForm({
-      id: row.Id,
-      name: row.KPIName,
-      description: row.Description || '',
-      themeId: row.ParentKPIID,
-    });
-    setEditingSubTheme(true);
-  };
-
-  const openUnitEditor = (row) => {
-    setEditUnitForm({
-      id: row.id,
-      name: row.name,
-      code: row.code,
-      description: row.description === '—' ? '' : row.description,
-    });
-    setEditingUnit(true);
-  };
-
-  const saveKpiEdit = async () => {
-    if (!editKpiForm.id || !editKpiForm.kpiTypeId || !editKpiForm.kpiName.trim() || !editKpiForm.subThemeId || !editKpiForm.unitId) {
-      notify('KPI Name, Sub-Theme and Unit are required.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.put(`/kpi-types/${editKpiForm.kpiTypeId}`, {
-        KPIName: editKpiForm.kpiName.trim(),
-        ParentKPIID: editKpiForm.subThemeId,
-        Description: editKpiForm.description?.trim() || null,
-      });
-
-      await api.put(`/kpis/${editKpiForm.id}`, {
-        KPITypeId: editKpiForm.kpiTypeId,
-        UnitId: editKpiForm.unitId,
-        Weight: Number(editKpiForm.weight || 0),
-        Baseline: editKpiForm.baseline === '' ? null : Number(editKpiForm.baseline),
-        Target: Number(editKpiForm.target || 0),
-        Description: editKpiForm.description?.trim() || null,
-        Remark: editKpiForm.remark?.trim() || null,
-        IsEvedenceRequired: editKpiForm.isEvidenceRequired,
-      });
-
-      notify('KPI updated successfully.', 'success');
-      setEditingKpi(false);
-      await loadData();
-    } catch (saveErr) {
-      notify(saveErr?.response?.data?.message || 'Failed to update KPI.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveThemeEdit = async () => {
-    if (!editThemeForm.id || !editThemeForm.name.trim()) {
-      notify('Theme name is required.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.put(`/kpi-types/${editThemeForm.id}`, {
-        KPIName: editThemeForm.name.trim(),
-        ParentKPIID: null,
-        Description: editThemeForm.description?.trim() || null,
-      });
-      notify('Theme updated successfully.', 'success');
-      setEditingTheme(false);
-      await loadData();
-    } catch (saveErr) {
-      notify(saveErr?.response?.data?.message || 'Failed to update theme.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveSubThemeEdit = async () => {
-    if (!editSubThemeForm.id || !editSubThemeForm.name.trim() || !editSubThemeForm.themeId) {
-      notify('Sub-Theme name and parent theme are required.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.put(`/kpi-types/${editSubThemeForm.id}`, {
-        KPIName: editSubThemeForm.name.trim(),
-        ParentKPIID: editSubThemeForm.themeId,
-        Description: editSubThemeForm.description?.trim() || null,
-      });
-      notify('Sub-Theme updated successfully.', 'success');
-      setEditingSubTheme(false);
-      await loadData();
-    } catch (saveErr) {
-      notify(saveErr?.response?.data?.message || 'Failed to update sub-theme.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveUnitEdit = async () => {
-    if (!editUnitForm.id || !editUnitForm.name.trim() || !editUnitForm.code.trim()) {
-      notify('Unit name and code are required.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.put(`/units/${editUnitForm.id}`, {
-        Name: editUnitForm.name.trim(),
-        Code: editUnitForm.code.trim(),
-        Description: editUnitForm.description?.trim() || null,
-      });
-      notify('Unit updated successfully.', 'success');
-      setEditingUnit(false);
-      await loadData();
-    } catch (saveErr) {
-      notify(saveErr?.response?.data?.message || 'Failed to update unit.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteKpi = async () => {
-    if (!deletingKpi) return;
-
-    setSaving(true);
-    try {
-      await api.delete(`/kpis/${deletingKpi.id}`);
-      notify('KPI deleted successfully.', 'success');
-      setDeletingKpi(null);
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete KPI.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteTheme = async () => {
-    if (!deletingTheme) return;
-
-    const hasSubThemes = subThemes.some((item) => item.ParentKPIID === deletingTheme.Id);
-    if (hasSubThemes) {
-      notify('Cannot delete theme with existing sub-themes. Delete sub-themes first.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.delete(`/kpi-types/${deletingTheme.Id}`);
-      notify('Theme deleted successfully.', 'success');
-      setDeletingTheme(null);
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete theme.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteSubTheme = async () => {
-    if (!deletingSubTheme) return;
-
-    const hasKpis = kpiRows.some((row) => row.subThemeId === deletingSubTheme.Id);
-    if (hasKpis) {
-      notify('Cannot delete sub-theme with existing KPIs. Delete KPIs first.', 'warning');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.delete(`/kpi-types/${deletingSubTheme.Id}`);
-      notify('Sub-Theme deleted successfully.', 'success');
-      setDeletingSubTheme(null);
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete sub-theme.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteUnit = async () => {
-    if (!deletingUnit) return;
-
-    setSaving(true);
-    try {
-      await api.delete(`/units/${deletingUnit.id}`);
-      notify('Unit deleted successfully.', 'success');
-      setDeletingUnit(null);
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete unit.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteAll = async () => {
-    setSaving(true);
-    try {
-      const res = await api.delete('/kpis/delete-all');
-      notify(res.data?.message || 'All KPIs deleted successfully.', 'success');
-      setDeletingAll(false);
-      await loadData();
-    } catch (deleteErr) {
-      notify(deleteErr?.response?.data?.message || 'Failed to delete all KPIs.', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const subThemeOptionsForEdit = subThemes.filter((row) => !editKpiForm.themeId || row.ParentKPIID === editKpiForm.themeId);
 
   return (
-    <div className="flex flex-col gap-12">
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">
-            All KPIs <span className="text-muted-foreground">{filteredKpis.length}</span>
-          </h2>
+    <div className="rounded-lg border border-border bg-card">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
+        <div className="min-w-56 flex-1">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by code or name..." />
+        </div>
+        <Filter allLabel="All themes" options={themeOptions(themes)} value={filters.themeId} onChange={setFilter('themeId')} />
+        <Filter allLabel="All objectives" options={objectives.map((objective) => ({ value: objective.id, label: objective.name }))} value={filters.strategicObjectiveId} onChange={setFilter('strategicObjectiveId')} />
+        <Filter allLabel="All types" options={toOptions(MEASUREMENT_TYPES)} value={filters.measurementType} onChange={setFilter('measurementType')} />
+        <div className="w-40">
+          <CustomSelect compact options={STATUS_OPTIONS} value={filters.isActive} onChange={setFilter('isActive')} />
+        </div>
+        <Button type="button" variant="outline" className="gap-2" disabled={exporting || kpis.length === 0} onClick={exportExcel}>
+          <FileSpreadsheet className="h-4 w-4" />
+          {exporting ? 'Exporting...' : 'Export Excel'}
+        </Button>
+      </div>
 
-          <div className="flex items-center gap-3">
-            <div className="w-80">
-              <SearchInput onChange={setSearch} value={search} placeholder="Search KPI records..." />
-            </div>
+      {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load the KPIs.')}</p>}
 
-            <button className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-muted shadow-soft">
-              <span>Filters</span>
-            </button>
-
-            {kpiRows.length > 0 && (
-              <button
-                onClick={() => setDeletingAll(true)}
-                className="flex h-10 items-center gap-2 rounded-full border border-destructive/30 bg-destructive/5 px-4 text-sm font-semibold text-destructive transition-all duration-200 hover:bg-destructive/10 shadow-soft"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span>Delete All</span>
-              </button>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Theme</TableHead>
+              <TableHead>Sub-Theme</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Frequency</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow>
+                <TableCell colSpan={COLUMN_COUNT}>Loading KPIs...</TableCell>
+              </TableRow>
             )}
-          </div>
-        </div>
-
-        {error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={selectAll}>
-                Select all
-              </Button>
-              <Button size="sm" variant="outline" onClick={deselectAll}>
-                Deselect
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setDeletingSelected(true)}
-                disabled={selectedIds.length === 0}
-                title="Trash selected"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
-                onClick={() => exportCsv(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
-                aria-label="Export CSV"
-                title="Export CSV"
-              >
-                <FileText className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
-                onClick={() => exportJson(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
-                aria-label="Export JSON"
-                title="Export JSON"
-              >
-                <FileJson className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
-                onClick={() => exportXlsx(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
-                aria-label="Export Excel"
-                title="Export Excel"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="bg-muted/10 hover:bg-muted/20 px-2.5 py-1 rounded"
-                onClick={() => exportPdf(selectedIds.length ? kpis.filter((r) => selectedIds.includes(String(r.id))) : filteredKpis)}
-                aria-label="Export PDF"
-                title="Export PDF"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          <Table className="min-w-300">
-            <TableHeader>
+            {!isLoading && !error && kpis.length === 0 && (
               <TableRow>
-                <TableHead className="w-12 text-center">
-                  <Checkbox
-                    id="select-all-kpis"
-                    checked={filteredKpis.length > 0 && selectedIds.length === filteredKpis.length}
-                    onCheckedChange={(checked) => (checked ? selectAll() : deselectAll())}
-                  />
-                </TableHead>
-                <TableHead>No.</TableHead>
-                <TableHead>KPI</TableHead>
-                <TableHead>Theme</TableHead>
-                <TableHead>Sub-Theme</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Weight</TableHead>
-                <TableHead>Baseline</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Remark</TableHead>
-                <TableHead>Action</TableHead>
+                <TableCell colSpan={COLUMN_COUNT}>No KPIs found.</TableCell>
               </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={11}>Loading KPI records...</TableCell>
-                </TableRow>
-              ) : paginatedKpis.length ? (
-                paginatedKpis.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-center">
-                      <Checkbox
-                        id={`select-kpi-${row.id}`}
-                        checked={selectedIds.includes(String(row.id))}
-                        onCheckedChange={() => toggleRow(row.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{row.no}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span>{row.kpiName}</span>
-                        {row.isEvidenceRequired && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 w-fit">
-                            Evidence Required
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{row.theme}</TableCell>
-                    <TableCell>{row.subTheme}</TableCell>
-                    <TableCell>{row.unit}</TableCell>
-                    <TableCell>{row.weight}</TableCell>
-                    <TableCell>{row.baseline}</TableCell>
-                    <TableCell>{row.target}</TableCell>
-                    <TableCell>{row.remark}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setViewingKpi(row)} className="rounded p-1 hover:bg-muted" title="View Details">
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => openKpiEditor(row)} className="rounded p-1 hover:bg-muted" title="Edit KPI">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingKpi(row)}
-                          className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          title="Delete KPI"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={11}>No KPI records found in the database.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        <TablePagination currentPage={currentPage} totalItems={filteredKpis.length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">Registered Themes</h2>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <Table className="min-w-200">
-            <TableHeader>
-              <TableRow>
-                <TableHead>No.</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4}>Loading themes...</TableCell>
-                </TableRow>
-              ) : filteredThemes.length ? (
-                filteredThemes.map((row) => (
-                  <TableRow key={row.Id}>
-                    <TableCell className="font-medium">{row.no}</TableCell>
-                    <TableCell>{row.KPIName}</TableCell>
-                    <TableCell>{row.Description || '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openThemeEditor(row)} className="rounded p-1 hover:bg-muted" title="Edit Theme">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingTheme(row)}
-                          className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          title="Delete Theme"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4}>No themes found in the database.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">Registered Sub-Themes</h2>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <Table className="min-w-225">
-            <TableHeader>
-              <TableRow>
-                <TableHead>No.</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Theme</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5}>Loading sub-themes...</TableCell>
-                </TableRow>
-              ) : filteredSubThemes.length ? (
-                filteredSubThemes.map((row) => (
-                  <TableRow key={row.Id}>
-                    <TableCell className="font-medium">{row.no}</TableCell>
-                    <TableCell>{row.KPIName}</TableCell>
-                    <TableCell>{typeById.get(row.ParentKPIID)?.KPIName || '—'}</TableCell>
-                    <TableCell>{row.Description || '—'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openSubThemeEditor(row)} className="rounded p-1 hover:bg-muted" title="Edit Sub-Theme">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingSubTheme(row)}
-                          className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          title="Delete Sub-Theme"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5}>No sub-themes found in the database.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold text-foreground">Registered Units</h2>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <Table className="min-w-200">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4}>Loading units...</TableCell>
-                </TableRow>
-              ) : filteredUnits.length ? (
-                filteredUnits.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.name}</TableCell>
-                    <TableCell>{row.code}</TableCell>
-                    <TableCell>{row.description}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openUnitEditor(row)} className="rounded p-1 hover:bg-muted" title="Edit Unit">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeletingUnit(row)}
-                          className="rounded p-1 text-destructive hover:bg-destructive/10"
-                          title="Delete Unit"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4}>No units found in the database.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-
-      <Dialog open={editingKpi} onOpenChange={(open) => !open && !saving && setEditingKpi(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit KPI</DialogTitle>
-            <DialogDescription>Update KPI details below.</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <Input
-              value={editKpiForm.kpiName}
-              placeholder="KPI Name"
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, kpiName: e.target.value }))}
-            />
-            <select
-              value={editKpiForm.themeId}
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, themeId: e.target.value, subThemeId: '' }))}
-              className="h-10 rounded border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select Theme</option>
-              {themes.map((theme) => (
-                <option key={theme.Id} value={theme.Id}>
-                  {theme.KPIName}
-                </option>
-              ))}
-            </select>
-            <select
-              value={editKpiForm.subThemeId}
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, subThemeId: e.target.value }))}
-              className="h-10 rounded border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select Sub-Theme</option>
-              {subThemeOptionsForEdit.map((item) => (
-                <option key={item.Id} value={item.Id}>
-                  {item.KPIName}
-                </option>
-              ))}
-            </select>
-            <select
-              value={editKpiForm.unitId}
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, unitId: e.target.value }))}
-              className="h-10 rounded border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select Unit</option>
-              {units.map((unit) => (
-                <option key={unit.Id} value={unit.Id}>
-                  {unit.Name} ({unit.Code})
-                </option>
-              ))}
-            </select>
-            <Input
-              value={editKpiForm.weight}
-              placeholder="Weight"
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, weight: e.target.value }))}
-            />
-            <Input
-              value={editKpiForm.baseline}
-              placeholder="Baseline"
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, baseline: e.target.value }))}
-            />
-            <Input
-              value={editKpiForm.target}
-              placeholder="Target"
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, target: e.target.value }))}
-            />
-            <Input
-              value={editKpiForm.remark}
-              placeholder="Remark"
-              onChange={(e) => setEditKpiForm((prev) => ({ ...prev, remark: e.target.value }))}
-              className="md:col-span-2"
-            />
-            <div className="flex items-center gap-3 py-1 px-1">
-              <Checkbox
-                id="editIsEvidenceRequired"
-                checked={editKpiForm.isEvidenceRequired}
-                onCheckedChange={(checked) => setEditKpiForm((prev) => ({ ...prev, isEvidenceRequired: !!checked }))}
-              />
-              <label htmlFor="editIsEvidenceRequired" className="text-sm font-medium text-foreground cursor-pointer select-none">
-                Needs Evidence Verification
-              </label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingKpi(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={saveKpiEdit} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editingTheme} onOpenChange={(open) => !open && !saving && setEditingTheme(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Theme</DialogTitle>
-            <DialogDescription>Update theme details below.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={editThemeForm.name}
-              placeholder="Theme Name"
-              onChange={(e) => setEditThemeForm((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <Input
-              value={editThemeForm.description}
-              placeholder="Description"
-              onChange={(e) => setEditThemeForm((prev) => ({ ...prev, description: e.target.value }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTheme(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={saveThemeEdit} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editingSubTheme} onOpenChange={(open) => !open && !saving && setEditingSubTheme(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Sub-Theme</DialogTitle>
-            <DialogDescription>Update sub-theme details below.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={editSubThemeForm.name}
-              placeholder="Sub-Theme Name"
-              onChange={(e) => setEditSubThemeForm((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <select
-              value={editSubThemeForm.themeId}
-              onChange={(e) => setEditSubThemeForm((prev) => ({ ...prev, themeId: e.target.value }))}
-              className="h-10 w-full rounded border border-border bg-background px-3 text-sm"
-            >
-              <option value="">Select Theme</option>
-              {themes.map((theme) => (
-                <option key={theme.Id} value={theme.Id}>
-                  {theme.KPIName}
-                </option>
-              ))}
-            </select>
-            <Input
-              value={editSubThemeForm.description}
-              placeholder="Description"
-              onChange={(e) => setEditSubThemeForm((prev) => ({ ...prev, description: e.target.value }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingSubTheme(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={saveSubThemeEdit} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editingUnit} onOpenChange={(open) => !open && !saving && setEditingUnit(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Unit</DialogTitle>
-            <DialogDescription>Update unit details below.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              value={editUnitForm.name}
-              placeholder="Unit Name"
-              onChange={(e) => setEditUnitForm((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <Input value={editUnitForm.code} placeholder="Code" onChange={(e) => setEditUnitForm((prev) => ({ ...prev, code: e.target.value }))} />
-            <Input
-              value={editUnitForm.description}
-              placeholder="Description"
-              onChange={(e) => setEditUnitForm((prev) => ({ ...prev, description: e.target.value }))}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingUnit(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button onClick={saveUnitEdit} disabled={saving}>
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(deletingKpi)} onOpenChange={(open) => !open && !saving && setDeletingKpi(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete KPI</DialogTitle>
-            <DialogDescription>Delete KPI "{deletingKpi?.kpiName}"? This action cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingKpi(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteKpi} disabled={saving}>
-              {saving ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deletingAll} onOpenChange={(open) => !open && !saving && setDeletingAll(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Delete All KPIs
-            </DialogTitle>
-            <DialogDescription>
-              This will permanently delete <strong>all {kpiRows.length} KPIs</strong> along with their associated assignments, results, year plans,
-              and documents. This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingAll(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteAll} disabled={saving}>
-              {saving ? 'Deleting All...' : 'Yes, Delete All KPIs'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deletingSelected} onOpenChange={(open) => !open && !saving && setDeletingSelected(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Delete Selected KPIs
-            </DialogTitle>
-            <DialogDescription>
-              This will permanently delete the selected <strong>{selectedIds.length}</strong> KPI(s) and cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingSelected(false)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteSelected} disabled={saving || selectedIds.length === 0}>
-              {saving ? 'Deleting...' : `Delete Selected (${selectedIds.length})`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(deletingTheme)} onOpenChange={(open) => !open && !saving && setDeletingTheme(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Theme</DialogTitle>
-            <DialogDescription>Delete theme "{deletingTheme?.KPIName}"? Delete sub-themes first if they exist.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingTheme(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteTheme} disabled={saving}>
-              {saving ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(deletingSubTheme)} onOpenChange={(open) => !open && !saving && setDeletingSubTheme(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Sub-Theme</DialogTitle>
-            <DialogDescription>Delete sub-theme "{deletingSubTheme?.KPIName}"? Delete KPI rows under it first.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingSubTheme(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteSubTheme} disabled={saving}>
-              {saving ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(deletingUnit)} onOpenChange={(open) => !open && !saving && setDeletingUnit(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Unit</DialogTitle>
-            <DialogDescription>Delete unit "{deletingUnit?.name}"? This action cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingUnit(null)} disabled={saving}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDeleteUnit} disabled={saving}>
-              {saving ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(viewingKpi)} onOpenChange={(open) => !open && setViewingKpi(null)}>
-        <DialogContent className="max-w-2xl p-0 overflow-hidden border-0 bg-slate-50 shadow-2xl rounded-[2rem] max-h-[85vh] flex flex-col">
-          <div className="bg-white px-6 py-6 border-b border-slate-100 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100/50">
-                <Target className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <DialogTitle className="text-2xl font-bold text-slate-900 leading-tight">KPI Information</DialogTitle>
-                <DialogDescription className="text-sm text-slate-500 font-medium">
-                  Review the full configuration and strategic metadata for this objective.
-                </DialogDescription>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 overflow-y-auto flex-grow">
-            {viewingKpi && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* KPI Name - Full Width */}
-                <div className="md:col-span-2 bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm transition hover:border-indigo-200 hover:shadow-md">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">KPI Name</p>
-                  <p className="text-base font-bold text-slate-900 leading-snug">{viewingKpi.kpiName}</p>
-                </div>
-
-                {/* Baseline & Target */}
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Baseline</p>
-                  <p className="text-lg font-black text-slate-900">{viewingKpi.baseline}</p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Target</p>
-                  <p className="text-lg font-black text-indigo-600">{viewingKpi.target}</p>
-                </div>
-
-                {/* Theme & Sub-Theme */}
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Theme</p>
-                  <p className="text-sm font-bold text-slate-700">{viewingKpi.theme}</p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Sub-Theme</p>
-                  <p className="text-sm font-bold text-slate-700">{viewingKpi.subTheme}</p>
-                </div>
-
-                {/* Unit & Weight */}
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Unit</p>
-                  <p className="text-sm font-bold text-indigo-600">{viewingKpi.unit}</p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Weight</p>
-                  <p className="text-sm font-bold text-slate-700">{viewingKpi.weight}%</p>
-                </div>
-
-                {/* Evidence Status & Remark */}
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Evidence Required</p>
-                  <Badge
-                    className={viewingKpi.isEvidenceRequired ? 'bg-indigo-100 text-indigo-700 border-0' : 'bg-slate-100 text-slate-600 border-0'}
-                  >
-                    {viewingKpi.isEvidenceRequired ? 'Yes' : 'No'}
-                  </Badge>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 shadow-sm">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-1">Remark</p>
-                  <p className="text-sm font-medium text-slate-500 italic">{viewingKpi.remark || 'No remark provided'}</p>
-                </div>
-
-                {/* Description - Full Width */}
-                {viewingKpi.description && (
-                  <div className="md:col-span-2 bg-slate-100/50 rounded-2xl border border-slate-200/60 p-4">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-2">Detailed Description</p>
-                    <p className="text-sm text-slate-600 leading-relaxed">{viewingKpi.description}</p>
+            )}
+            {kpis.map((kpi) => (
+              <TableRow key={kpi.id}>
+                <TableCell className="font-medium text-foreground">{kpi.code}</TableCell>
+                <TableCell>{kpi.name}</TableCell>
+                <TableCell>{themeNames(themes, kpi.themeId).theme ?? kpi.theme?.name ?? '-'}</TableCell>
+                <TableCell>{themeNames(themes, kpi.themeId).subTheme ?? '-'}</TableCell>
+                <TableCell>{optionLabel(kpi.measurementType)}</TableCell>
+                <TableCell>{kpi.defaultFrequency?.name ?? '-'}</TableCell>
+                <TableCell>
+                  <span className="flex flex-wrap gap-1">
+                    <Badge variant="outline">{kpi.isActive ? 'Active' : 'Retired'}</Badge>
+                    {kpi.isLocked && <Badge variant="outline">In use</Badge>}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <IconAction icon={Eye} label={`View ${kpi.code}`} onClick={() => setViewing(kpi)} />
+                    {can('kpi:update') && <IconAction icon={Edit3} label={`Edit ${kpi.code}`} onClick={() => onEdit(kpi)} />}
+                    {can('kpi:create') && kpi.replacedBy?.length === 0 && <IconAction icon={Replace} label={`Replace ${kpi.code}`} onClick={() => onReplace(kpi)} />}
+                    {can('kpi:update') && kpi.replacedBy?.length === 0 && <IconAction icon={Power} label={`${kpi.isActive ? 'Retire' : 'Reactivate'} ${kpi.code}`} danger={kpi.isActive} onClick={() => (kpi.isActive ? setRetiring(kpi) : setActive(kpi, true))} />}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
-          <div className="bg-white px-6 py-4 border-t border-slate-100 flex justify-end">
-            <Button onClick={() => setViewingKpi(null)} className="rounded-xl px-8 bg-slate-900 hover:bg-slate-800">
-              Close Detail
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <TablePagination currentPage={page} totalItems={data?.pagination?.total ?? 0} itemsPerPage={PAGE_SIZE} onPageChange={setPage} className="px-4" />
+
+      {viewing && <KpiDetailDialog kpi={viewing} onClose={() => setViewing(null)} />}
+      <ConfirmDialog open={Boolean(retiring)} onClose={closeRetire} title="Retire KPI" description={`Retire ${retiring?.code}? It stays in the history and can be reactivated, but it can no longer be chosen for new work.`} onConfirm={() => setActive(retiring, false)} error={save.error} pending={save.isPending} confirmLabel="Retire" />
     </div>
   );
 }

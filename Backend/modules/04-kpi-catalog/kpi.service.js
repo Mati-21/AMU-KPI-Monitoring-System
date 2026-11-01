@@ -92,7 +92,7 @@ const parseKpiInput = (input) => {
  */
 const validateDefinition = async (kpi) => {
   const errors = [];
-  for (const key of ['code', 'name', 'description', 'themeId', 'strategicObjectiveId', 'measurementType', 'direction', 'defaultFrequencyId', 'dataSource', 'evidenceRequirement']) {
+  for (const key of ['code', 'name', 'description', 'themeId', 'strategicObjectiveId', 'measurementType', 'direction', 'defaultFrequencyId']) {
     if (kpi[key] === undefined || kpi[key] === null) errors.push(`${key} is required`);
   }
   const rules = RULES_BY_TYPE[kpi.measurementType];
@@ -153,13 +153,23 @@ const validateDefinition = async (kpi) => {
 
 // ===== Queries =====
 
+/**
+ * A theme's id and the ids of every sub-theme below it, so filtering by a theme includes its sub-themes' KPIs.
+ */
+const themeWithSubThemes = async (themeId) => {
+  const themes = await prisma.kpiTheme.findMany({ select: { id: true, parentThemeId: true } });
+  const ids = [themeId];
+  for (const id of ids) ids.push(...themes.filter((theme) => theme.parentThemeId === id).map((theme) => theme.id));
+  return ids;
+};
+
 export const listKpis = async ({ search, themeId, strategicObjectiveId, measurementType, direction, isActive, page = 1, limit = 20 } = {}) => {
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20));
 
   const active = parseBooleanQuery(isActive, 'isActive');
   const where = {
-    ...(themeId && { themeId: parseUuid(themeId, 'themeId') }),
+    ...(themeId && { themeId: { in: await themeWithSubThemes(parseUuid(themeId, 'themeId')) } }),
     ...(strategicObjectiveId && { strategicObjectiveId: parseUuid(strategicObjectiveId, 'strategicObjectiveId') }),
     ...(measurementType && { measurementType: parseEnum(measurementType, 'measurementType', MEASUREMENT_TYPES) }),
     ...(direction && { direction: parseEnum(direction, 'direction', DIRECTIONS) }),

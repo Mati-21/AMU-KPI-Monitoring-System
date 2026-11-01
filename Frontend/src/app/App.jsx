@@ -21,6 +21,7 @@ import DirectMessageView from '../features/13-messaging/pages/DirectMessageView'
 
 import DashboardHome from '../features/11-dashboards/pages/DashboardHome';
 import OfficeReport from '../features/07-performance/pages/OfficeReport';
+import PlanningPage from '../features/06-reporting-periods/pages/PlanningPage';
 import RegisteredKpis from '../features/04-kpi-catalog/pages/RegisteredKpis';
 import AssignedKpisPage from '../features/07-performance/pages/AssignedKpisPage';
 import KpiApprovalsPage from '../features/07-performance/pages/KpiApprovalsPage';
@@ -105,18 +106,12 @@ function App() {
                       <Route path="/reports" element={<Navigate to="/report" replace />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'KPI Management'),
-                            permissionUtils.permissionKey('create', 'KPI Management'),
-                            permissionUtils.permissionKey('edit', 'KPI Management'),
-                          ]}
-                        />
-                      }
-                    >
+                    <Route element={<RequirePermission permissions={['kpi:create', 'kpi:update', 'kpi:manage']} />}>
                       <Route path="/kpi" element={<KpiManagement />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permissions={['kpi:manage', 'period:manage']} />}>
+                      <Route path="/planning" element={<PlanningPage />} />
                     </Route>
 
                     <Route path="/profile" element={<UserProfile />} />

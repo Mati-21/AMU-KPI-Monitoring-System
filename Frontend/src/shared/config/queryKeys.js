@@ -28,6 +28,10 @@ export const queryKeys = {
     assignments: (params) => [...queryKeys.kpis.all, 'assignments', params],
     approvals: ['kpis', 'approvals'],
   },
+  catalog: {
+    all: ['catalog'],
+    part: (name, params) => ['catalog', name, ...(params ? [params] : [])],
+  },
   messaging: {
     all: ['messages'],
     conversations: ['messages', 'conversations'],

@@ -1,359 +1,249 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import { Input } from '../../../shared/components/ui/Input';
-import { Label } from '../../../shared/components/ui/Label';
-import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import Button from '../../../shared/components/ui/Button';
-import Checkbox from '../../../shared/components/ui/Checkbox';
-import { api } from '../../../shared/api/axios';
+import CustomSelect from '../../../shared/components/ui/CustomSelect';
+import { Input } from '../../../shared/components/ui/Input';
+import { apiErrorMessage } from '../../../shared/lib/apiError';
+import { Field } from '../../02-offices/components/FormParts';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
+import { useCurrencies, useFrequencies, useObjectives, useSaveRecord, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
+import { DIRECTIONS, MEASUREMENT_TYPES, RULES_BY_TYPE, SCORING_METHODS, ZERO_TARGET_RULES, isAdditiveType, kpiErrors, targetTypesFor, themeOptions, themePath, toOptions, usesLabels, usesScale } from '../lib/kpiRules';
 
-const NO_THEME_OPTION = 'Select Theme';
-const NO_SUB_THEME_OPTION = 'Select Sub-Theme';
+const TEXT_KEYS = ['code', 'name', 'description', 'numeratorLabel', 'denominatorLabel'];
+const CHOICE_KEYS = ['themeId', 'strategicObjectiveId', 'measurementType', 'direction', 'targetType', 'defaultFrequencyId', 'unitId', 'scaleId', 'currencyId', 'aggregationMethod', 'periodRollupMethod', 'scoringMethod', 'zeroTargetRule'];
+const EDITABLE_WHEN_LOCKED = new Set(['defaultFrequencyId']);
 
-const parseNumericInput = (value) => {
-  if (value === null || value === undefined) return null;
-  const normalized = String(value).trim().replace(/,/g, '').replace(/%/g, '');
-  if (!normalized) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+const blankForm = () => ({
+  ...Object.fromEntries([...TEXT_KEYS, ...CHOICE_KEYS].map((key) => [key, ''])),
+  isAdditive: false,
+  maintenanceTolerance: '',
+  decimalPlaces: '2',
+  zeroTargetRule: 'NOT_CALCULABLE',
+});
+
+const formFrom = (kpi) => {
+  const form = blankForm();
+  if (!kpi) return form;
+  for (const key of [...TEXT_KEYS, ...CHOICE_KEYS]) form[key] = kpi[key] ?? '';
+  return { ...form, isAdditive: kpi.isAdditive, maintenanceTolerance: kpi.maintenanceTolerance ?? '', decimalPlaces: String(kpi.decimalPlaces ?? 2) };
 };
 
-const normalizeName = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase();
+const toSendValues = (form) => ({
+  ...Object.fromEntries([...TEXT_KEYS, ...CHOICE_KEYS].map((key) => [key, form[key] === '' ? null : form[key]])),
+  isAdditive: form.isAdditive,
+  maintenanceTolerance: form.maintenanceTolerance === '' ? null : Number(form.maintenanceTolerance),
+  decimalPlaces: Number(form.decimalPlaces),
+});
 
-function RegisterKpi({ setActiveTab, onSaved }) {
-  const [kpiForm, setKpiForm] = useState({
-    kpiName: '',
-    themeId: '',
-    subThemeId: '',
-    unit: '',
-    weight: '',
-    baseline: '',
-    target: '',
-    cycleYear: '',
-    description: '',
-    remark: '',
-    isEvidenceRequired: false,
-  });
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [kpiTypes, setKpiTypes] = useState([]);
-  const [units, setUnits] = useState([]);
+const changedValues = (values, kpi) => {
+  const before = toSendValues(formFrom(kpi));
+  return Object.fromEntries(Object.entries(values).filter(([key, value]) => String(value) !== String(before[key])));
+};
+
+const withoutEmpty = (values) => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null));
+
+const SectionTitle = ({ children }) => <h3 className="border-b border-border pb-2 text-sm font-semibold text-foreground md:col-span-3">{children}</h3>;
+
+/**
+ * Register a KPI, edit one, or (with `replaces`) register its replacement.
+ */
+function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
   const { notify } = useNotification();
+  const save = useSaveRecord('kpis');
+  const { data: themes = [] } = useThemeTree();
+  const { data: objectives = [] } = useObjectives();
+  const { data: frequencies = [] } = useFrequencies();
+  const { data: units = [] } = useUnits();
+  const { data: scales = [] } = useScales();
+  const { data: currencies = [] } = useCurrencies();
+  const [form, setForm] = useState(() => (replaces ? { ...formFrom(replaces), code: '' } : formFrom(kpi)));
+  const [chosenThemeId, setChosenThemeId] = useState(null);
+  const [subThemeMissing, setSubThemeMissing] = useState(false);
+  const isEditing = Boolean(kpi);
+  const rules = RULES_BY_TYPE[form.measurementType];
+  const lockedOut = (key) => Boolean(kpi?.isLocked) && !EDITABLE_WHEN_LOCKED.has(key);
+  const scaleChoices = scales.filter((scale) => scale.scaleType === form.measurementType);
+  // form.themeId is what is saved: the sub-theme, or the theme itself when it has no sub-themes
+  const topThemeId = chosenThemeId ?? themePath(themes, form.themeId)[0]?.id ?? '';
+  const topTheme = themes.find((theme) => theme.id === topThemeId);
+  const activeOnly = !lockedOut('themeId');
+  const topThemeOptions = themes.filter((theme) => theme.isActive || !activeOnly).map((theme) => ({ value: theme.id, label: theme.name }));
+  const subThemeOptions = themeOptions(topTheme?.children, { activeOnly });
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadCatalog = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [typesRes, unitsRes, cycleYearsRes] = await Promise.all([
-          api.get('/kpi-types'),
-          api.get('/units'),
-          api.get('/kpi-year-plans/cycle-years')
-        ]);
-        if (!mounted) return;
-        setKpiTypes(typesRes.data?.data || []);
-        setUnits(unitsRes.data?.data || []);
-        const activeYear = cycleYearsRes.data?.data?.activeCycleYear || new Date().getFullYear().toString();
-        setKpiForm((prev) => ({ ...prev, cycleYear: activeYear }));
-      } catch (loadErr) {
-        if (!mounted) return;
-        setError(loadErr?.response?.data?.message || 'Failed to load themes, units, and active cycle year.');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadCatalog();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const typeById = useMemo(() => new Map(kpiTypes.map((type) => [type.Id, type])), [kpiTypes]);
-
-  const rootThemes = useMemo(() => kpiTypes.filter((type) => !type.ParentKPIID), [kpiTypes]);
-
-  const subThemeOptions = useMemo(() => kpiTypes.filter((type) => type.ParentKPIID === kpiForm.themeId), [kpiTypes, kpiForm.themeId]);
-
-  const unitOptions = useMemo(() => units.map((unit) => `${unit.Name} (${unit.Code})`), [units]);
-
-  const getThemePath = (themeId) => typeById.get(themeId)?.KPIName || '';
-
-  const getSubThemePath = (subThemeId) => {
-    const subTheme = typeById.get(subThemeId);
-    if (!subTheme) return '';
-    const theme = subTheme.ParentKPIID ? typeById.get(subTheme.ParentKPIID) : null;
-    return theme ? `${theme.KPIName} / ${subTheme.KPIName}` : subTheme.KPIName;
+  const chooseTheme = (id) => {
+    setChosenThemeId(id);
+    setSubThemeMissing(false);
+    const theme = themes.find((candidate) => candidate.id === id);
+    setForm({ ...form, themeId: themeOptions(theme.children, { activeOnly }).length > 0 ? '' : id });
   };
 
-  const handleSave = async () => {
-    setError('');
-
-    if (!kpiForm.kpiName.trim() || !kpiForm.themeId || !kpiForm.subThemeId || !kpiForm.unit || !kpiForm.weight || !kpiForm.target || !kpiForm.cycleYear.trim()) {
-      setError('KPI name, theme, sub-theme, unit, weight, target, and cycle year are required.');
-      return;
-    }
-
-    const parsedWeight = parseNumericInput(kpiForm.weight);
-    const parsedBaseline = parseNumericInput(kpiForm.baseline);
-    const parsedTarget = parseNumericInput(kpiForm.target);
-
-    if (parsedWeight === null || parsedTarget === null) {
-      setError('Weight and target must be valid numbers (for example: 25 or 90.6).');
-      return;
-    }
-
-    if (parsedWeight < 0 || parsedWeight > 100) {
-      setError('Weight must be between 0 and 100.');
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const unit = units.find((item) => `${item.Name} (${item.Code})` === kpiForm.unit);
-      const subThemeType = typeById.get(kpiForm.subThemeId);
-      if (!unit?.Id) {
-        setError('Please select a valid KPI unit.');
-        return;
-      }
-
-      if (!subThemeType?.Id) {
-        setError('Please select a valid sub-theme.');
-        return;
-      }
-
-      const trimmedKpiName = kpiForm.kpiName.trim();
-      const existingType = kpiTypes.find(
-        (type) => type.ParentKPIID === subThemeType.Id && normalizeName(type.KPIName) === normalizeName(trimmedKpiName)
-      );
-
-      let kpiTypeId = existingType?.Id;
-
-      if (!kpiTypeId) {
-        try {
-          const createdTypeRes = await api.post('/kpi-types', {
-            KPIName: trimmedKpiName,
-            ParentKPIID: subThemeType.Id,
-            Description: kpiForm.description?.trim() || null,
-          });
-          kpiTypeId = createdTypeRes.data?.data?.Id;
-        } catch (typeErr) {
-          if (typeErr?.response?.status !== 409) {
-            throw typeErr;
-          }
-
-          const typeRes = await api.get('/kpi-types');
-          const latestTypes = typeRes.data?.data || [];
-          setKpiTypes(latestTypes);
-          const duplicateType = latestTypes.find(
-            (type) => type.ParentKPIID === subThemeType.Id && normalizeName(type.KPIName) === normalizeName(trimmedKpiName)
-          );
-
-          if (!duplicateType?.Id) {
-            throw typeErr;
-          }
-
-          kpiTypeId = duplicateType.Id;
-        }
-      }
-
-      if (!kpiTypeId) {
-        setError('Unable to resolve KPI category. Please try again.');
-        return;
-      }
-
-      await api.post('/kpis', {
-        KPITypeId: kpiTypeId,
-        UnitId: unit.Id,
-        Weight: parsedWeight,
-        Baseline: parsedBaseline,
-        Target: parsedTarget,
-        CycleYear: kpiForm.cycleYear.trim(),
-        Description: kpiForm.description?.trim() || null,
-        Remark: kpiForm.remark?.trim() || null,
-        IsEvedenceRequired: kpiForm.isEvidenceRequired,
-      });
-
-      notify(`KPI "${kpiForm.kpiName}" saved successfully.`, 'success');
-      onSaved?.();
-      setKpiForm({
-        kpiName: '',
-        themeId: '',
-        subThemeId: '',
-        unit: '',
-        weight: '',
-        baseline: '',
-        target: '',
-        cycleYear: kpiForm.cycleYear,
-        description: '',
-        remark: '',
-        isEvidenceRequired: false,
-      });
-      setActiveTab('list');
-    } catch (saveErr) {
-      const message = saveErr?.response?.data?.message || 'Failed to save KPI.';
-      setError(message);
-      notify(message, 'error');
-    } finally {
-      setSaving(false);
-    }
+  const chooseSubTheme = (id) => {
+    setSubThemeMissing(false);
+    setForm({ ...form, themeId: id });
   };
+
+  const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+  const setChoice = (key) => (value) => setForm({ ...form, [key]: value });
+
+  // Clear what no longer applies and start from the usual methods for this type
+  const chooseType = (measurementType) =>
+    setForm({
+      ...form,
+      measurementType,
+      aggregationMethod: RULES_BY_TYPE[measurementType].aggregation[0],
+      periodRollupMethod: RULES_BY_TYPE[measurementType].rollup[0],
+      isAdditive: isAdditiveType(measurementType),
+      unitId: measurementType === 'NUMBER' ? form.unitId : '',
+      currencyId: measurementType === 'MONEY' ? form.currencyId : '',
+      scaleId: '',
+      numeratorLabel: usesLabels(measurementType) ? form.numeratorLabel : '',
+      denominatorLabel: usesLabels(measurementType) ? form.denominatorLabel : '',
+    });
+
+  const chooseDirection = (direction) =>
+    setForm({ ...form, direction, targetType: targetTypesFor(direction)[0], maintenanceTolerance: direction === 'MAINTAIN' ? form.maintenanceTolerance : '' });
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (topThemeId && !form.themeId) {
+      setSubThemeMissing(true);
+      return;
+    }
+    const values = toSendValues(form);
+    const payload = isEditing ? changedValues(values, kpi) : { ...withoutEmpty(values), ...(replaces && { replacesKpiId: replaces.id }) };
+    if (isEditing && Object.keys(payload).length === 0) {
+      onCancel();
+      return;
+    }
+    save.mutate(
+      { id: kpi?.id, values: payload },
+      {
+        onSuccess: (saved) => {
+          notify(replaces ? `${saved.code} now replaces ${replaces.code}, which was retired.` : `KPI ${saved.code} saved.`, 'success');
+          onDone();
+        },
+      }
+    );
+  };
+
+  const select = (key, label, options, { required, hint, onChange, placeholder } = {}) =>
+    lockedOut(key) ? (
+      <Field label={label} group>
+        <Input disabled value={options.find((option) => option.value === form[key])?.label ?? '-'} />
+      </Field>
+    ) : (
+      <Field label={label} required={required} hint={hint} group>
+        <CustomSelect compact options={options} value={form[key]} onChange={onChange ?? setChoice(key)} placeholder={placeholder ?? `Choose ${label.toLowerCase()}`} />
+      </Field>
+    );
+
+  const text = (key, label, { required, hint, ...rest } = {}) => (
+    <Field label={label} required={required} hint={hint}>
+      <Input required={required} disabled={lockedOut(key)} value={form[key]} onChange={set(key)} {...rest} />
+    </Field>
+  );
+
+  const area = (key, label, { required, hint } = {}) => (
+    <Field label={label} required={required} hint={hint}>
+      <textarea required={required} disabled={lockedOut(key)} rows={3} value={form[key]} onChange={set(key)} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
+    </Field>
+  );
+
+  const missingCatalog = [themes.length === 0 && 'Themes', objectives.length === 0 && 'Objectives', frequencies.length === 0 && 'Frequencies'].filter(Boolean);
+  const problems = kpiErrors(save.error);
+  const title = isEditing ? `Edit ${kpi.code}` : replaces ? `Replace ${replaces.code}` : 'Register KPI';
 
   return (
-    <section className="space-y-6">
-      <div className="bg-card border border-border rounded-xl p-8 w-full">
-        <h2 className="text-xl font-semibold text-foreground mb-6">Add KPI</h2>
-
-        {error ? <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div className="space-y-1">
-            <Label>KPI Name</Label>
-            <Input
-              placeholder="KPI Name"
-              value={kpiForm.kpiName}
-              onChange={(e) => setKpiForm({ ...kpiForm, kpiName: e.target.value })}
-              className="h-11"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Theme</Label>
-            <CustomSelect
-              placeholder={loading ? 'Loading themes...' : NO_THEME_OPTION}
-              value={kpiForm.themeId ? getThemePath(kpiForm.themeId) : ''}
-              onChange={(value) => {
-                const selectedTheme = rootThemes.find((theme) => theme.KPIName === value);
-                setKpiForm({ ...kpiForm, themeId: selectedTheme?.Id || '', subThemeId: '' });
-              }}
-              options={rootThemes.map((theme) => theme.KPIName)}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Sub-Theme</Label>
-            <CustomSelect
-              placeholder={loading ? 'Loading sub-themes...' : NO_SUB_THEME_OPTION}
-              value={kpiForm.subThemeId ? getSubThemePath(kpiForm.subThemeId) : ''}
-              onChange={(value) => {
-                const selectedSubTheme = subThemeOptions.find((subTheme) => subTheme.KPIName === value);
-                setKpiForm({ ...kpiForm, subThemeId: selectedSubTheme?.Id || '' });
-              }}
-              options={subThemeOptions.map((subTheme) => subTheme.KPIName)}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>KPI Unit</Label>
-            <CustomSelect
-              placeholder={loading ? 'Loading units...' : 'KPI Unit'}
-              value={kpiForm.unit}
-              onChange={(value) => setKpiForm({ ...kpiForm, unit: value })}
-              options={unitOptions}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Weight</Label>
-            <Input placeholder="Weight" value={kpiForm.weight} onChange={(e) => setKpiForm({ ...kpiForm, weight: e.target.value })} className="h-11" />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Baseline</Label>
-            <Input
-              placeholder="Baseline"
-              value={kpiForm.baseline}
-              onChange={(e) => setKpiForm({ ...kpiForm, baseline: e.target.value })}
-              className="h-11"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Target</Label>
-            <Input placeholder="Target" value={kpiForm.target} onChange={(e) => setKpiForm({ ...kpiForm, target: e.target.value })} className="h-11" />
-          </div>
-          
-          <div className="space-y-1">
-            <Label>KPI Cycle Year</Label>
-            <Input
-              placeholder="e.g. 2018"
-              value={kpiForm.cycleYear}
-              onChange={(e) => setKpiForm({ ...kpiForm, cycleYear: e.target.value })}
-              className="h-11"
-            />
-          </div>
-          
-          <div className="flex items-center gap-3 h-11 px-1 mt-6">
-            <Checkbox
-              id="isEvidenceRequired"
-              checked={kpiForm.isEvidenceRequired}
-              onCheckedChange={(checked) => setKpiForm({ ...kpiForm, isEvidenceRequired: !!checked })}
-            />
-            <label htmlFor="isEvidenceRequired" className="text-sm font-medium text-foreground cursor-pointer select-none">
-              Needs Evidence Verification
-            </label>
-          </div>
-
-          <div className="md:col-span-3 flex flex-col md:flex-row gap-4 mt-2">
-            <div className="flex-1 space-y-1">
-              <Label>Description</Label>
-              <textarea
-                placeholder="Enter Description"
-                value={kpiForm.description}
-                onChange={(e) => setKpiForm({ ...kpiForm, description: e.target.value })}
-                className="w-full min-h-[120px] border border-border rounded bg-background px-3 py-2 placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y"
-              />
-            </div>
-            <div className="flex-1 space-y-1">
-              <Label>Remark</Label>
-              <textarea
-                placeholder="Remark"
-                value={kpiForm.remark}
-                onChange={(e) => setKpiForm({ ...kpiForm, remark: e.target.value })}
-                className="w-full min-h-[120px] border border-border rounded bg-background px-3 py-2 placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-y"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-3 pt-6">
-          <Button onClick={handleSave} disabled={saving || loading} className="bg-primary hover:bg-primary/90">
-            {saving ? 'Saving...' : 'Save'}
-          </Button>
-
-          <Button
-            onClick={() => {
-              setKpiForm({
-                kpiName: '',
-                themeId: '',
-                subThemeId: '',
-                unit: '',
-                weight: '',
-                baseline: '',
-                target: '',
-                cycleYear: '',
-                description: '',
-                remark: '',
-                isEvidenceRequired: false,
-              });
-              setActiveTab('list');
-            }}
-            className="bg-destructive/10 text-destructive border border-destructive/20 hover:bg-destructive/20"
-          >
-            Cancel
-          </Button>
-        </div>
+    <form onSubmit={submit} className="space-y-5 rounded-xl border border-border bg-card p-8">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {kpi?.isLocked && 'This KPI is in use, so only its reporting frequency can change. To change anything else, replace it.'}
+          {replaces && `Saving retires ${replaces.code} and links the two, so the trend carries on.`}
+          {!kpi?.isLocked && !replaces && 'What is measured and how. Weights, baselines and targets are set per year on each contract.'}
+        </p>
       </div>
-    </section>
+
+      {!isEditing && missingCatalog.length > 0 && <p className="text-sm text-amber-600">Add at least one in each of these tabs first: {missingCatalog.join(', ')}.</p>}
+
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
+        <SectionTitle>What It Is</SectionTitle>
+        {text('code', 'Code', { required: true, hint: 'A short unique code, such as ACAD-01.' })}
+        <div className="md:col-span-2">{text('name', 'Name', { required: true })}</div>
+        {lockedOut('themeId') ? (
+          <Field label="Theme" group>
+            <Input disabled value={topTheme?.name ?? '-'} />
+          </Field>
+        ) : (
+          <Field label="Theme" required group>
+            <CustomSelect compact options={topThemeOptions} value={topThemeId} onChange={chooseTheme} placeholder="Choose theme" />
+          </Field>
+        )}
+        {lockedOut('themeId') ? (
+          <Field label="Sub-Theme" group>
+            <Input disabled value={subThemeOptions.find((option) => option.value === form.themeId)?.label ?? '-'} />
+          </Field>
+        ) : (
+          <Field label="Sub-Theme" required={subThemeOptions.length > 0} group hint={topTheme && subThemeOptions.length === 0 ? 'This theme has no sub-themes, so the KPI goes directly under it.' : undefined}>
+            <CustomSelect compact options={subThemeOptions} value={subThemeOptions.some((option) => option.value === form.themeId) ? form.themeId : ''} onChange={chooseSubTheme} placeholder={topTheme ? (subThemeOptions.length > 0 ? 'Choose sub-theme' : 'No sub-themes') : 'Choose a theme first'} />
+            {subThemeMissing && <p className="text-xs text-red-500">Choose a sub-theme.</p>}
+          </Field>
+        )}
+        {select('strategicObjectiveId', 'Strategic Objective', objectives.filter((objective) => objective.isActive || lockedOut('strategicObjectiveId')).map((objective) => ({ value: objective.id, label: `${objective.code} - ${objective.name}` })), { required: true })}
+        {select('defaultFrequencyId', 'Reporting Frequency', frequencies.map((frequency) => ({ value: frequency.id, label: frequency.name })), { required: true })}
+        <div className="md:col-span-3">{area('description', 'Description', { required: true })}</div>
+
+        <SectionTitle>How It Is Measured</SectionTitle>
+        {select('measurementType', 'Measurement Type', toOptions(MEASUREMENT_TYPES), { required: true, onChange: chooseType, hint: 'Use Percentage, Ratio or Money for those results, not Number with a unit, so they add up correctly.' })}
+        {select('direction', 'Direction', toOptions(DIRECTIONS), { required: true, onChange: chooseDirection })}
+        {select('targetType', 'Target Type', toOptions(targetTypesFor(form.direction)), { required: true, placeholder: form.direction ? 'Choose target type' : 'Choose a direction first' })}
+        {form.measurementType === 'NUMBER' && select('unitId', 'Unit', units.map((unit) => ({ value: unit.id, label: unit.symbol ? `${unit.name} (${unit.symbol})` : unit.name })), { required: true })}
+        {form.measurementType === 'MONEY' && select('currencyId', 'Currency', currencies.map((currency) => ({ value: currency.id, label: `${currency.code} - ${currency.name}` })), { required: true })}
+        {usesScale(form.measurementType) && select('scaleId', 'Scale', scaleChoices.map((scale) => ({ value: scale.id, label: scale.name })), { required: true, hint: scaleChoices.length === 0 ? 'There is no scale of this type yet. Add one in the Scales tab.' : undefined })}
+        {usesLabels(form.measurementType) && text('numeratorLabel', 'Numerator Label', { required: true, hint: 'What is counted, such as Graduates.' })}
+        {usesLabels(form.measurementType) && text('denominatorLabel', 'Denominator Label', { required: true, hint: 'What it is out of, such as Enrolled students.' })}
+        {form.direction === 'MAINTAIN' && text('maintenanceTolerance', 'Allowed Variation', { required: true, type: 'number', min: 0, step: 'any', hint: 'How far from the target still counts as maintained.' })}
+
+        {rules && (
+          <>
+            <SectionTitle>Scoring Rules</SectionTitle>
+            {select('aggregationMethod', 'Combining Offices', toOptions(rules.aggregation), { hint: 'How results of offices below add up.' })}
+            {select('periodRollupMethod', 'Combining Periods', toOptions(rules.rollup), { hint: 'How period results make the year-end result.' })}
+            {select('scoringMethod', 'Scoring Method', [{ value: '', label: 'University default' }, ...toOptions(SCORING_METHODS)], { placeholder: 'University default', hint: 'Left empty, it follows Official score basis in Configuration.' })}
+            {select('zeroTargetRule', 'When the Target Is Zero', toOptions(ZERO_TARGET_RULES))}
+            {text('decimalPlaces', 'Decimal Places', { type: 'number', min: 0, max: 6, step: 1 })}
+            {isAdditiveType(form.measurementType) && (
+              <label className="flex items-center gap-2 pt-7 text-sm text-foreground">
+                <input type="checkbox" disabled={lockedOut('isAdditive')} checked={form.isAdditive} onChange={(event) => setForm({ ...form, isAdditive: event.target.checked })} />
+                Results can be added together
+              </label>
+            )}
+          </>
+        )}
+      </div>
+
+      {save.error && (
+        <div className="space-y-1 text-sm text-red-500">
+          <p>{apiErrorMessage(save.error, 'Could not save this KPI.')}</p>
+          {problems.length > 0 && (
+            <ul className="list-disc pl-5">
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? 'Saving...' : 'Save'}
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
   );
 }
 

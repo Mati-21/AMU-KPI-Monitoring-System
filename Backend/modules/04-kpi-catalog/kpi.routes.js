@@ -546,7 +546,7 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *     tags: [KPI Catalog]
  *     parameters:
  *       - { in: query, name: search, schema: { type: string }, description: Code or name }
- *       - { in: query, name: themeId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: themeId, schema: { type: string, format: uuid }, description: This theme and every sub-theme below it }
  *       - { in: query, name: strategicObjectiveId, schema: { type: string, format: uuid } }
  *       - { in: query, name: measurementType, schema: { type: string, enum: [NUMBER, PERCENTAGE, RATIO, STAGE, CATEGORY, MONEY] } }
  *       - { in: query, name: direction, schema: { type: string, enum: [HIGHER_IS_BETTER, LOWER_IS_BETTER, MAINTAIN] } }
@@ -568,7 +568,7 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *         application/json:
  *           schema:
  *             type: object
- *             required: [code, name, description, themeId, strategicObjectiveId, measurementType, direction, defaultFrequencyId, dataSource, evidenceRequirement]
+ *             required: [code, name, description, themeId, strategicObjectiveId, measurementType, direction, defaultFrequencyId]
  *             properties:
  *               code: { type: string, example: KPI-RES-001 }
  *               name: { type: string, example: Number of research publications }
