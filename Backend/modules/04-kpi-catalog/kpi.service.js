@@ -4,6 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseBoolean, parseBooleanQuery, parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
 import { getSetting } from '../10-system-governance/system.service.js';
+import { activeKpiNames, assertNameFree, nameKey, sameNameIn } from './kpiNames.js';
 
 /**
  * Module 04 — Master KPI catalog.
@@ -35,19 +36,18 @@ const DEFAULT_TARGET_TYPE = { HIGHER_IS_BETTER: 'MINIMUM', LOWER_IS_BETTER: 'MAX
 const LIVE_ASSIGNMENT = { status: { notIn: ['CANCELLED', 'REJECTED'] } };
 
 // What may still change on a locked KPI; everything else defines what past results mean.
-const EDITABLE_WHEN_LOCKED = new Set(['isActive', 'coordinatingOfficeId', 'defaultFrequencyId']);
+const EDITABLE_WHEN_LOCKED = new Set(['isActive', 'coordinatingOfficeId', 'defaultFrequencyId', 'remark']);
 
 const REF_SELECT = { id: true, code: true, name: true };
 const KPI_INCLUDE = {
   theme: { select: REF_SELECT },
-  strategicObjective: { select: REF_SELECT },
   unit: { select: { id: true, name: true, symbol: true } },
   scale: { select: { id: true, name: true, scaleType: true, isBinary: true, scoringApproved: true } },
   currency: { select: { id: true, code: true, symbol: true } },
   defaultFrequency: { select: { id: true, name: true, intervalMonths: true } },
   coordinatingOffice: { select: REF_SELECT },
-  replaces: { select: REF_SELECT },
-  replacedBy: { select: REF_SELECT },
+  replaces: { select: { id: true, name: true } },
+  replacedBy: { select: { id: true, name: true } },
   _count: { select: { assignments: { where: LIVE_ASSIGNMENT } } },
 };
 
@@ -71,9 +71,8 @@ const parseKpiInput = (input) => {
   const text = (value, key) => optionalString(value, key);
   const oneOf = (values) => (value, key) => parseEnum(value, key, values);
 
-  set('code', (value, key) => text(value, key)?.toUpperCase() ?? null);
-  ['name', 'description', 'numeratorLabel', 'denominatorLabel', 'formula', 'dataSource', 'evidenceRequirement'].forEach((key) => set(key, text));
-  ['themeId', 'strategicObjectiveId', 'unitId', 'scaleId', 'currencyId', 'defaultFrequencyId', 'coordinatingOfficeId'].forEach((key) => set(key, uuidOrNull));
+  ['name', 'description', 'remark', 'numeratorLabel', 'denominatorLabel', 'formula', 'dataSource', 'evidenceRequirement'].forEach((key) => set(key, text));
+  ['themeId', 'unitId', 'scaleId', 'currencyId', 'defaultFrequencyId', 'coordinatingOfficeId'].forEach((key) => set(key, uuidOrNull));
   set('measurementType', oneOf(MEASUREMENT_TYPES));
   set('direction', oneOf(DIRECTIONS));
   set('targetType', oneOf(TARGET_TYPES));
@@ -94,7 +93,7 @@ const parseKpiInput = (input) => {
  */
 const validateDefinition = async (kpi) => {
   const errors = [];
-  for (const key of ['code', 'name', 'description', 'themeId', 'strategicObjectiveId', 'measurementType', 'direction', 'defaultFrequencyId']) {
+  for (const key of ['name', 'description', 'themeId', 'measurementType', 'direction', 'defaultFrequencyId']) {
     if (kpi[key] === undefined || kpi[key] === null) errors.push(`${key} is required`);
   }
   const rules = RULES_BY_TYPE[kpi.measurementType];
@@ -124,9 +123,8 @@ const validateDefinition = async (kpi) => {
   if (kpi.decimalPlaces < 0 || kpi.decimalPlaces > 6) errors.push('decimalPlaces must be between 0 and 6');
 
   // Related records must exist and be usable
-  const [theme, objective, unit, scale, currency, frequency, office] = await Promise.all([
+  const [theme, unit, scale, currency, frequency, office] = await Promise.all([
     kpi.themeId ? prisma.kpiTheme.findUnique({ where: { id: kpi.themeId } }) : null,
-    kpi.strategicObjectiveId ? prisma.strategicObjective.findUnique({ where: { id: kpi.strategicObjectiveId } }) : null,
     kpi.unitId ? prisma.measurementUnit.findUnique({ where: { id: kpi.unitId } }) : null,
     kpi.scaleId ? prisma.kpiScale.findUnique({ where: { id: kpi.scaleId } }) : null,
     kpi.currencyId ? prisma.currency.findUnique({ where: { id: kpi.currencyId } }) : null,
@@ -134,7 +132,6 @@ const validateDefinition = async (kpi) => {
     kpi.coordinatingOfficeId ? prisma.office.findUnique({ where: { id: kpi.coordinatingOfficeId } }) : null,
   ]);
   if (kpi.themeId && !theme?.isActive) errors.push('themeId must point to an active theme');
-  if (kpi.strategicObjectiveId && !objective?.isActive) errors.push('strategicObjectiveId must point to an active strategic objective');
   if (kpi.unitId && !unit) errors.push('Unit not found');
   if (kpi.currencyId && !currency) errors.push('Currency not found');
   if (kpi.defaultFrequencyId && !frequency) errors.push('Reporting frequency not found');
@@ -165,25 +162,24 @@ const themeWithSubThemes = async (themeId) => {
   return ids;
 };
 
-export const listKpis = async ({ search, themeId, strategicObjectiveId, measurementType, direction, isActive, page = 1, limit = 20 } = {}) => {
+export const listKpis = async ({ search, themeId, measurementType, direction, isActive, page = 1, limit = 20 } = {}) => {
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20));
 
   const active = parseBooleanQuery(isActive, 'isActive');
   const where = {
     ...(themeId && { themeId: { in: await themeWithSubThemes(parseUuid(themeId, 'themeId')) } }),
-    ...(strategicObjectiveId && { strategicObjectiveId: parseUuid(strategicObjectiveId, 'strategicObjectiveId') }),
     ...(measurementType && { measurementType: parseEnum(measurementType, 'measurementType', MEASUREMENT_TYPES) }),
     ...(direction && { direction: parseEnum(direction, 'direction', DIRECTIONS) }),
     ...(active !== undefined && { isActive: active }),
   };
   if (search?.trim()) {
-    where.OR = [{ code: { contains: search.trim(), mode: 'insensitive' } }, { name: { contains: search.trim(), mode: 'insensitive' } }];
+    where.name = { contains: search.trim(), mode: 'insensitive' };
   }
 
   const [total, kpis] = await Promise.all([
     prisma.kpi.count({ where }),
-    prisma.kpi.findMany({ where, orderBy: { code: 'asc' }, skip: (pageNum - 1) * limitNum, take: limitNum, include: KPI_INCLUDE }),
+    prisma.kpi.findMany({ where, orderBy: { name: 'asc' }, skip: (pageNum - 1) * limitNum, take: limitNum, include: KPI_INCLUDE }),
   ]);
   return { data: kpis.map(formatKpi), pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) } };
 };
@@ -200,7 +196,7 @@ export const getKpiById = async (id) => {
  * A complete, checked KPI definition. Methods left out get the usual choice for its measurement type; the scoring
  * method defaults to the university's official basis.
  */
-const buildDefinition = async (data) => {
+export const buildDefinition = async (data) => {
   const fields = parseKpiInput(data);
   const rules = RULES_BY_TYPE[fields.measurementType];
 
@@ -227,7 +223,7 @@ const buildDefinition = async (data) => {
   return definition;
 };
 
-const auditValues = ({ _count, theme, strategicObjective, unit, scale, currency, defaultFrequency, coordinatingOffice, replaces, replacedBy, ...values }) => values;
+const auditValues = ({ _count, theme, unit, scale, currency, defaultFrequency, coordinatingOffice, replaces, replacedBy, ...values }) => values;
 
 /**
  * Register a KPI. With replacesKpiId the old KPI is retired in the same transaction.
@@ -236,14 +232,14 @@ export const createKpi = async (data = {}, actor) => {
   assertGlobal(actor, PERMISSIONS.KPI_CREATE, 'Registering KPIs');
   const replacesKpiId = parseUuid(data.replacesKpiId, 'replacesKpiId', { required: false }) ?? null;
   const definition = await buildDefinition(data);
-
-  if (await prisma.kpi.findUnique({ where: { code: definition.code } })) throw conflict(`KPI code "${definition.code}" is already used`);
+  // A replacement carries on its old KPI, so it may keep the name
+  await assertNameFree(definition.name, replacesKpiId ? [replacesKpiId] : []);
 
   let replaced = null;
   if (replacesKpiId) {
-    replaced = await prisma.kpi.findUnique({ where: { id: replacesKpiId }, include: { replacedBy: { select: { code: true } } } });
+    replaced = await prisma.kpi.findUnique({ where: { id: replacesKpiId }, include: { replacedBy: { select: { name: true } } } });
     if (!replaced) throw badRequest('The KPI to replace was not found');
-    if (replaced.replacedBy.length > 0) throw conflict(`KPI ${replaced.code} was already replaced by ${replaced.replacedBy[0].code}`);
+    if (replaced.replacedBy.length > 0) throw conflict(`"${replaced.name}" was already replaced by "${replaced.replacedBy[0].name}"`);
   }
 
   const kpi = await prisma.$transaction(async (tx) => {
@@ -259,16 +255,18 @@ export const createKpi = async (data = {}, actor) => {
  * Check every row of a mass registration, reporting all problems at once by row position.
  */
 const checkImportRows = async (rows) => {
-  const seen = new Set();
+  const seenNames = new Set();
+  const catalog = await activeKpiNames();
   const checked = [];
   for (const row of rows) {
     const errors = [];
     let definition = null;
     try {
       definition = await buildDefinition(row ?? {});
-      if (seen.has(definition.code)) errors.push(`Code "${definition.code}" appears more than once in this file`);
-      else if (await prisma.kpi.findUnique({ where: { code: definition.code }, select: { id: true } })) errors.push(`KPI code "${definition.code}" is already used`);
-      seen.add(definition.code);
+      const same = sameNameIn(catalog, definition.name);
+      if (seenNames.has(nameKey(definition.name))) errors.push(`"${definition.name}" appears more than once in this file`);
+      else if (same) errors.push(`A KPI with this name already exists: "${same.name}"`);
+      seenNames.add(nameKey(definition.name));
     } catch (failure) {
       if (!(failure instanceof HttpError)) throw failure;
       errors.push(...(failure.details?.errors ?? [failure.message]));
@@ -304,7 +302,7 @@ export const updateKpi = async (id, data = {}, actor) => {
   assertGlobal(actor, PERMISSIONS.KPI_UPDATE, 'Changing KPIs');
   const existing = await prisma.kpi.findUnique({
     where: { id: parseUuid(id, 'id') },
-    include: { replacedBy: { select: { code: true } }, _count: { select: { assignments: { where: LIVE_ASSIGNMENT } } } },
+    include: { replacedBy: { select: { name: true } }, _count: { select: { assignments: { where: LIVE_ASSIGNMENT } } } },
   });
   if (!existing) throw notFound('KPI not found');
   const { _count, replacedBy, ...before } = existing;
@@ -317,20 +315,18 @@ export const updateKpi = async (id, data = {}, actor) => {
     const same = (key) => String(fields[key] ?? '') === String(before[key] ?? '');
     const blocked = Object.keys(fields).filter((key) => !EDITABLE_WHEN_LOCKED.has(key) && !same(key));
     if (blocked.length > 0) {
-      throw conflict(`KPI ${existing.code} is in use and locked, so these cannot change: ${blocked.join(', ')}. Register a new KPI with replacesKpiId instead`, { locked: blocked });
+      throw conflict(`"${existing.name}" is in use and locked, so these cannot change: ${blocked.join(', ')}. Register a new KPI with replacesKpiId instead`, { locked: blocked });
     }
   }
-  if (fields.isActive === true && replacedBy.length > 0) throw conflict(`KPI ${existing.code} was replaced by ${replacedBy[0].code} and cannot be reactivated`);
+  if (fields.isActive === true && replacedBy.length > 0) throw conflict(`"${existing.name}" was replaced by "${replacedBy[0].name}" and cannot be reactivated`);
 
   const merged = { ...before, ...fields, maintenanceTolerance: 'maintenanceTolerance' in fields ? fields.maintenanceTolerance : before.maintenanceTolerance === null ? null : Number(before.maintenanceTolerance) };
   await validateDefinition(merged);
-  if (fields.code && fields.code !== existing.code && (await prisma.kpi.findUnique({ where: { code: fields.code } }))) {
-    throw conflict(`KPI code "${fields.code}" is already used`);
-  }
+  if (fields.name && nameKey(fields.name) !== nameKey(existing.name)) await assertNameFree(fields.name, [existing.id]);
 
   const kpi = await prisma.kpi.update({ where: { id: existing.id }, data: fields, include: KPI_INCLUDE });
   await auditAction(actor, { action: 'KPI_UPDATED', entityType: 'kpi', entityId: existing.id, oldValues: before, newValues: fields });
   return formatKpi(kpi);
 };
 
-export default { listKpis, getKpiById, createKpi, importKpis, updateKpi };
+export default { listKpis, getKpiById, buildDefinition, createKpi, importKpis, updateKpi };

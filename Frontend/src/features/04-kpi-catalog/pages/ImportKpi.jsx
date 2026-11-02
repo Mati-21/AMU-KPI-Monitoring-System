@@ -6,7 +6,7 @@ import Button from '../../../shared/components/ui/Button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../shared/components/ui/Table';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { useCheckKpiImport, useCurrencies, useFrequencies, useImportKpis, useObjectives, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
+import { useCheckKpiImport, useCurrencies, useFrequencies, useImportKpis, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
 import { MAX_ROWS, downloadTemplate, readKpiFile, rowToKpi } from '../lib/kpiImport';
 import { friendlyProblem } from '../lib/kpiRules';
 
@@ -23,12 +23,11 @@ function ImportKpi({ onDone }) {
   const { notify } = useNotification();
   const fileInput = useRef(null);
   const { data: themes = [] } = useThemeTree();
-  const { data: objectives = [] } = useObjectives();
   const { data: frequencies = [] } = useFrequencies();
   const { data: units = [] } = useUnits();
   const { data: scales = [] } = useScales();
   const { data: currencies = [] } = useCurrencies();
-  const catalog = { themes, objectives, frequencies, units, scales, currencies };
+  const catalog = { themes, frequencies, units, scales, currencies };
   const check = useCheckKpiImport();
   const save = useImportKpis();
   const [fileName, setFileName] = useState('');
@@ -110,7 +109,6 @@ function ImportKpi({ onDone }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Row</TableHead>
-                  <TableHead>Code</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Result</TableHead>
@@ -120,8 +118,7 @@ function ImportKpi({ onDone }) {
                 {shown.map((row) => (
                   <TableRow key={row.rowNumber}>
                     <TableCell>{row.rowNumber}</TableCell>
-                    <TableCell className="font-medium text-foreground">{row.cells.Code || '-'}</TableCell>
-                    <TableCell>{row.cells.Name || '-'}</TableCell>
+                    <TableCell className="font-medium text-foreground">{row.cells.Name || '-'}</TableCell>
                     <TableCell>{row.cells['Measurement Type'] || '-'}</TableCell>
                     <TableCell>
                       {row.errors.length === 0 ? (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { Input } from '../../../shared/components/ui/Input';
@@ -19,6 +20,7 @@ const toSendValue = (field, value) => {
 };
 
 const Control = ({ field, value, onChange }) => {
+  if (field.type === 'date') return <EthiopianDateInput label={field.label} required={field.required} min={field.min} max={field.max} value={value} onChange={onChange} />;
   if (field.type === 'select') return <CustomSelect compact options={field.options} value={value} onChange={onChange} placeholder={field.placeholder ?? 'Choose'} />;
   if (field.type === 'textarea') return <textarea required={field.required} rows={3} value={value} onChange={(event) => onChange(event.target.value)} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" />;
   return <Input type={field.type ?? 'text'} required={field.required} min={field.min} max={field.max} step={field.step} value={value} onChange={(event) => onChange(event.target.value)} />;
@@ -64,7 +66,7 @@ const RecordDialog = ({ title, description, fields, record, defaults, mutation, 
             {field.label}
           </label>
         ) : (
-          <Field key={field.key} label={field.label} required={field.required} hint={field.hint} group={field.type === 'select'}>
+          <Field key={field.key} label={field.label} required={field.required} hint={field.hint} group={field.type === 'select' || field.type === 'date'}>
             <Control field={field} value={form[field.key]} onChange={(value) => setForm({ ...form, [field.key]: value })} />
           </Field>
         )

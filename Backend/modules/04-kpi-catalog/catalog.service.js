@@ -5,7 +5,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError
 import { optionalString, parseBoolean, parseBooleanQuery, parseDate, parseIntId, parseNumber, parseUuid, requireString } from '../../utils/validation.js';
 
 /**
- * Module 04 — What KPIs are built from: strategic objectives, themes, units, reporting frequencies,
+ * Module 04 — What KPIs are built from: themes, units, reporting frequencies,
  * stage/category scales, currencies and exchange rates. The university configures all of these.
  * A scale locks as soon as a KPI uses it; a real change means a new scale.
  */
@@ -27,43 +27,6 @@ const findOrThrow = async (model, id, label, args = {}) => {
 const assertNameFree = async (model, name, label, exceptId) => {
   const existing = await model.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
   if (existing && existing.id !== exceptId) throw conflict(`${label} "${existing.name}" already exists`);
-};
-
-// ===== Strategic objectives =====
-
-export const listObjectives = async ({ isActive } = {}) => {
-  const active = parseBooleanQuery(isActive, 'isActive');
-  const objectives = await prisma.strategicObjective.findMany({
-    where: active === undefined ? {} : { isActive: active },
-    orderBy: { code: 'asc' },
-    include: { _count: { select: { kpis: true } } },
-  });
-  return objectives.map(({ _count, ...objective }) => ({ ...objective, kpiCount: _count.kpis }));
-};
-
-export const createObjective = async ({ code, name, description } = {}, actor) => {
-  assertGlobal(actor);
-  const objective = await prisma.strategicObjective.create({
-    data: { code: upperCode(requireString(code, 'code')), name: requireString(name, 'name'), description: optionalString(description, 'description') ?? null },
-  });
-  await auditAction(actor, { action: 'OBJECTIVE_CREATED', entityType: 'strategic_objective', entityId: objective.id, newValues: objective });
-  return objective;
-};
-
-export const updateObjective = async (id, data = {}, actor) => {
-  assertGlobal(actor);
-  const existing = await findOrThrow(prisma.strategicObjective, id, 'Strategic objective');
-  const update = {};
-  if (data.code !== undefined) update.code = upperCode(requireString(data.code, 'code'));
-  if (data.name !== undefined) update.name = requireString(data.name, 'name');
-  if (data.description !== undefined) update.description = optionalString(data.description, 'description');
-  const isActive = parseBoolean(data.isActive, 'isActive');
-  if (isActive !== undefined) update.isActive = isActive;
-  if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
-
-  const objective = await prisma.strategicObjective.update({ where: { id: existing.id }, data: update });
-  await auditAction(actor, { action: 'OBJECTIVE_UPDATED', entityType: 'strategic_objective', entityId: existing.id, oldValues: existing, newValues: objective });
-  return objective;
 };
 
 // ===== Themes =====
@@ -469,9 +432,6 @@ export const createExchangeRate = async ({ fromCurrencyId, toCurrencyId, rate, r
 };
 
 export default {
-  listObjectives,
-  createObjective,
-  updateObjective,
   getThemeTree,
   createTheme,
   updateTheme,

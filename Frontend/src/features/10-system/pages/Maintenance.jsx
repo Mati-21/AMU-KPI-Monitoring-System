@@ -1,4 +1,5 @@
 import { Hammer, AlertTriangle, RefreshCw } from 'lucide-react';
+import { formatEthiopianDateTime } from '../../../shared/lib/ethiopianDate';
 import { useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
@@ -56,7 +57,7 @@ const Maintenance = () => {
       </h1>
       
       <p className="text-lg text-muted-foreground max-w-md mb-8 leading-relaxed">{message}</p>
-      {endsAt && <p className="text-sm font-medium text-foreground mb-8">Expected back by {new Date(endsAt).toLocaleString()}</p>}
+      {endsAt && <p className="text-sm font-medium text-foreground mb-8">Expected back by {formatEthiopianDateTime(endsAt)}</p>}
 
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center gap-3 mb-10 max-w-sm">
         <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />

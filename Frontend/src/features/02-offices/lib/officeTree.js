@@ -36,5 +36,5 @@ export const collapsedFromDepth = (nodes = [], depth = 0) => new Set(flattenTree
 
 export const todayIso =() => new Date().toISOString().slice(0, 10);
 
-// Stored as calendar dates, so they must not shift with the viewer's time zone
-export const formatDate = (date) => (date ? new Date(date).toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' }) : '');
+// Stored as calendar dates, so they must not shift with the viewer's time zone. Shown in the Ethiopian calendar.
+export { formatEthiopianDate as formatDate } from '../../../shared/lib/ethiopianDate';

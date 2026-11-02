@@ -20,8 +20,8 @@ const COLUMNS = [
       ) : (
         <ul className="space-y-1">
           {row.flaggedKpis.map((kpi) => (
-            <li key={kpi.code}>
-              <span className="font-medium text-foreground">{kpi.code}:</span> {kpi.note}
+            <li key={kpi.name}>
+              <span className="font-medium text-foreground">{kpi.name}:</span> {kpi.note}
             </li>
           ))}
         </ul>

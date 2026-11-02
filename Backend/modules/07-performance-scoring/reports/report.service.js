@@ -55,7 +55,6 @@ const formatLine = (line) => ({
   assignmentId: line.assignment.id,
   kpi: {
     id: line.assignment.kpi.id,
-    code: line.assignment.kpi.code,
     name: line.assignment.kpi.name,
     measurementType: line.assignment.kpi.measurementType,
     direction: line.assignment.kpi.direction,
@@ -164,9 +163,9 @@ const assertEvidenceAttached = async (report) => {
   if (!(await getSetting('reporting', 'require_evidence'))) return;
   const missing = await prisma.performanceValue.findMany({
     where: { reportId: report.id, contributionType: 'DIRECT', reportingStatus: 'REPORTED', evidence: { none: {} } },
-    select: { assignment: { select: { kpi: { select: { code: true } } } } },
+    select: { assignment: { select: { kpi: { select: { name: true } } } } },
   });
-  if (missing.length > 0) throw conflict(`Attach evidence for: ${missing.map((row) => row.assignment.kpi.code).join(', ')}`);
+  if (missing.length > 0) throw conflict(`Attach evidence for: ${missing.map((row) => row.assignment.kpi.name).join(', ')}`);
 };
 
 /**

@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BadgeCheck, Flag } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
+import Button from '../../../shared/components/ui/Button';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import RecordTable from '../../04-kpi-catalog/components/RecordTable';
@@ -13,6 +15,9 @@ import ContractActions from './ContractActions';
 import ShareState from './ShareState';
 import ShareTargetDialog from './ShareTargetDialog';
 
+// How a KPI that is not divided between the offices below reaches them
+const UNDIVIDED = { FULL: 'Fully, to each office', CUSTOM: 'Custom targets' };
+
 const Fact = ({ label, children }) => (
   <div>
     <p className="text-xs text-muted-foreground">{label}</p>
@@ -22,6 +27,7 @@ const Fact = ({ label, children }) => (
 
 const ContractDetail = ({ contractId, contracts }) => {
   const can = useCan();
+  const navigate = useNavigate();
   const { data: contract, isLoading, error } = useContract(contractId);
   const parentSummary = contracts.find((candidate) => candidate.officeId === contract?.assigningOfficeId);
   const { data: parentContract } = useContract(parentSummary?.id);
@@ -34,10 +40,11 @@ const ContractDetail = ({ contractId, contracts }) => {
 
   const isClosed = contract.fiscalYear.status === 'CLOSED';
   const canAdd = can('contract:manage') && !isClosed && isOpen(contract);
+  // New KPIs come from the ministry into the top office's own plan, so only a draft self contract takes them
+  const canRegister = canAdd && !contract.assigningOfficeId && contract.status === 'DRAFT';
   const step = nextStep(contract);
 
   const columns = [
-    { label: 'Code', render: (row) => row.kpi.code },
     {
       label: 'KPI',
       render: (row) => (
@@ -66,10 +73,10 @@ const ContractDetail = ({ contractId, contracts }) => {
     {
       label: 'Shared',
       render: (row) => {
-        if (!row.sharing?.shareable) return <span className="text-xs text-muted-foreground">Same target</span>;
+        if (!row.sharing?.shareable) return <span className="text-xs text-muted-foreground">{UNDIVIDED[row.sharing?.method] ?? 'Same target'}</span>;
         if (!isApproved(row)) return '-';
         return (
-          <button type="button" aria-label={`Share ${row.kpi.code}`} onClick={() => setSharing(row)} className="text-left hover:underline">
+          <button type="button" aria-label={`Share ${row.kpi.name}`} onClick={() => setSharing(row)} className="text-left hover:underline">
             <span className="block text-sm text-foreground">{row.sharing.assigned} of {row.sharing.parentAmount}</span>
             <ShareState difference={row.sharing.difference} />
           </button>
@@ -107,7 +114,7 @@ const ContractDetail = ({ contractId, contracts }) => {
         <ContractActions contract={contract} />
       </div>
 
-      <RecordTable title="KPIs on This Contract" addLabel="Add KPI" onAdd={canAdd ? () => setDialog({}) : null} columns={columns} rows={contract.assignments} rowClassName={rejectedRow} emptyText="No KPIs on this contract yet." />
+      <RecordTable title="KPIs on This Contract" addLabel="Add KPI" onAdd={canAdd ? () => setDialog({}) : null} filter={canRegister ? <Button type="button" variant="outline" className="ml-auto" onClick={() => navigate(`/assign-kpi/${contract.id}/register`)}>Register New KPIs</Button> : null} columns={columns} rows={contract.assignments} rowClassName={rejectedRow} emptyText="No KPIs on this contract yet." />
 
       {dialog && <AssignmentFormDialog contract={contract} assignment={dialog.assignment} kpi={kpis.find((kpi) => kpi.id === dialog.assignment?.kpi.id)} parentContract={parentContract} choices={assignableKpis(contract, kpis, parentContract)} onClose={() => setDialog(null)} />}
 

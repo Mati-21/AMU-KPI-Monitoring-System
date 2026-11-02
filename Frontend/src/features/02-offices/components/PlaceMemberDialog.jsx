@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
-import { Input } from '../../../shared/components/ui/Input';
+import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 import SearchInput from '../../../shared/components/ui/SearchInput';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { usePersons } from '../../01-identity/hooks/useUsers';
@@ -107,12 +107,12 @@ const PlaceMemberDialog = ({ office, person, onClose }) => {
           <CustomSelect compact options={positionOptions} value={positionId} onChange={setPositionId} placeholder="Choose the position" />
         </Field>
       )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Start Date" required>
-          <Input type="date" required value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+      <div className="grid grid-cols-1 gap-4">
+        <Field label="Start Date" required group>
+          <EthiopianDateInput label="Start date" required value={startDate} onChange={setStartDate} />
         </Field>
-        <Field label="End Date" hint="Leave empty if it has no planned end.">
-          <Input type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+        <Field label="End Date" group hint="Leave empty if it has no planned end.">
+          <EthiopianDateInput label="End date" min={startDate} value={endDate} onChange={setEndDate} />
         </Field>
       </div>
       <label className="flex items-center gap-2 text-sm text-foreground">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatEthiopianDateTime } from '../../../shared/lib/ethiopianDate';
 import { CheckCircle2, Clock, Inbox, Mail, RotateCcw } from 'lucide-react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -47,7 +48,7 @@ const RequestPanel = ({ request, onChanged }) => {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-foreground">{request.requesterName}</h2>
-          <p className="text-xs text-muted-foreground">{new Date(request.createdAt).toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground">{formatEthiopianDateTime(request.createdAt)}</p>
         </div>
         <StatusBadge status={request.status} />
       </div>

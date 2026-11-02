@@ -62,11 +62,10 @@ export const themeOptions = (nodes,{ activeOnly = false, except } = {}) =>
 
 // Fields the backend's messages name, in the words the form uses
 const FIELD_LABELS = {
-  code: 'Code',
   name: 'Name',
   description: 'Description',
   themeId: 'Theme',
-  strategicObjectiveId: 'Strategic objective',
+  remark: 'Remark',
   measurementType: 'Measurement type',
   direction: 'Direction',
   defaultFrequencyId: 'Reporting frequency',

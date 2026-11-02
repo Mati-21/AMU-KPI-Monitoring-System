@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { useSelector } from 'react-redux';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
-import { Input } from '../../../shared/components/ui/Input';
+import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 import { useCan } from '../hooks/useCan';
 import { ConfirmDialog, Field, FormDialog } from '../../02-offices/components/FormParts';
 import { useOfficeTree } from '../../02-offices/hooks/useOffices';
@@ -89,12 +89,12 @@ const RoleAssignmentsDialog = ({ placement, officeName, personName, onClose }) =
         <Field label="Applies To" required group>
           <CustomSelect compact options={scopeOptions} value={scope} onChange={setScope} placeholder="Choose where it applies" />
         </Field>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Start Date" required>
-            <Input type="date" required value={validFrom} onChange={(event) => setValidFrom(event.target.value)} />
+        <div className="grid grid-cols-1 gap-4">
+          <Field label="Start Date" required group>
+            <EthiopianDateInput label="Start date" required value={validFrom} onChange={setValidFrom} />
           </Field>
-          <Field label="End Date" hint="Leave empty if it has no planned end.">
-            <Input type="date" min={validFrom} value={validTo} onChange={(event) => setValidTo(event.target.value)} />
+          <Field label="End Date" group hint="Leave empty if it has no planned end.">
+            <EthiopianDateInput label="End date" min={validFrom} value={validTo} onChange={setValidTo} />
           </Field>
         </div>
       </FormDialog>

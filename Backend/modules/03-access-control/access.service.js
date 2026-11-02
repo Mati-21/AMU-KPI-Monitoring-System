@@ -29,6 +29,7 @@ export const getActiveGrants = async (personId) => {
     },
     select: {
       scopeOfficeId: true,
+      scopeOffice: { select: { parentOfficeId: true } },
       officePerson: { select: { officeId: true } },
       role: {
         select: {
@@ -42,7 +43,7 @@ export const getActiveGrants = async (personId) => {
 
   return assignments.flatMap((assignment) =>
     assignment.role.permissions.flatMap(({ permission }) => {
-      const grant = { code: permission.code, scopeOfficeId: assignment.scopeOfficeId, placedOfficeId: assignment.officePerson.officeId, roleId: assignment.role.id, roleName: assignment.role.name };
+      const grant = { code: permission.code, scopeOfficeId: assignment.scopeOfficeId, coversUniversity: !assignment.scopeOffice || assignment.scopeOffice.parentOfficeId === null, placedOfficeId: assignment.officePerson.officeId, roleId: assignment.role.id, roleName: assignment.role.name };
       // Whoever can read the offices below can read their own too
       return READ_OF.has(grant.code) ? [grant, { ...grant, code: READ_OF.get(grant.code) }] : [grant];
     })
@@ -102,14 +103,15 @@ export const hasPermission = async (grants, code, targetOfficeId) => {
 export const reachesOffice = async (grants, code, scopeOfficeId) => {
   const matching = holding(grants, code);
   if (matching.length === 0) return false;
-  return scopeOfficeId ? coversOffice(matching, scopeOfficeId) : matching.some((grant) => grant.scopeOfficeId === null);
+  return scopeOfficeId ? coversOffice(matching, scopeOfficeId) : matching.some((grant) => grant.coversUniversity);
 };
 
 /**
- * True only for a university-wide grant (scopeOfficeId = null) of the code, or the Super Admin wildcard.
+ * True for a grant covering the whole university, either university-wide (scopeOfficeId = null) or scoped to the top
+ * office, or the Super Admin wildcard.
  * Use for actions that are not tied to one office (e.g. defining office types, creating the root office).
  */
-export const hasGlobalPermission = (grants, code) => holding(grants, READ_ALL_OF.get(code) ?? code).some((grant) => grant.scopeOfficeId === null);
+export const hasGlobalPermission = (grants, code) => holding(grants, READ_ALL_OF.get(code) ?? code).some((grant) => grant.coversUniversity);
 
 /**
  * Distinct permission codes a person currently holds (any scope).

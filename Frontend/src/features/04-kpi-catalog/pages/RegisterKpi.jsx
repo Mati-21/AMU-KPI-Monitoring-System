@@ -6,12 +6,12 @@ import { Input } from '../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { Field } from '../../02-offices/components/FormParts';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { useCurrencies, useFrequencies, useObjectives, useSaveRecord, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
+import { useCurrencies, useFrequencies, useSaveRecord, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
 import { DIRECTIONS, MEASUREMENT_TYPES, RULES_BY_TYPE, SCORING_METHODS, ZERO_TARGET_RULES, isAdditiveType, kpiErrors, targetTypesFor, themeOptions, themePath, toOptions, usesLabels, usesScale } from '../lib/kpiRules';
 
-const TEXT_KEYS = ['code', 'name', 'description', 'numeratorLabel', 'denominatorLabel'];
-const CHOICE_KEYS = ['themeId', 'strategicObjectiveId', 'measurementType', 'direction', 'targetType', 'defaultFrequencyId', 'unitId', 'scaleId', 'currencyId', 'aggregationMethod', 'periodRollupMethod', 'scoringMethod', 'zeroTargetRule'];
-const EDITABLE_WHEN_LOCKED = new Set(['defaultFrequencyId']);
+const TEXT_KEYS = ['name', 'description', 'remark', 'numeratorLabel', 'denominatorLabel'];
+const CHOICE_KEYS = ['themeId', 'measurementType', 'direction', 'targetType', 'defaultFrequencyId', 'unitId', 'scaleId', 'currencyId', 'aggregationMethod', 'periodRollupMethod', 'scoringMethod', 'zeroTargetRule'];
+const EDITABLE_WHEN_LOCKED = new Set(['defaultFrequencyId', 'remark']);
 
 const blankForm = () => ({
   ...Object.fromEntries([...TEXT_KEYS, ...CHOICE_KEYS].map((key) => [key, ''])),
@@ -51,12 +51,11 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
   const { notify } = useNotification();
   const save = useSaveRecord('kpis');
   const { data: themes = [] } = useThemeTree();
-  const { data: objectives = [] } = useObjectives();
   const { data: frequencies = [] } = useFrequencies();
   const { data: units = [] } = useUnits();
   const { data: scales = [] } = useScales();
   const { data: currencies = [] } = useCurrencies();
-  const [form, setForm] = useState(() => (replaces ? { ...formFrom(replaces), code: '' } : formFrom(kpi)));
+  const [form, setForm] = useState(() => (replaces ? formFrom(replaces) : formFrom(kpi)));
   const [chosenThemeId, setChosenThemeId] = useState(null);
   const [subThemeMissing, setSubThemeMissing] = useState(false);
   const isEditing = Boolean(kpi);
@@ -119,7 +118,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
       { id: kpi?.id, values: payload },
       {
         onSuccess: (saved) => {
-          notify(replaces ? `${saved.code} now replaces ${replaces.code}, which was retired.` : `KPI ${saved.code} saved.`, 'success');
+          notify(replaces ? `${saved.name} now replaces ${replaces.name}, which was retired.` : `${saved.name} saved.`, 'success');
           onDone();
         },
       }
@@ -149,9 +148,9 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
     </Field>
   );
 
-  const missingCatalog = [themes.length === 0 && 'Themes', objectives.length === 0 && 'Objectives', frequencies.length === 0 && 'Frequencies'].filter(Boolean);
+  const missingCatalog = [themes.length === 0 && 'Themes', frequencies.length === 0 && 'Frequencies'].filter(Boolean);
   const problems = kpiErrors(save.error);
-  const title = isEditing ? `Edit ${kpi.code}` : replaces ? `Replace ${replaces.code}` : 'Register KPI';
+  const title = isEditing ? `Edit ${kpi.name}` : replaces ? `Replace ${replaces.name}` : 'Register KPI';
 
   return (
     <form onSubmit={submit} className="space-y-5 rounded-xl border border-border bg-card p-8">
@@ -159,7 +158,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
         <h2 className="text-xl font-semibold text-foreground">{title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {kpi?.isLocked && 'This KPI is in use, so only its reporting frequency can change. To change anything else, replace it.'}
-          {replaces && `Saving retires ${replaces.code} and links the two, so the trend carries on.`}
+          {replaces && `Saving retires the old one and links the two, so the trend carries on.`}
           {!kpi?.isLocked && !replaces && 'What is measured and how. Weights, baselines and targets are set per year on each contract.'}
         </p>
       </div>
@@ -168,8 +167,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
 
       <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
         <SectionTitle>What It Is</SectionTitle>
-        {text('code', 'Code', { required: true, hint: 'A short unique code, such as ACAD-01.' })}
-        <div className="md:col-span-2">{text('name', 'Name', { required: true })}</div>
+        <div className="md:col-span-3">{text('name', 'Name', { required: true })}</div>
         {lockedOut('themeId') ? (
           <Field label="Theme" group>
             <Input disabled value={topTheme?.name ?? '-'} />
@@ -189,9 +187,9 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
             {subThemeMissing && <p className="text-xs text-red-500">Choose a sub-theme.</p>}
           </Field>
         )}
-        {select('strategicObjectiveId', 'Strategic Objective', objectives.filter((objective) => objective.isActive || lockedOut('strategicObjectiveId')).map((objective) => ({ value: objective.id, label: `${objective.code} - ${objective.name}` })), { required: true })}
         {select('defaultFrequencyId', 'Reporting Frequency', frequencies.map((frequency) => ({ value: frequency.id, label: frequency.name })), { required: true })}
         <div className="md:col-span-3">{area('description', 'Description', { required: true })}</div>
+        <div className="md:col-span-3">{area('remark', 'Remark', { hint: 'Optional. Anything worth noting about this KPI.' })}</div>
 
         <SectionTitle>How It Is Measured</SectionTitle>
         {select('measurementType', 'Measurement Type', toOptions(MEASUREMENT_TYPES), { required: true, onChange: chooseType, hint: 'Use Percentage, Ratio or Money for those results, not Number with a unit, so they add up correctly.' })}

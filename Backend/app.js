@@ -70,6 +70,7 @@ app.use(
 app.use(compression());
 // A mass KPI registration can hold 500 rows, which is more than the usual body limit
 app.use('/api/v1/kpis/import', express.json({ limit: '1mb' }));
+app.use(/^\/api\/v1\/contracts\/[^/]+\/kpi-import$/, express.json({ limit: '1mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

@@ -7,7 +7,6 @@ import CurrenciesPanel from './CurrenciesPanel';
 import FrequenciesPanel from './FrequenciesPanel';
 import ImportKpi from './ImportKpi';
 import KpiList from './KpiList';
-import ObjectivesPanel from './ObjectivesPanel';
 import RegisterKpi from './RegisterKpi';
 import ScalesPanel from './ScalesPanel';
 import ThemesPanel from './ThemesPanel';
@@ -15,7 +14,6 @@ import UnitsPanel from './UnitsPanel';
 
 const PANELS = {
   themes: { label: 'Themes', Panel: ThemesPanel },
-  objectives: { label: 'Objectives', Panel: ObjectivesPanel },
   units: { label: 'Units', Panel: UnitsPanel },
   frequencies: { label: 'Frequencies', Panel: FrequenciesPanel },
   scales: { label: 'Scales', Panel: ScalesPanel },

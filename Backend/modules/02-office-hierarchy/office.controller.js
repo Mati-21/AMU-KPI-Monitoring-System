@@ -76,8 +76,8 @@ export const updatePosition = async (req, res) => {
 };
 
 export const deletePosition = async (req, res) => {
-  await officeService.deletePosition(req.params.id, actorOf(req));
-  res.json({ status: 'success', message: 'Position deleted' });
+  const { archived } = await officeService.deletePosition(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: archived ? 'Position archived' : 'Position deleted', data: { archived } });
 };
 
 export const listMembers = async (req, res) => {

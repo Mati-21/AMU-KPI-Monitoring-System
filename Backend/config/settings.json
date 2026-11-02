@@ -20,8 +20,7 @@
         { "key": "profile_picture_max_mb", "label": "Largest profile picture", "type": "number", "default": 5, "min": 1, "max": 20, "integer": true, "public": false, "description": "Largest profile picture a person can upload, in MB" },
         { "key": "contact_email", "label": "Support contact email", "type": "email", "default": null, "public": true, "description": "Shown to users who need help (e.g. on the login page)" },
         { "key": "timezone", "label": "Time zone", "type": "enum", "default": "Africa/Addis_Ababa", "options": ["Africa/Addis_Ababa", "UTC"], "public": false, "description": "Time zone used for deadlines and reminders" },
-        { "key": "calendar", "label": "Display calendar", "type": "enum", "default": "gregorian", "options": ["gregorian", "ethiopian"], "public": true, "description": "Calendar used to display dates in the UI" },
-        { "key": "fiscal_year_start_month", "label": "Fiscal year start month", "type": "number", "default": 7, "min": 1, "max": 12, "integer": true, "public": false, "description": "Gregorian month in which a new fiscal year normally starts (7 = July, Ethiopian fiscal year)" }
+        { "key": "fiscal_year_start_month", "label": "Fiscal year start month", "type": "number", "default": 7, "min": 1, "max": 12, "integer": true, "public": false, "description": "Gregorian month in which a new fiscal year normally starts (7 = July, as Hamle 1 falls on 8 July)" }
       ]
     },
     {

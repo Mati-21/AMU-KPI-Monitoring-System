@@ -22,7 +22,7 @@ const KpiDetailDialog = ({ kpi, onClose }) => {
     <DialogContent className="max-h-[90vh] overflow-y-auto bg-card sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>
-          {kpi.code} - {kpi.name}
+          {kpi.name}
         </DialogTitle>
         <DialogDescription>{kpi.description}</DialogDescription>
       </DialogHeader>
@@ -33,11 +33,11 @@ const KpiDetailDialog = ({ kpi, onClose }) => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Detail label="Theme">{theme ?? kpi.theme?.name}</Detail>
         <Detail label="Sub-Theme">{subTheme}</Detail>
-        <Detail label="Strategic Objective">{kpi.strategicObjective?.name}</Detail>
         <Detail label="Measurement Type">{words(kpi.measurementType)}</Detail>
         <Detail label="Direction">{words(kpi.direction)}</Detail>
         <Detail label="Target Type">{words(kpi.targetType)}</Detail>
         <Detail label="Reporting Frequency">{kpi.defaultFrequency?.name}</Detail>
+        {kpi.remark && <Detail label="Remark">{kpi.remark}</Detail>}
         {kpi.unit && <Detail label="Unit">{kpi.unit.name}</Detail>}
         {kpi.currency && <Detail label="Currency">{kpi.currency.code}</Detail>}
         {kpi.scale && <Detail label="Scale">{kpi.scale.name}</Detail>}
@@ -47,8 +47,8 @@ const KpiDetailDialog = ({ kpi, onClose }) => {
         <Detail label="Combining Offices">{words(kpi.aggregationMethod)}</Detail>
         <Detail label="Combining Periods">{words(kpi.periodRollupMethod)}</Detail>
         <Detail label="Scoring Method">{words(kpi.scoringMethod)}</Detail>
-        {kpi.replaces && <Detail label="Replaces">{`${kpi.replaces.code} - ${kpi.replaces.name}`}</Detail>}
-        {kpi.replacedBy?.length > 0 && <Detail label="Replaced By">{`${kpi.replacedBy[0].code} - ${kpi.replacedBy[0].name}`}</Detail>}
+        {kpi.replaces && <Detail label="Replaces">{kpi.replaces.name}</Detail>}
+        {kpi.replacedBy?.length > 0 && <Detail label="Replaced By">{kpi.replacedBy[0].name}</Detail>}
       </div>
     </DialogContent>
   </Dialog>

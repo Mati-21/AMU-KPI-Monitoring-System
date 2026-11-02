@@ -6,6 +6,7 @@ import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { formatDate } from '../../02-offices/lib/officeTree';
+import { nextFiscalYear } from '../lib/fiscalYear';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import RecordDialog from '../../04-kpi-catalog/components/RecordDialog';
 import RecordTable, { IconAction } from '../../04-kpi-catalog/components/RecordTable';
@@ -72,7 +73,7 @@ const YearsTable = ({ years, selectedId, onSelect, isLoading, error }) => {
     <>
       <RecordTable title="Fiscal Years" description="Only one year is active at a time. Closing a year makes all its data read-only." addLabel="Add Fiscal Year" onAdd={canManage ? () => setDialog({ type: 'edit' }) : null} columns={columns} rows={years} isLoading={isLoading} error={error} emptyText="No fiscal years yet." />
 
-      {dialog?.type === 'edit' && <RecordDialog title={dialog.year ? 'Edit Fiscal Year' : 'Add Fiscal Year'} description="It starts in planning, so you can prepare it before it goes live." fields={YEAR_FIELDS} record={dialog.year} mutation={save} onClose={() => setDialog(null)} />}
+      {dialog?.type === 'edit' && <RecordDialog title={dialog.year ? 'Edit Fiscal Year' : 'Add Fiscal Year'} description="It starts in planning, so you can prepare it before it goes live." fields={YEAR_FIELDS} record={dialog.year} defaults={dialog.year ? undefined : nextFiscalYear(years)} mutation={save} onClose={() => setDialog(null)} />}
       {dialog?.type === 'close' && <RecordDialog title={`Close ${dialog.year.name}`} description="All its data becomes read-only, and only a Super Admin can reopen it." fields={REASON_FIELDS} mutation={{ ...close, mutate: ({ values }, options) => close.mutate({ id: dialog.year.id, values }, options) }} submitLabel="Close Year" successMessage="Fiscal year closed." onClose={() => { close.reset(); setDialog(null); }} />}
       {dialog?.type === 'reopen' && <RecordDialog title={`Reopen ${dialog.year.name}`} description="Its data becomes editable again and it becomes the active year." fields={REASON_FIELDS} mutation={{ ...reopen, mutate: ({ values }, options) => reopen.mutate({ id: dialog.year.id, values }, options) }} submitLabel="Reopen Year" successMessage="Fiscal year reopened." onClose={() => { reopen.reset(); setDialog(null); }} />}
     </>

@@ -25,7 +25,6 @@ const CONTRACT_INCLUDE = {
     include: {
       kpi: {
         include: {
-          strategicObjective: { select: { id: true, code: true, name: true } },
           unit: { select: { id: true, name: true, symbol: true } },
           scale: { include: { levels: { orderBy: { sortOrder: 'asc' } } } },
         },
@@ -35,7 +34,7 @@ const CONTRACT_INCLUDE = {
       targets: { where: { isCurrent: true }, take: 1 },
       achievements: { include: { reportingPeriod: PERIOD_REF, statusThreshold: { select: { id: true, name: true, color: true } }, weight: { select: { weight: true } } } },
     },
-    orderBy: { kpi: { code: 'asc' } },
+    orderBy: { kpi: { name: 'asc' } },
   },
 };
 
@@ -109,7 +108,7 @@ const buildLine = (assignment, stateOfPeriod, fiscalYear, period) => {
   return {
     assignment,
     assignmentId: assignment.id,
-    kpi: { id: kpi.id, code: kpi.code, name: kpi.name, measurementType: kpi.measurementType, direction: kpi.direction, scoringMethod: kpi.scoringMethod, unit: kpi.unit, strategicObjective: kpi.strategicObjective },
+    kpi: { id: kpi.id, name: kpi.name, measurementType: kpi.measurementType, direction: kpi.direction, scoringMethod: kpi.scoringMethod, unit: kpi.unit },
     weight: toNumber(officialRow?.weight.weight ?? assignment.weights[0]?.weight ?? 0),
     outcome: classifyOutcome({ official, latestState }),
     official,

@@ -1,6 +1,6 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
-import { badRequest, forbidden, notFound } from '../../utils/httpError.js';
+import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { parseUuid } from '../../utils/validation.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import { numericValue, requiredImprovement, toNumber } from './measurement.js';
@@ -17,13 +17,15 @@ export const APPROVED_STATUSES = ['APPROVED', 'ACKNOWLEDGED'];
 export const OPEN_CONTRACT_STATUSES = ['DRAFT', 'REJECTED'];
 const ASSIGNED_STATUSES = ['SUBMITTED', ...APPROVED_STATUSES];
 
-const hasAuthorityFromAbove = (actor, code, contract) =>
-  contract.assigningOfficeId ? actor.access.can(code, contract.assigningOfficeId) : actor.access.canGlobally(code);
+// The office that gives the contract. The top office has none above it, so its own authority covers its self contract.
+const authorityOfficeOf = (contract) => contract.assigningOfficeId ?? contract.officeId;
+
+const hasAuthorityFromAbove = (actor, code, contract) => actor.access.can(code, authorityOfficeOf(contract));
 
 export const assertAuthorityFromAbove = async (actor, code, contract) => {
-  if (!(await hasAuthorityFromAbove(actor, code, contract))) {
-    throw forbidden(`You need ${code} authority over the assigning office of this contract`);
-  }
+  if (await hasAuthorityFromAbove(actor, code, contract)) return;
+  const office = await prisma.office.findUnique({ where: { id: authorityOfficeOf(contract) }, select: { name: true } });
+  throw forbidden(`You need ${code} authority over ${office?.name ?? 'the assigning office'}, which gives this contract. Check that your role has it and applies to that office`);
 };
 
 export const assertAuthorityOnOffice = async (actor, code, officeId) => {
@@ -70,7 +72,6 @@ export const ASSIGNMENT_INCLUDE = {
   contract: { include: { office: OFFICE_REF, assigningOffice: OFFICE_REF, fiscalYear: { select: { id: true, name: true, status: true } } } },
   kpi: {
     include: {
-      strategicObjective: { select: { id: true, code: true, name: true } },
       unit: { select: { id: true, name: true, symbol: true } },
       currency: { select: { id: true, code: true, symbol: true } },
       scale: { include: { levels: { orderBy: { sortOrder: 'asc' } } } },
@@ -84,7 +85,6 @@ export const ASSIGNMENT_INCLUDE = {
 
 const kpiSummary = (kpi) => ({
   id: kpi.id,
-  code: kpi.code,
   name: kpi.name,
   description: kpi.description,
   measurementType: kpi.measurementType,
@@ -92,7 +92,6 @@ const kpiSummary = (kpi) => ({
   targetType: kpi.targetType,
   isAdditive: kpi.isAdditive,
   evidenceRequirement: kpi.evidenceRequirement,
-  strategicObjective: kpi.strategicObjective,
   unit: kpi.unit,
   currency: kpi.currency,
   scale: kpi.scale ? { id: kpi.scale.id, name: kpi.scale.name, scoringApproved: kpi.scale.scoringApproved } : null,
@@ -124,6 +123,42 @@ export const getAssignmentOrThrow = async (id) => {
   const assignment = await prisma.kpiAssignment.findUnique({ where: { id: parseUuid(id, 'id') }, include: ASSIGNMENT_INCLUDE });
   if (!assignment) throw notFound('Assignment not found');
   return assignment;
+};
+
+/**
+ * Why a fiscal year cannot take KPIs reported at this frequency, or null when it can. A report only holds the KPIs of
+ * its own frequency, so without periods of that frequency the KPI would never be reported.
+ */
+export const frequencyProblem = async (fiscalYearId, frequencyId) => {
+  const [frequency, year, periods] = await Promise.all([
+    prisma.reportingFrequency.findUnique({ where: { id: frequencyId }, select: { name: true } }),
+    prisma.fiscalYear.findUnique({ where: { id: fiscalYearId }, select: { name: true } }),
+    prisma.reportingPeriod.findMany({ where: { fiscalYearId }, distinct: ['frequencyId'], select: { frequencyId: true, frequency: { select: { name: true } } } }),
+  ]);
+  if (!frequency) return 'Reporting frequency not found';
+  if (periods.some((period) => period.frequencyId === frequencyId)) return null;
+  const available = periods.map((period) => period.frequency.name).join(', ');
+  return `${year.name} has no ${frequency.name} reporting periods, so this KPI would never be reported. Create the ${frequency.name} periods for ${year.name} under Fiscal Years first${available ? `, or choose a frequency it has: ${available}` : ''}`;
+};
+
+/**
+ * An office reports a KPI as often as the office above it, or more often, so the office above always has its numbers.
+ * Custom periods cannot be compared, so they only follow Custom.
+ */
+export const assertFrequencyFollowsAbove = async (aboveFrequencyId, frequencyId) => {
+  if (!aboveFrequencyId || aboveFrequencyId === frequencyId) return;
+  const [above, chosen] = await Promise.all([
+    prisma.reportingFrequency.findUnique({ where: { id: aboveFrequencyId }, select: { name: true, intervalMonths: true } }),
+    prisma.reportingFrequency.findUnique({ where: { id: frequencyId }, select: { name: true, intervalMonths: true } }),
+  ]);
+  if (!chosen) throw badRequest('Reporting frequency not found');
+  if (above?.intervalMonths && chosen.intervalMonths && chosen.intervalMonths < above.intervalMonths) return;
+  throw conflict(`The office above reports this KPI ${above?.name ?? 'at another frequency'}, so here it can be reported ${above?.name ?? 'the same'} or more often, not ${chosen.name}`);
+};
+
+export const assertYearReportsFrequency = async (fiscalYearId, frequencyId) => {
+  const problem = await frequencyProblem(fiscalYearId, frequencyId);
+  if (problem) throw conflict(problem);
 };
 
 export const requireComment = (value) => {

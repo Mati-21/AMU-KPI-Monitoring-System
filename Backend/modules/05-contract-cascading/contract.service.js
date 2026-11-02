@@ -1,12 +1,13 @@
 import { prisma } from '../../config/database.js';
-import { PERMISSIONS } from '../../config/permissions.js';
+import { PERMISSIONS, SUPER_ADMIN_PERMISSION } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { activeOn } from '../../utils/dates.js';
-import { badRequest, conflict, notFound } from '../../utils/httpError.js';
+import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseEnum, parseUuid } from '../../utils/validation.js';
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
 import { contractAssigned, contractRejected, contractSigned } from '../09-notifications/notification.events.js';
 import { getSetting } from '../10-system-governance/system.service.js';
+import { ownOfficeOf } from '../03-access-control/access.service.js';
 import {
   ASSIGNMENT_INCLUDE,
   assertAuthorityFromAbove,
@@ -24,6 +25,7 @@ import { toNumber } from './measurement.js';
  * Module 05 — Performance contracts: one per office per fiscal year, with the office directly above it.
  * Workflow: the office above builds it in DRAFT and assigns it (SUBMITTED). The receiving office reviews it, then
  * signs it (SIGNED) or rejects it (REJECTED), which returns it to the office above to correct and assign again.
+ * The top office's self contract has nobody to assign it to, so the top office signs it straight from DRAFT.
  */
 
 const CONTRACT_STATUSES = ['DRAFT', 'SUBMITTED', 'REJECTED', 'APPROVED', 'SIGNED', 'CLOSED'];
@@ -44,7 +46,7 @@ const getContractOrThrow = async (id) => {
 const countingAssignments = (contractId) =>
   prisma.kpiAssignment.findMany({
     where: { contractId, status: { not: 'CANCELLED' } },
-    select: { id: true, status: true, kpi: { select: { code: true } }, baselines: { where: { isCurrent: true }, take: 1, select: { baselineStatus: true } }, weights: { where: { isCurrent: true }, take: 1, select: { weight: true } } },
+    select: { id: true, status: true, kpi: { select: { name: true } }, baselines: { where: { isCurrent: true }, take: 1, select: { baselineStatus: true } }, weights: { where: { isCurrent: true }, take: 1, select: { weight: true } } },
   });
 
 const weightSummary = (contract, assignments) => {
@@ -129,7 +131,7 @@ export const getContractById = async (id, actor) => {
   const assignments = await prisma.kpiAssignment.findMany({
     where: { contractId: contract.id },
     include: ASSIGNMENT_INCLUDE,
-    orderBy: { kpi: { code: 'asc' } },
+    orderBy: { kpi: { name: 'asc' } },
   });
   const sharing = await loadSharing(assignments);
   const visible = [];
@@ -145,6 +147,25 @@ export const getContractById = async (id, actor) => {
  * The assigning office comes from the hierarchy: it is the receiving office's parent, and it must be allowed to
  * assign KPIs (SRS 2.2.10). Only the top office has no assigning office.
  */
+/**
+ * The offices a person manages contracts from: where each contract:manage role applies, without the offices below it.
+ * Contracts pass down one level at a time, so they are created only for offices directly below these.
+ */
+const contractHomeOffices = (actor) => new Set(actor.access.grants.filter((grant) => grant.code === PERMISSIONS.CONTRACT_MANAGE || grant.code === SUPER_ADMIN_PERMISSION).map(ownOfficeOf));
+
+/**
+ * Offices a new contract can be created for: active offices directly below the person's own (when that office may
+ * assign KPIs), and their own office when it is the top office, for its Self Contract.
+ */
+export const listContractOffices = async (actor) => {
+  const home = [...contractHomeOffices(actor)];
+  return prisma.office.findMany({
+    where: { isActive: true, OR: [{ parentOfficeId: { in: home }, parent: { canAssignKpi: true } }, { id: { in: home }, parentOfficeId: null }] },
+    select: { id: true, name: true, parentOfficeId: true },
+    orderBy: { name: 'asc' },
+  });
+};
+
 export const createContract = async ({ fiscalYearId, officeId } = {}, actor) => {
   const yearId = parseUuid(fiscalYearId, 'fiscalYearId');
   await assertFiscalYearOpen(yearId);
@@ -155,7 +176,10 @@ export const createContract = async ({ fiscalYearId, officeId } = {}, actor) => 
   if (office.parent && !office.parent.canAssignKpi) throw badRequest(`"${office.parent.name}" is not allowed to assign KPIs`);
 
   const assigningOfficeId = office.parentOfficeId;
-  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, { assigningOfficeId });
+  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, { assigningOfficeId, officeId: office.id });
+  if (assigningOfficeId && !contractHomeOffices(actor).has(assigningOfficeId)) {
+    throw forbidden(`Contracts are created by the office directly above. ${office.name} sits under ${office.parent.name}, so its contract is created there`);
+  }
 
   const existing = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id } });
   if (existing) throw conflict(`${office.name} already has a contract for this fiscal year`);
@@ -177,18 +201,25 @@ export const createContract = async ({ fiscalYearId, officeId } = {}, actor) => 
  * The office above sends the finished contract to the receiving office, once the weights reach the required total.
  * A pending baseline has no value yet, so it has to be settled first.
  */
-export const assignContract = async (id, actor) => {
-  const contract = await getContractOrThrow(id);
-  await assertFiscalYearOpen(contract.fiscalYearId);
-  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
-  if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) throw conflict(`Only a draft or rejected contract can be assigned; this one is ${contract.status}`);
-
+/**
+ * A contract is complete once it has KPIs, every baseline is settled and the weights reach the required total.
+ */
+const assertComplete = async (contract) => {
   const assignments = await countingAssignments(contract.id);
   if (assignments.length === 0) throw badRequest('A contract needs at least one KPI');
-  const pending = assignments.filter((a) => a.baselines[0]?.baselineStatus === 'PENDING_VERIFICATION').map((a) => a.kpi.code);
+  const pending = assignments.filter((a) => a.baselines[0]?.baselineStatus === 'PENDING_VERIFICATION').map((a) => a.kpi.name);
   if (pending.length > 0) throw conflict(`These KPIs still have a pending baseline: ${pending.join(', ')}`);
   const { totalWeight, requiredTotalWeight, isWeightBalanced } = weightSummary(contract, assignments);
   if (!isWeightBalanced) throw conflict(`KPI weights total ${totalWeight}, but this contract requires ${requiredTotalWeight}`);
+};
+
+export const assignContract = async (id, actor) => {
+  const contract = await getContractOrThrow(id);
+  await assertFiscalYearOpen(contract.fiscalYearId);
+  if (!contract.assigningOfficeId) throw conflict('A self contract has no office to assign it to. Sign it when it is ready');
+  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
+  if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) throw conflict(`Only a draft or rejected contract can be assigned; this one is ${contract.status}`);
+  await assertComplete(contract);
 
   const updated = await transition(contract, 'SUBMITTED', { reviewComment: null }, actor, 'CONTRACT_ASSIGNED', undefined, () => [
     prisma.kpiAssignment.updateMany({ where: { contractId: contract.id, status: { in: ['DRAFT', 'REJECTED'] } }, data: { status: 'SUBMITTED', reviewComment: null } }),
@@ -208,10 +239,10 @@ export const rejectContract = async (id, { comment } = {}, actor) => {
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract.officeId);
   assertStatus(contract, 'SUBMITTED');
   const note = optionalString(comment, 'comment') ?? null;
-  const flagged = await prisma.kpiAssignment.findMany({ where: FLAGGED(contract.id), select: { reviewComment: true, kpi: { select: { code: true, name: true } } } });
+  const flagged = await prisma.kpiAssignment.findMany({ where: FLAGGED(contract.id), select: { reviewComment: true, kpi: { select: { name: true } } } });
   if (!note && flagged.length === 0) throw badRequest('Flag at least one KPI or write a note, so the office above knows what to correct');
   const reason = note ?? `${flagged.length} KPI(s) flagged`;
-  const flaggedKpis = flagged.map(({ kpi, reviewComment }) => ({ code: kpi.code, name: kpi.name, note: reviewComment }));
+  const flaggedKpis = flagged.map(({ kpi, reviewComment }) => ({ name: kpi.name, note: reviewComment }));
 
   const updated = await transition(contract, 'REJECTED', { reviewComment: note }, actor, 'CONTRACT_REJECTED', reason, () => [
     prisma.kpiAssignment.updateMany({ where: FLAGGED(contract.id), data: { status: 'REJECTED' } }),
@@ -224,25 +255,28 @@ export const rejectContract = async (id, { comment } = {}, actor) => {
 
 /**
  * The receiving office accepts the contract by signing. This accepts every KPI on it, with its target and weight,
- * and those KPIs can then pass down to the offices below.
+ * and those KPIs can then pass down to the offices below. The top office signs its self contract from draft.
  */
 export const signContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
   await assertFiscalYearOpen(contract.fiscalYearId);
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract.officeId);
-  assertStatus(contract, 'SUBMITTED');
+  const isSelf = !contract.assigningOfficeId;
+  assertStatus(contract, isSelf ? 'DRAFT' : 'SUBMITTED');
+  if (isSelf) await assertComplete(contract);
   if ((await prisma.kpiAssignment.count({ where: FLAGGED(contract.id) })) > 0) throw conflict('Some KPIs are flagged. Remove the flags to sign, or reject the contract');
 
   const now = new Date();
   const accepted = { approvedByPersonId: actor.personId, approvedAt: now };
-  const onContract = { assignment: { contractId: contract.id, status: 'SUBMITTED' }, isCurrent: true };
+  const waiting = isSelf ? 'DRAFT' : 'SUBMITTED';
+  const onContract = { assignment: { contractId: contract.id, status: waiting }, isCurrent: true };
   const updated = await transition(contract, 'SIGNED', { ...accepted, signedByPersonId: actor.personId, signedAt: now }, actor, 'CONTRACT_SIGNED', undefined, () => [
     prisma.kpiTarget.updateMany({ where: onContract, data: accepted }),
     prisma.kpiWeight.updateMany({ where: onContract, data: accepted }),
-    prisma.kpiAssignment.updateMany({ where: { contractId: contract.id, status: 'SUBMITTED' }, data: { ...accepted, status: 'ACKNOWLEDGED', acknowledgedByPersonId: actor.personId, acknowledgedAt: now } }),
+    prisma.kpiAssignment.updateMany({ where: { contractId: contract.id, status: waiting }, data: { ...accepted, status: 'ACKNOWLEDGED', acknowledgedByPersonId: actor.personId, acknowledgedAt: now } }),
   ]);
   await contractSigned(updated, actor);
   return updated;
 };
 
-export default { listContracts, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };
+export default { listContracts, listContractOffices, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };

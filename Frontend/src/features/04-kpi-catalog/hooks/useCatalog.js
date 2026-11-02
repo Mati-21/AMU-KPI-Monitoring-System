@@ -7,7 +7,6 @@ const unwrap = ({ data }) => data.data;
 
 const useCatalogList = (path) => useQuery({ queryKey: queryKeys.catalog.part(path), queryFn: () => api.get(`/${path}`).then(unwrap) });
 
-export const useObjectives = () => useCatalogList('strategic-objectives');
 export const useThemeTree = () => useCatalogList('kpi-themes');
 export const useUnits = () => useCatalogList('measurement-units');
 export const useFrequencies = () => useCatalogList('reporting-frequencies');

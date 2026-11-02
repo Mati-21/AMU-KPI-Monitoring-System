@@ -2,11 +2,10 @@ import { useState } from 'react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
-import { useOfficeList } from '../../02-offices/hooks/useOffices';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import RecordDialog from '../../04-kpi-catalog/components/RecordDialog';
 import RecordTable from '../../04-kpi-catalog/components/RecordTable';
-import { useCreateContract } from '../hooks/useContracts';
+import { useContractOffices, useCreateContract } from '../hooks/useContracts';
 import { contractOfficeOptions, rejectedRow, statusLabel } from '../lib/contractRules';
 
 const DIRECTIONS = {
@@ -18,10 +17,10 @@ const DIRECTIONS = {
 const ContractsTable = ({ year, contracts, onSelect, onShowHistory, isLoading, error }) => {
   const can = useCan();
   const create = useCreateContract();
-  const { data: offices = [] } = useOfficeList();
+  const canAdd = can('contract:manage') && year.status !== 'CLOSED';
+  const { data: offices = [] } = useContractOffices(canAdd);
   const [adding, setAdding] = useState(false);
   const options = contractOfficeOptions(offices, contracts);
-  const canAdd = can('contract:manage') && year.status !== 'CLOSED';
 
   const close = () => {
     create.reset();
@@ -70,7 +69,7 @@ const ContractsTable = ({ year, contracts, onSelect, onShowHistory, isLoading, e
         <RecordDialog
           title="New Contract"
           description="The office above the one you choose becomes its assigning office. Start with the top office, because KPIs pass down from there."
-          fields={[{ key: 'officeId', label: 'Office', type: 'select', required: true, options, placeholder: options.length ? 'Choose an office' : 'Every office already has a contract', hint: 'Offices already holding a contract this year are not listed.' }]}
+          fields={[{ key: 'officeId', label: 'Office', type: 'select', required: true, options, placeholder: options.length ? 'Choose an office' : 'Every office already has a contract', hint: 'Only offices directly below yours are listed, and not those already holding a contract this year.' }]}
           mutation={mutation}
           submitLabel="Create Contract"
           successMessage="Contract created."

@@ -16,7 +16,7 @@ const router = Router();
  * @swagger
  * /api/v1/settings/public:
  *   get:
- *     summary: Public configuration (branding, contact, calendar, maintenance status, active fiscal year)
+ *     summary: Public configuration (branding, contact, maintenance status, active fiscal year)
  *     description: No login required. File settings (e.g. branding.logo) return the File id.
  *     tags: [System Governance]
  *     security: []

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatEthiopianDay } from '../../../shared/lib/ethiopianDate';
 import { History, Target, CalendarDays, FileText, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../../shared/components/ui/dialog';
 import Button from '../../../shared/components/ui/Button';
@@ -96,7 +97,7 @@ const PerformanceHistoryModal = ({ open, onOpenChange, kpi }) => {
                           <div className="text-right">
                             <div className="text-[10px] text-muted-foreground">Submitted on</div>
                             <div className="text-[11px] font-medium text-muted-foreground/80">
-                              {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                              {entry.createdAt ? formatEthiopianDay(entry.createdAt) : 'N/A'}
                             </div>
                           </div>
                         </div>

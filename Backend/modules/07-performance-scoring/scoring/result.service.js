@@ -42,7 +42,7 @@ export const dueAssignments = (contractId, period) =>
       ...(period.isYearEnd ? {} : { reportingFrequencyId: period.frequencyId }),
     },
     include: LINE_INCLUDE,
-    orderBy: { kpi: { code: 'asc' } },
+    orderBy: { kpi: { name: 'asc' } },
   });
 
 export const isDirectEntry = (assignment, period) => assignment.reportingFrequencyId === period.frequencyId;

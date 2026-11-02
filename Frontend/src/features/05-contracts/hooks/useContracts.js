@@ -27,6 +27,14 @@ export const useRejections = (fiscalYearId) =>
     enabled: Boolean(fiscalYearId),
   });
 
+// Offices a new contract can be created for: directly below the person's own office
+export const useContractOffices = (enabled) =>
+  useQuery({
+    queryKey: [...queryKeys.contracts.all, 'offices'],
+    queryFn: () => api.get('/contract-offices').then(unwrap),
+    enabled,
+  });
+
 export const useAllocations = (assignmentId) =>
   useQuery({
     queryKey: [...queryKeys.contracts.all, 'allocations', assignmentId],
@@ -54,5 +62,9 @@ export const useContractStep = () => useContractAction(({ id, step, values }) =>
 export const useAssignmentStep = () => useContractAction(({ id, step, values }) => api.patch(`/assignments/${id}/${step}`, values ?? {}).then(unwrap));
 
 export const useSaveAllocations = () => useContractAction(({ id, values }) => api.put(`/assignments/${id}/allocations`, values).then(unwrap));
+
+// Checking a file changes nothing, so it refreshes nothing
+export const useCheckContractImport = () => useMutation({ mutationFn: ({ id, rows }) => api.post(`/contracts/${id}/kpi-import`, { rows, dryRun: true }).then(unwrap) });
+export const useContractImport = () => useContractAction(({ id, rows }) => api.post(`/contracts/${id}/kpi-import`, { rows }).then(unwrap));
 
 export const useSaveAssignment = () => useContractAction(({ id, contractId, values }) => (id ? api.put(`/assignments/${id}`, values) : api.post(`/contracts/${contractId}/assignments`, values)).then(unwrap));

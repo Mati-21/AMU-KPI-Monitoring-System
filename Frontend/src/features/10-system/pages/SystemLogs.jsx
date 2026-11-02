@@ -3,7 +3,7 @@ import { Eye } from 'lucide-react';
 
 import Button from '../../../shared/components/ui/Button';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
-import { Input } from '../../../shared/components/ui/Input';
+import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TablePagination, TableRow } from '../../../shared/components/ui/Table';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import AuditEntryDialog from '../components/AuditEntryDialog';
@@ -55,14 +55,14 @@ const SystemLogs = () => {
             <FilterSelect allLabel="All actions" options={(choices?.actions ?? []).map((action) => ({ value: action, label: actionLabel(action) }))} value={filters.action} onChange={setFilter('action')} />
             <FilterSelect allLabel="All items" options={(choices?.entityTypes ?? []).map((type) => ({ value: type, label: entityLabel(type) }))} value={filters.entityType} onChange={setFilter('entityType')} />
             <FilterSelect allLabel="All people" options={(choices?.actors ?? []).map((actor) => ({ value: actor.id, label: actor.fullName }))} value={filters.actorPersonId} onChange={setFilter('actorPersonId')} />
-            <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">From</span>
-              <Input type="date" max={filters.to || undefined} value={filters.from} onChange={(event) => setFilter('from')(event.target.value)} className="h-9 w-40" />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-xs text-muted-foreground">To</span>
-              <Input type="date" min={filters.from || undefined} value={filters.to} onChange={(event) => setFilter('to')(event.target.value)} className="h-9 w-40" />
-            </label>
+            <div className="space-y-1">
+              <span className="block text-xs text-muted-foreground">From</span>
+              <EthiopianDateInput label="From" max={filters.to || undefined} value={filters.from} onChange={setFilter('from')} className="w-72" />
+            </div>
+            <div className="space-y-1">
+              <span className="block text-xs text-muted-foreground">To</span>
+              <EthiopianDateInput label="To" min={filters.from || undefined} value={filters.to} onChange={setFilter('to')} className="w-72" />
+            </div>
             {isFiltered && (
               <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
                 Clear Filters

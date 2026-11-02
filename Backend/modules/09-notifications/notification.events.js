@@ -23,7 +23,7 @@ const reportEntity = (report) => ({ entityType: 'performance_report', entityId: 
 const fromAbove = (contract, code) => (contract.assigningOfficeId ? { targetOfficeId: contract.assigningOfficeId, requiredPermissionCode: code } : { requiredPermissionCode: code });
 const receivingOffice = (contract, code) => ({ targetOfficeId: contract.officeId, requiredPermissionCode: code });
 
-const kpiLabel = (assignment) => `${assignment.kpi.code} ${assignment.kpi.name}`;
+const kpiLabel = (assignment) => `"${assignment.kpi.name}"`;
 const officeName = (contract) => contract.office?.name ?? 'An office';
 
 // ===== Support =====
@@ -60,7 +60,7 @@ export const changeRequested = quietly((request, assignment, actor) =>
 );
 
 export const changeReviewed = quietly((request, actor) =>
-  event({ title: `Change request ${request.status.toLowerCase()}`, message: `Your request on ${request.assignment.kpi.code} was ${request.status.toLowerCase()}.${request.reviewComment ? ` ${request.reviewComment}` : ''}`, notificationType: 'CHANGE_REVIEWED', entityType: 'assignment_change_request', entityId: request.id, personIds: request.requestedByPersonId ? [request.requestedByPersonId] : [] }, actor)
+  event({ title: `Change request ${request.status.toLowerCase()}`, message: `Your request on "${request.assignment.kpi.name}" was ${request.status.toLowerCase()}.${request.reviewComment ? ` ${request.reviewComment}` : ''}`, notificationType: 'CHANGE_REVIEWED', entityType: 'assignment_change_request', entityId: request.id, personIds: request.requestedByPersonId ? [request.requestedByPersonId] : [] }, actor)
 );
 
 // ===== Reports =====
@@ -86,6 +86,6 @@ export const reportReopened = quietly((report, reason, actor) =>
  */
 export const lowPerformance = quietly(async (report, lowLines, actor) => {
   for (const line of lowLines) {
-    await event({ title: 'Office significantly below target', message: `${officeName(report.contract)} is at ${line.percent}% on ${line.kpiCode} for ${periodName(report)}.`, notificationType: 'LOW_PERFORMANCE', ...reportEntity(report), ...fromAbove(report.contract, PERMISSIONS.REPORT_REVIEW) }, actor);
+    await event({ title: 'Office significantly below target', message: `${officeName(report.contract)} is at ${line.percent}% on "${line.kpiName}" for ${periodName(report)}.`, notificationType: 'LOW_PERFORMANCE', ...reportEntity(report), ...fromAbove(report.contract, PERMISSIONS.REPORT_REVIEW) }, actor);
   }
 });

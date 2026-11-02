@@ -10,7 +10,7 @@ import { flaggedCount, isOpen } from '../lib/contractRules';
 
 /**
  * The office above assigns the contract. The receiving office then signs it, or rejects it with flags on its KPIs,
- * an overall note, or both.
+ * an overall note, or both. A self contract is never assigned: the top office signs it once it is complete.
  * The backend has the final say, including which office the person may act on.
  */
 const ContractActions = ({ contract }) => {
@@ -20,11 +20,13 @@ const ContractActions = ({ contract }) => {
   const [confirming, setConfirming] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const { status, office } = contract;
+  const isSelf = !contract.assigningOfficeId;
   const flagged = flaggedCount(contract);
 
   const confirms = {
     assign: { title: 'Assign Contract', confirmLabel: 'Assign', done: `Contract assigned to ${office.name}.`, description: `${office.name} will review it, then sign it or reject it with a note. You cannot change it while it is with them.` },
     sign: { title: 'Accept and Sign', confirmLabel: 'Accept and Sign', done: 'Contract signed.', description: `This accepts every KPI, target and weight on this contract for ${office.name}. After signing, values change only through a change request.` },
+    selfSign: { step: 'sign', title: 'Approve and Sign', confirmLabel: 'Approve and Sign', done: 'Self contract signed.', description: `This approves every KPI, target and weight of ${office.name}'s own plan. Its KPIs can then pass down to the offices below, and values change only through a change request.` },
   };
 
   if (contract.fiscalYear.status === 'CLOSED') return null;
@@ -36,7 +38,7 @@ const ContractActions = ({ contract }) => {
 
   const confirm = () =>
     step.mutate(
-      { id: contract.id, step: confirming },
+      { id: contract.id, step: confirms[confirming].step ?? confirming },
       {
         onSuccess: () => {
           notify(confirms[confirming].done, 'success');
@@ -53,7 +55,12 @@ const ContractActions = ({ contract }) => {
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {can('contract:manage') && isOpen(contract) && (
+        {isSelf && can('contract:acknowledge') && status === 'DRAFT' && (
+          <Button type="button" size="sm" onClick={() => setConfirming('selfSign')}>
+            Approve and Sign
+          </Button>
+        )}
+        {!isSelf && can('contract:manage') && isOpen(contract) && (
           <Button type="button" size="sm" onClick={() => setConfirming('assign')}>
             Assign to {office.name}
           </Button>

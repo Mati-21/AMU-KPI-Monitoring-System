@@ -15,7 +15,7 @@ const DistributionAndHeatmap = ({ statusDistribution, heatmap }) => {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">KPI Status Distribution</CardTitle>
-          <p className="text-[10px] text-muted-foreground">Overall aggregate status of all strategic objectives</p>
+          <p className="text-[10px] text-muted-foreground">Overall status of all KPIs</p>
         </CardHeader>
         <CardContent className="flex items-center gap-6">
           {Array.isArray(statusDistribution) && statusDistribution.length > 0 ? (

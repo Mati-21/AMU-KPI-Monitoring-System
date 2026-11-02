@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatEthiopianDateTime } from '../../../shared/lib/ethiopianDate';
 import { RefreshCw, CheckCheck, Calendar, Search, Filter, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '../../../shared/components/ui/Badge';
 import { api } from '../../../shared/api/axios';
@@ -57,18 +58,7 @@ const Input = ({ className = '', ...props }) => {
 };
 
 /* -------------------- Helpers -------------------- */
-const formatDateLabel = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const formatDateLabel = formatEthiopianDateTime;
 
 const getTime = (d) => {
   if (!d) return 0;

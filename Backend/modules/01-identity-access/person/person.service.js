@@ -6,7 +6,7 @@ import { auditAction } from '../../../utils/auditLogger.js';
 import { activeOn, isActiveToday, startOfTodayUtc } from '../../../utils/dates.js';
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
-import { parseBoolean, parseBooleanQuery, parseUuid } from '../../../utils/validation.js';
+import { parseBooleanQuery, parseUuid } from '../../../utils/validation.js';
 
 const ACCOUNT_SELECT = {
   id: true,
@@ -97,15 +97,21 @@ const getPersonOrThrow = async (id) => {
 };
 
 /**
+ * An archived person is gone for good: they are kept only so history can name them.
+ */
+const assertNotArchived = (person) => {
+  if (!person.isActive) throw conflict(`${person.firstName} ${person.lastName} is archived and can no longer be changed`);
+};
+
+/**
  * List persons with pagination, search (name, email, phone, username) and filters.
  */
 export const listPersons = async ({ search = '', isActive, officeId, roleId, hasRole, hasAccount, page = 1, limit = 20 } = {}) => {
   const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 20));
 
-  const where = {};
-  const active = parseBooleanQuery(isActive, 'isActive');
-  if (active !== undefined) where.isActive = active;
+  // Archived people are left out unless isActive=false asks for them
+  const where = { isActive: parseBooleanQuery(isActive, 'isActive') ?? true };
   if (officeId) where.officePersons = { some: { officeId } };
   // Holding a role means today, the same rule that decides whether it gives them access
   const holdingRole = (roleFilter = {}) => ({ officePersons: { some: { ...activeOn('startDate', 'endDate'), roles: { some: { ...roleFilter, ...activeOn('validFrom', 'validTo') } } } } });
@@ -209,6 +215,7 @@ export const createPerson = async ({ staffNumber, firstName, middleName, lastNam
  */
 export const updatePerson = async (id, data, actor) => {
   const existing = await getPersonOrThrow(id);
+  assertNotArchived(existing);
   await assertCanChangePerson(id, actor);
 
   const update = {};
@@ -222,8 +229,6 @@ export const updatePerson = async (id, data, actor) => {
   }
   if (data.middleName !== undefined) update.middleName = data.middleName?.trim() || null;
   if (data.phone !== undefined) update.phone = data.phone?.trim() || null;
-  const isActive = parseBoolean(data.isActive, 'isActive');
-  if (isActive !== undefined) update.isActive = isActive;
   if (data.staffNumber !== undefined) {
     update.staffNumber = data.staffNumber?.trim() || null;
     await assertStaffNumberAvailable(update.staffNumber, existing.id);
@@ -245,8 +250,9 @@ export const updatePerson = async (id, data, actor) => {
 };
 
 /**
- * Archive a person: nothing is deleted, so their history stays. Login stops, sessions end, and their placements end
- * yesterday, which frees their positions and takes them off office and role lists.
+ * Archive a person: nothing is deleted, so their history stays. Login stops for good, sessions end, and their
+ * placements end yesterday, which frees their positions and takes them off office and role lists. Their email and
+ * staff number move to the archived columns, so someone new (or the same person rejoining) can register with them.
  */
 export const archivePerson = async (id, actor) => {
   const existing = await getPersonOrThrow(id);
@@ -257,13 +263,13 @@ export const archivePerson = async (id, actor) => {
   const yesterday = new Date(startOfTodayUtc().getTime() - 24 * 60 * 60 * 1000);
   const running = await prisma.officePerson.findMany({ where: { personId: id, OR: [{ endDate: null }, { endDate: { gte: startOfTodayUtc() } }] }, select: { id: true, startDate: true } });
   await prisma.$transaction([
-    prisma.person.update({ where: { id }, data: { isActive: false } }),
+    prisma.person.update({ where: { id }, data: { isActive: false, archivedAt: new Date(), archivedEmail: existing.email, archivedStaffNumber: existing.staffNumber, email: null, staffNumber: null } }),
     prisma.userAccount.updateMany({ where: { personId: id }, data: { isActive: false } }),
     // A placement cannot end before it began, so one that began today or has not begun ends on its first day
     ...running.map((placement) => prisma.officePerson.update({ where: { id: placement.id }, data: { endDate: placement.startDate > yesterday ? placement.startDate : yesterday } })),
   ]);
   if (existing.userAccount) await revokeAllSessions(existing.userAccount.id, REVOKE_REASONS.ACCOUNT_DEACTIVATED);
-  await auditAction(actor, { action: 'PERSON_ARCHIVED', entityType: 'person', entityId: id, oldValues: { firstName: existing.firstName, lastName: existing.lastName, email: existing.email, isActive: true }, newValues: { isActive: false } });
+  await auditAction(actor, { action: 'PERSON_ARCHIVED', entityType: 'person', entityId: id, oldValues: { firstName: existing.firstName, lastName: existing.lastName, email: existing.email, staffNumber: existing.staffNumber, isActive: true }, newValues: { isActive: false } });
 };
 
 /**
@@ -271,6 +277,7 @@ export const archivePerson = async (id, actor) => {
  */
 export const upsertAccount = async (personId, { username, temporaryPassword, mustChangePassword = true, mfaEnforced = false, isActive = true }, actor) => {
   const person = await getPersonOrThrow(personId);
+  assertNotArchived(person);
   await assertCanChangePerson(personId, actor);
   const existing = person.userAccount;
 
@@ -307,12 +314,21 @@ const getAccountByAnyIdOrThrow = async (accountId) => {
 };
 
 /**
+ * The account of someone who is not archived, for changes that would let them sign in again.
+ */
+const getLiveAccountOrThrow = async (accountId) => {
+  const account = await getAccountByAnyIdOrThrow(accountId);
+  assertNotArchived(await getPersonOrThrow(account.personId));
+  return account;
+};
+
+/**
  * Enable or disable login for an account (by UserAccount id, Person id or username).
  * Deactivation also ends every active session.
  */
 export const setAccountActive = async (accountId, isActive, actor) => {
   if (typeof isActive !== 'boolean') throw badRequest('isActive (boolean) is required');
-  const account = await getAccountByAnyIdOrThrow(accountId);
+  const account = await getLiveAccountOrThrow(accountId);
   if (account.personId === actor?.personId && !isActive) throw badRequest('You cannot deactivate yourself');
   await assertCanChangePerson(account.personId, actor);
 
@@ -332,7 +348,7 @@ export const setAccountActive = async (accountId, isActive, actor) => {
  */
 export const resetPassword = async (accountId, temporaryPassword, actor) => {
   assertPasswordStrength(temporaryPassword);
-  const account = await getAccountByAnyIdOrThrow(accountId);
+  const account = await getLiveAccountOrThrow(accountId);
   await assertCanChangePerson(account.personId, actor);
 
   const updated = await prisma.userAccount.update({

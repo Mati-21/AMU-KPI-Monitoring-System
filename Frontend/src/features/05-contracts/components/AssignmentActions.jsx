@@ -37,7 +37,7 @@ const AssignmentActions = ({ assignment, contractStatus, isClosed, onEdit }) => 
     run.mutate(
       { id: assignment.id, step: 'flag', values: { note: null } },
       {
-        onSuccess: () => notify(`Flag removed from ${kpi.code}.`, 'success'),
+        onSuccess: () => notify(`Flag removed from ${kpi.name}.`, 'success'),
         onError: (failure) => notify(apiErrorMessage(failure, 'Could not remove this flag.'), 'error'),
       }
     );
@@ -50,15 +50,15 @@ const AssignmentActions = ({ assignment, contractStatus, isClosed, onEdit }) => 
   return (
     <>
       <div className="flex gap-2">
-        {canChange && <IconAction icon={Edit3} label={`Edit ${kpi.code}`} onClick={onEdit} />}
-        {canChange && <IconAction icon={Ban} label={`Cancel ${kpi.code}`} danger onClick={() => setCancelling(true)} />}
-        {canFlag && <IconAction icon={Flag} label={`${isFlagged(assignment) ? 'Edit flag on' : 'Flag'} ${kpi.code}`} danger={isFlagged(assignment)} onClick={() => setFlagging(true)} />}
-        {canFlag && isFlagged(assignment) && <IconAction icon={FlagOff} label={`Remove flag from ${kpi.code}`} onClick={removeFlag} />}
+        {canChange && <IconAction icon={Edit3} label={`Edit ${kpi.name}`} onClick={onEdit} />}
+        {canChange && <IconAction icon={Ban} label={`Cancel ${kpi.name}`} danger onClick={() => setCancelling(true)} />}
+        {canFlag && <IconAction icon={Flag} label={`${isFlagged(assignment) ? 'Edit flag on' : 'Flag'} ${kpi.name}`} danger={isFlagged(assignment)} onClick={() => setFlagging(true)} />}
+        {canFlag && isFlagged(assignment) && <IconAction icon={FlagOff} label={`Remove flag from ${kpi.name}`} onClick={removeFlag} />}
       </div>
 
-      {flagging && <RecordDialog title={`Flag ${kpi.code}`} description={kpi.name} fields={FLAG_FIELDS} defaults={{ note: assignment.reviewComment }} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'flag', values }, options) }} submitLabel="Save Flag" successMessage={`${kpi.code} flagged.`} onClose={closeFlag} />}
+      {flagging && <RecordDialog title={`Flag ${kpi.name}`} description="Say what the office above should correct." fields={FLAG_FIELDS} defaults={{ note: assignment.reviewComment }} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'flag', values }, options) }} submitLabel="Save Flag" successMessage={`${kpi.name} flagged.`} onClose={closeFlag} />}
 
-      {cancelling && <RecordDialog title={`Cancel ${kpi.code}`} description="It stops counting on this contract. You can add it again later." fields={COMMENT_FIELDS} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'cancel', values }, options) }} submitLabel="Cancel KPI" successMessage={`${kpi.code} cancelled.`} onClose={closeCancel} />}
+      {cancelling && <RecordDialog title={`Cancel ${kpi.name}`} description="It stops counting on this contract. You can add it again later." fields={COMMENT_FIELDS} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'cancel', values }, options) }} submitLabel="Cancel KPI" successMessage={`${kpi.name} cancelled.`} onClose={closeCancel} />}
     </>
   );
 };

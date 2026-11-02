@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { formatEthiopianDay } from '../../../shared/lib/ethiopianDate';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { api, BASE_URL } from '../../../shared/api/axios';
@@ -278,12 +279,7 @@ const DirectMessageView = () => {
   const groupedMessages = useMemo(() => {
     const groups = [];
     chatHistory.forEach((msg) => {
-      const date = new Date(msg.createdAt).toLocaleDateString([], { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      const date = formatEthiopianDay(msg.createdAt);
       
       const lastGroup = groups[groups.length - 1];
       if (!lastGroup || lastGroup.date !== date) {
@@ -294,8 +290,8 @@ const DirectMessageView = () => {
     });
 
     // Label relative dates
-    const today = new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const today = formatEthiopianDay(new Date());
+    const yesterday = formatEthiopianDay(new Date(Date.now() - 86400000));
 
     return groups.map(group => {
       let displayDate = group.date;

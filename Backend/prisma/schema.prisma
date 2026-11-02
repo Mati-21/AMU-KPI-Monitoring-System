@@ -196,6 +196,11 @@ model Person {
   phone                String?
   profilePictureFileId String?  @unique @map("profile_picture_file_id") @db.Uuid
   isActive             Boolean  @default(true) @map("is_active")
+  // Archiving hides a person for good but keeps the row, so history still names them. The email and staff number
+  // move here, which frees them for a new registration.
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz(6)
+  archivedEmail        String?   @map("archived_email")
+  archivedStaffNumber  String?   @map("archived_staff_number")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -354,6 +359,8 @@ model Position {
   officeId String  @map("office_id") @db.Uuid
   title    String
   isHead   Boolean @default(false) @map("is_head")
+  // A position someone held is archived instead of deleted: it leaves every list, and past placements keep its title
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
 
   office        Office         @relation(fields: [officeId], references: [id])
   officePersons OfficePerson[]
@@ -439,18 +446,6 @@ model OfficePersonRole {
 }
 
 // ===== KPI definition =====
-
-model StrategicObjective {
-  id          String  @id @default(uuid()) @db.Uuid
-  code        String  @unique
-  name        String
-  description String?
-  isActive    Boolean @default(true) @map("is_active")
-
-  kpis Kpi[]
-
-  @@map("strategic_objective")
-}
 
 model KpiTheme {
   id            String  @id @default(uuid()) @db.Uuid
@@ -557,11 +552,10 @@ model ExchangeRate {
 // with replaces_kpi_id keeping the trend connected across years.
 model Kpi {
   id                   String             @id @default(uuid()) @db.Uuid
-  code                 String             @unique
   name                 String
   description          String?
+  remark               String?
   themeId              String             @map("theme_id") @db.Uuid
-  strategicObjectiveId String             @map("strategic_objective_id") @db.Uuid
   measurementType      MeasurementType    @map("measurement_type")
   unitId               String?            @map("unit_id") @db.Uuid
   scaleId              String?            @map("scale_id") @db.Uuid
@@ -589,7 +583,6 @@ model Kpi {
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   theme              KpiTheme           @relation(fields: [themeId], references: [id])
-  strategicObjective StrategicObjective @relation(fields: [strategicObjectiveId], references: [id])
   unit               MeasurementUnit?   @relation(fields: [unitId], references: [id])
   scale              KpiScale?          @relation(fields: [scaleId], references: [id])
   currency           Currency?          @relation(fields: [currencyId], references: [id])
@@ -602,7 +595,6 @@ model Kpi {
   assignments KpiAssignment[]
 
   @@index([themeId])
-  @@index([strategicObjectiveId])
   @@index([replacesKpiId])
   @@map("kpi")
 }

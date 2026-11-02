@@ -46,8 +46,8 @@ export const getOfficeScorecard = async (officeId, { fiscalYearId, reportingPeri
     }),
     prisma.kpiAchievement.findMany({
       where: { assignment: { contractId: contract.id }, ...periodFilter },
-      include: { ...ACHIEVEMENT_INCLUDE, assignment: { select: { id: true, kpi: { select: { id: true, code: true, name: true, measurementType: true, direction: true, scoringMethod: true } } } } },
-      orderBy: [{ reportingPeriod: { endDate: 'asc' } }, { assignment: { kpi: { code: 'asc' } } }],
+      include: { ...ACHIEVEMENT_INCLUDE, assignment: { select: { id: true, kpi: { select: { id: true, name: true, measurementType: true, direction: true, scoringMethod: true } } } } },
+      orderBy: [{ reportingPeriod: { endDate: 'asc' } }, { assignment: { kpi: { name: 'asc' } } }],
     }),
   ]);
   return { contract, scores, achievements };
@@ -60,7 +60,7 @@ export const getAssignmentPerformance = async (assignmentId, actor) => {
   const assignment = await prisma.kpiAssignment.findUnique({
     where: { id: parseUuid(assignmentId, 'id') },
     include: {
-      kpi: { select: { id: true, code: true, name: true, measurementType: true, direction: true } },
+      kpi: { select: { id: true, name: true, measurementType: true, direction: true } },
       contract: { select: { officeId: true, office: OFFICE_REF } },
       achievements: { include: ACHIEVEMENT_INCLUDE, orderBy: { reportingPeriod: { endDate: 'asc' } } },
       children: {
@@ -87,17 +87,17 @@ export const getKpiHistory = async (kpiId, { officeId } = {}, actor) => {
   await assertCanRead(actor, office);
 
   const lineage = [];
-  let current = await prisma.kpi.findUnique({ where: { id: parseUuid(kpiId, 'id') }, select: { id: true, code: true, name: true, replacesKpiId: true } });
+  let current = await prisma.kpi.findUnique({ where: { id: parseUuid(kpiId, 'id') }, select: { id: true, name: true, replacesKpiId: true } });
   if (!current) throw notFound('KPI not found');
   while (current) {
     lineage.push(current);
-    current = current.replacesKpiId ? await prisma.kpi.findUnique({ where: { id: current.replacesKpiId }, select: { id: true, code: true, name: true, replacesKpiId: true } }) : null;
+    current = current.replacesKpiId ? await prisma.kpi.findUnique({ where: { id: current.replacesKpiId }, select: { id: true, name: true, replacesKpiId: true } }) : null;
   }
 
   const assignments = await prisma.kpiAssignment.findMany({
     where: { kpiId: { in: lineage.map((kpi) => kpi.id) }, contract: { officeId: office }, status: { in: ['APPROVED', 'ACKNOWLEDGED'] } },
     include: {
-      kpi: { select: { id: true, code: true, name: true } },
+      kpi: { select: { id: true, name: true } },
       contract: { select: { fiscalYear: { select: { id: true, name: true, status: true, startDate: true } } } },
       achievements: { include: ACHIEVEMENT_INCLUDE, orderBy: { reportingPeriod: { endDate: 'desc' } } },
     },

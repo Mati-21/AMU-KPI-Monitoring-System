@@ -65,7 +65,7 @@ router.post('/office-types', protect, requirePermission(PERMISSIONS.OFFICE_MANAG
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Deleted }
+ *       200: { description: Deleted, or archived when it was held before (data.archived) }
  *       409: { description: Still used by offices }
  */
 router.put('/office-types/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.updateOfficeType);
@@ -160,7 +160,7 @@ router.put('/offices/:id', protect, requirePermission(PERMISSIONS.OFFICE_UPDATE)
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Deleted }
+ *       200: { description: Deleted, or archived when it was held before (data.archived) }
  *       409: { description: "Still in use; details.dependencies lists what depends on it" }
  */
 router.delete('/offices/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.deleteOffice);
@@ -229,13 +229,13 @@ router.post('/offices/:id/positions', protect, requirePermission(PERMISSIONS.OFF
  *     responses:
  *       200: { description: Updated }
  *   delete:
- *     summary: Delete a position nobody has ever held
+ *     summary: Remove a position nobody holds today. Never held, it is deleted; held before, it is archived and kept for history
  *     tags: [Offices]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Deleted }
- *       409: { description: Someone has held it }
+ *       200: { description: Deleted, or archived when it was held before (data.archived) }
+ *       409: { description: Someone holds it today }
  */
 router.put('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.updatePosition);
 router.delete('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.deletePosition);

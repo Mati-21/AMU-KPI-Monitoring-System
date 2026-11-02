@@ -80,8 +80,8 @@ const PositionsCard = ({ office }) => {
 
   const confirmDelete = () =>
     remove.mutate(deleting.id, {
-      onSuccess: () => {
-        notify('Position deleted.', 'success');
+      onSuccess: ({ data }) => {
+        notify(data.data?.archived ? `"${deleting.title}" was removed. Past placements still show it.` : `"${deleting.title}" was deleted.`, 'success');
         closeDelete();
       },
     });
@@ -106,7 +106,7 @@ const PositionsCard = ({ office }) => {
       </CardContent>
 
       {editing && <PositionDialog officeId={office.id} position={editing.id ? editing : null} onClose={() => setEditing(null)} />}
-      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete Position" description={`Delete "${deleting?.title}"? A position someone has held is kept as history.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
+      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete Position" description={`Delete "${deleting?.title}"? It leaves this office for good. If someone held it before, their past placements still show it.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
     </Card>
   );
 };

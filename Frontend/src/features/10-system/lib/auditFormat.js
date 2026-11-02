@@ -9,7 +9,7 @@ export const actionLabel = sentenceCase;
 /** office_person_role becomes Office person role. */
 export const entityLabel = sentenceCase;
 
-export const formatDateTime = (date) => new Date(date).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+export { formatEthiopianDateTime as formatDateTime } from '../../../shared/lib/ethiopianDate';
 
 export const formatValue = (value) => {
   if (value === null || value === undefined) return 'Empty';

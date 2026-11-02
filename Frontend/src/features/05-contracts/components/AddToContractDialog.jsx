@@ -6,8 +6,9 @@ import { Field, FormDialog } from '../../02-offices/components/FormParts';
 import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useContract, useContracts, useSaveAssignment } from '../hooks/useContracts';
-import { assignableKpis, assignmentPayload, blockedReason, defaultsForKpi, hasLevels, isOpen, shareFor, withShareTarget } from '../lib/contractRules';
+import { assignableKpis, assignmentPayload, blockedReason, defaultsForKpi, hasLevels, isOpen, sharedTarget } from '../lib/contractRules';
 import AssignmentValueFields from './AssignmentValueFields';
+import ShareMethodField from './ShareMethodField';
 
 /**
  * Add the KPIs selected in the KPI list to one draft contract. Each is saved on its own, so when one is refused
@@ -35,6 +36,9 @@ const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
   const choices = contract ? assignableKpis(contract, remaining, parentContract) : [];
   const blocked = contract ? remaining.filter((kpi) => !choices.some((choice) => choice.kpi.id === kpi.id)) : [];
   const formOf = (choice) => forms[choice.kpi.id] ?? defaultsForKpi(choice.kpi, choice.parent);
+  // Below the top office, how the target is shared decides the target
+  const noteFor = (choice) => (choice.parent ? sharedTarget(choice.kpi, choice.parent, formOf(choice).shareMethod, formOf(choice), contract.officeId) : null);
+  const ready = (choice) => hasLevels(choice.kpi, formOf(choice)) && (!choice.parent || Boolean(formOf(choice).shareMethod)) && !noteFor(choice)?.problem;
   const newWeight = choices.reduce((sum, choice) => sum + Number(formOf(choice).weight || 0), 0);
 
   const changeYear = (id) => {
@@ -75,7 +79,7 @@ const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
       onSubmit={submit}
       pending={saving}
       submitLabel={`Add ${choices.length} KPI(s)`}
-      submitDisabled={choices.length === 0 || !choices.every((choice) => hasLevels(choice.kpi, formOf(choice)))}
+      submitDisabled={choices.length === 0 || !choices.every(ready)}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Fiscal Year" required group>
@@ -94,20 +98,15 @@ const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
 
       {blocked.map((kpi) => (
         <p key={kpi.id} className="rounded-md border border-border p-3 text-sm text-foreground">
-          <span className="font-medium">{kpi.code} - {kpi.name}:</span> {blockedReason(contract, kpi)} It will be left out.
+          <span className="font-medium">{kpi.name}:</span> {blockedReason(contract, kpi)} It will be left out.
         </p>
       ))}
 
       {choices.map((choice) => (
-        <section key={choice.kpi.id} aria-label={choice.kpi.code} className="space-y-3 rounded-md border border-border p-4">
-          <h3 className="text-sm font-semibold text-foreground">{choice.kpi.code} - {choice.kpi.name}</h3>
-          {choice.parent?.sharing?.shareable && (
-            <p className="text-xs text-foreground">
-              {contract.assigningOffice.name} has assigned {choice.parent.sharing.assigned} of {choice.parent.sharing.parentAmount}, so {Math.max(0, -choice.parent.sharing.difference)} remains.
-              {shareFor(choice.parent, contract.officeId) !== null && ` The share for ${contract.office.name} is ${shareFor(choice.parent, contract.officeId)}.`}
-            </p>
-          )}
-          <AssignmentValueFields kpi={choice.kpi} form={formOf(choice)} onChange={(form) => setForms({ ...forms, [choice.kpi.id]: withShareTarget(choice.kpi, shareFor(choice.parent, contract.officeId), formOf(choice), form) })} />
+        <section key={choice.kpi.id} aria-label={choice.kpi.name} className="space-y-3 rounded-md border border-border p-4">
+          <h3 className="text-sm font-semibold text-foreground">{choice.kpi.name}</h3>
+          {choice.parent?.sharing && <ShareMethodField parent={choice.parent} fromOffice={contract.assigningOffice} value={formOf(choice).shareMethod ?? ''} onChange={(shareMethod) => setForms({ ...forms, [choice.kpi.id]: { ...formOf(choice), shareMethod } })} />}
+          <AssignmentValueFields kpi={choice.kpi} form={formOf(choice)} targetNote={noteFor(choice)} onChange={(form) => setForms({ ...forms, [choice.kpi.id]: form })} />
           {errors[choice.kpi.id] && <p className="text-sm text-red-500">{errors[choice.kpi.id]}</p>}
         </section>
       ))}

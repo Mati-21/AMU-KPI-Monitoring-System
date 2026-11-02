@@ -13,13 +13,15 @@ import {
   addVersion,
   assertAuthorityFromAbove,
   assertAuthorityOnOffice,
+  assertFrequencyFollowsAbove,
   assertSeparateApprover,
+  assertYearReportsFrequency,
   canSeeAssignment,
   formatAssignment,
   getAssignmentOrThrow,
   requireComment,
 } from './contract.shared.js';
-import { assertChildShare, recordChildShare, releaseChildShare } from './allocation.service.js';
+import { applyShareMethod, assertChildShare, loadShareContext, recordChildShare, releaseChildShare, resolveShareMethod, targetForShare } from './allocation.service.js';
 import { parseBaseline, parseTarget, parseWeight, requiredImprovement } from './measurement.js';
 
 /**
@@ -51,10 +53,6 @@ const setStatus = async (assignment, status, data, actor, action, reason) => {
 };
 
 const parseScopeRelation = (value, kpi) => (value === undefined ? (kpi.isAdditive ? 'EXCLUSIVE_COMPLETE' : 'OVERLAPPING') : parseEnum(value, 'scopeRelation', SCOPE_RELATIONS));
-
-const assertFrequency = async (frequencyId) => {
-  if (!(await prisma.reportingFrequency.findUnique({ where: { id: frequencyId }, select: { id: true } }))) throw badRequest('Reporting frequency not found');
-};
 
 /**
  * Cascading rules: the top office starts a KPI's chain. Every other office receives it from an approved assignment
@@ -134,23 +132,28 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   const kpiId = parseUuid(data.kpiId, 'kpiId');
   const kpi = await prisma.kpi.findUnique({ where: { id: kpiId }, include: { scale: { include: { levels: true } } } });
   if (!kpi) throw badRequest('KPI not found');
-  if (!kpi.isActive) throw badRequest(`KPI ${kpi.code} is retired`);
+  if (!kpi.isActive) throw badRequest(`"${kpi.name}" is retired`);
 
   const existing = await prisma.kpiAssignment.findUnique({ where: { contractId_kpiId: { contractId: contract.id, kpiId } } });
-  if (existing && existing.status !== 'CANCELLED') throw conflict(`KPI ${kpi.code} is already on this contract`);
+  if (existing && existing.status !== 'CANCELLED') throw conflict(`"${kpi.name}" is already on this contract`);
 
   const parentAssignmentId = parseUuid(data.parentAssignmentId, 'parentAssignmentId', { required: false }) ?? null;
-  await assertParentAssignment(contract, kpiId, parentAssignmentId);
+  const parent = await assertParentAssignment(contract, kpiId, parentAssignmentId);
 
-  const reportingFrequencyId = parseUuid(data.reportingFrequencyId, 'reportingFrequencyId', { required: false }) ?? kpi.defaultFrequencyId;
-  await assertFrequency(reportingFrequencyId);
+  // Below the top office the frequency starts from the office above, and may only be more often
+  const reportingFrequencyId = parseUuid(data.reportingFrequencyId, 'reportingFrequencyId', { required: false }) ?? parent?.reportingFrequencyId ?? kpi.defaultFrequencyId;
+  await assertYearReportsFrequency(contract.fiscalYearId, reportingFrequencyId);
+  await assertFrequencyFollowsAbove(parent?.reportingFrequencyId, reportingFrequencyId);
 
+  const shareContext = parent ? await loadShareContext(parent.id) : null;
+  const shareMethod = shareContext ? resolveShareMethod(shareContext, data.shareMethod) : null;
   const baseline = parseBaseline(kpi, data.baseline);
-  const target = parseTarget(kpi, data.target);
+  const shared = shareContext && targetForShare(shareContext, shareMethod, kpi, baseline, contract.officeId);
+  const target = parseTarget(kpi, shared ?? data.target);
   const weight = parseWeight(data.weight);
   const personId = actor.personId;
   const improvement = requiredImprovement(kpi, baseline, target);
-  await assertChildShare(parentAssignmentId, contract.officeId, improvement);
+  if (shareMethod === 'CUSTOM') await assertChildShare(parentAssignmentId, contract.officeId, improvement);
   const fields = {
     parentAssignmentId,
     reportingFrequencyId,
@@ -182,12 +185,15 @@ export const createAssignment = async (contractId, data = {}, actor) => {
         },
         include: ASSIGNMENT_INCLUDE,
       });
-  await recordChildShare(parentAssignmentId, contract.officeId, assignment.id, improvement, personId);
+  if (shareContext) {
+    await applyShareMethod(shareContext, shareMethod, personId, assignment.id);
+    if (shareMethod !== 'FULL') await recordChildShare(parentAssignmentId, contract.officeId, assignment.id, improvement, personId);
+  }
   await auditAction(actor, {
     action: 'ASSIGNMENT_CREATED',
     entityType: 'kpi_assignment',
     entityId: assignment.id,
-    newValues: { contractId: contract.id, kpiId, parentAssignmentId, reportingFrequencyId, baseline, target, weight },
+    newValues: { contractId: contract.id, kpiId, parentAssignmentId, reportingFrequencyId, shareMethod, baseline, target, weight },
   });
   return formatAssignment(assignment);
 };
@@ -205,34 +211,42 @@ export const updateAssignment = async (id, data = {}, actor) => {
   }
 
   const update = {};
+  const shareContext = assignment.parentAssignmentId ? await loadShareContext(assignment.parentAssignmentId) : null;
   if (data.reportingFrequencyId !== undefined) {
     update.reportingFrequencyId = parseUuid(data.reportingFrequencyId, 'reportingFrequencyId');
-    await assertFrequency(update.reportingFrequencyId);
+    await assertYearReportsFrequency(assignment.contract.fiscalYearId, update.reportingFrequencyId);
+    await assertFrequencyFollowsAbove(shareContext?.parent.reportingFrequencyId, update.reportingFrequencyId);
   }
   if (data.scopeRelation !== undefined) update.scopeRelation = parseEnum(data.scopeRelation, 'scopeRelation', SCOPE_RELATIONS);
   if (data.maxOverAllocationPercent !== undefined) update.maxOverAllocationPercent = parseNumber(data.maxOverAllocationPercent, 'maxOverAllocationPercent') ?? null;
 
-  const baseline = data.baseline === undefined ? undefined : parseBaseline(assignment.kpi, data.baseline);
-  const target = data.target === undefined ? undefined : parseTarget(assignment.kpi, data.target);
-  const weight = data.weight === undefined ? undefined : parseWeight(data.weight);
-  if (Object.keys(update).length === 0 && !baseline && !target && weight === undefined) throw badRequest('No updatable fields provided');
-
   const [before, targetBefore, weightBefore] = [assignment.baselines[0], assignment.targets[0], assignment.weights[0]];
+  const shareMethod = shareContext ? resolveShareMethod(shareContext, data.shareMethod) : null;
+  const baseline = data.baseline === undefined ? undefined : parseBaseline(assignment.kpi, data.baseline);
+  // Shared equally or fully, the target follows the baseline and the share, so it is worked out again here
+  const shared = shareContext && shareMethod !== 'CUSTOM' && (baseline || data.shareMethod !== undefined || data.target !== undefined) ? targetForShare(shareContext, shareMethod, assignment.kpi, baseline ?? before, assignment.contract.officeId) : null;
+  const target = shared ? parseTarget(assignment.kpi, shared) : data.target === undefined ? undefined : parseTarget(assignment.kpi, data.target);
+  const weight = data.weight === undefined ? undefined : parseWeight(data.weight);
+  if (Object.keys(update).length === 0 && !baseline && !target && weight === undefined && data.shareMethod === undefined) throw badRequest('No updatable fields provided');
+
   const improvement = requiredImprovement(assignment.kpi, baseline ?? before, target ?? targetBefore);
-  await assertChildShare(assignment.parentAssignmentId, assignment.contract.officeId, improvement);
+  if (shareMethod === 'CUSTOM') await assertChildShare(assignment.parentAssignmentId, assignment.contract.officeId, improvement);
   const updated = await prisma.$transaction(async (tx) => {
     if (baseline) await tx.kpiBaseline.update({ where: { id: before.id }, data: { ...baseline, verifiedByPersonId: null, verifiedAt: null } });
     if (target) await tx.kpiTarget.update({ where: { id: targetBefore.id }, data: target });
     if (weight !== undefined) await tx.kpiWeight.update({ where: { id: weightBefore.id }, data: { weight } });
     return tx.kpiAssignment.update({ where: { id: assignment.id }, data: update, include: ASSIGNMENT_INCLUDE });
   });
-  await recordChildShare(assignment.parentAssignmentId, assignment.contract.officeId, assignment.id, improvement, actor.personId);
+  if (shareContext) {
+    await applyShareMethod(shareContext, shareMethod, actor.personId, assignment.id);
+    if (shareMethod !== 'FULL') await recordChildShare(assignment.parentAssignmentId, assignment.contract.officeId, assignment.id, improvement, actor.personId);
+  }
   await auditAction(actor, {
     action: 'ASSIGNMENT_UPDATED',
     entityType: 'kpi_assignment',
     entityId: assignment.id,
     oldValues: { status: assignment.status, baseline: before, target: targetBefore, weight: weightBefore?.weight },
-    newValues: { ...update, baseline, target, weight },
+    newValues: { ...update, shareMethod, baseline, target, weight },
   });
   return formatAssignment(updated);
 };

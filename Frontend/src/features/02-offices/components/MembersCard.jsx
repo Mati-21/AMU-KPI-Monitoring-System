@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/components/ui/Card';
-import { Input } from '../../../shared/components/ui/Input';
+import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import RoleAssignmentsDialog from '../../03-access-control/components/RoleAssignmentsDialog';
 import { useCan } from '../../03-access-control/hooks/useCan';
@@ -39,8 +39,8 @@ const EndPlacementDialog = ({ member, onClose }) => {
 
   return (
     <FormDialog open onClose={onClose} title="End Placement" description={`${member.person.fullName} keeps this position and its roles through the last day, then loses them.`} onSubmit={submit} error={end.error} pending={end.isPending} submitLabel="End Placement">
-      <Field label="Last Day" required>
-        <Input type="date" required min={member.startDate.slice(0, 10)} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+      <Field label="Last Day" required group>
+        <EthiopianDateInput label="Last day" required min={member.startDate.slice(0, 10)} value={endDate} onChange={setEndDate} />
       </Field>
     </FormDialog>
   );

@@ -219,6 +219,7 @@ export const getOfficeById = async (id) => {
       select: { ...OFFICE_REF_SELECT, isActive: true, officeType: { select: { id: true, name: true } } },
     },
     positions: {
+      where: { archivedAt: null },
       orderBy: [{ isHead: 'desc' }, { title: 'asc' }],
       include: { _count: { select: { officePersons: { where: activeOn('startDate', 'endDate') } } } },
     },
@@ -458,7 +459,7 @@ export const deleteOffice = async (id, actor) => {
 export const listPositions = async (officeId) => {
   await getOfficeOrThrow(officeId);
   const positions = await prisma.position.findMany({
-    where: { officeId },
+    where: { officeId, archivedAt: null },
     orderBy: [{ isHead: 'desc' }, { title: 'asc' }],
     include: { _count: { select: { officePersons: { where: activeOn('startDate', 'endDate') } } } },
   });
@@ -472,10 +473,10 @@ export const createPosition = async (officeId, { title, isHead } = {}, actor) =>
   const cleanTitle = requireString(title, 'title');
   const head = parseBoolean(isHead, 'isHead') ?? false;
 
-  const duplicate = await prisma.position.findFirst({ where: { officeId, title: { equals: cleanTitle, mode: 'insensitive' } } });
+  const duplicate = await prisma.position.findFirst({ where: { officeId, archivedAt: null, title: { equals: cleanTitle, mode: 'insensitive' } } });
   if (duplicate) throw conflict(`Position "${duplicate.title}" already exists in ${office.name}`);
   if (head) {
-    const existingHead = await prisma.position.findFirst({ where: { officeId, isHead: true } });
+    const existingHead = await prisma.position.findFirst({ where: { officeId, isHead: true, archivedAt: null } });
     if (existingHead) throw conflict(`${office.name} already has a head position ("${existingHead.title}")`);
   }
 
@@ -486,7 +487,7 @@ export const createPosition = async (officeId, { title, isHead } = {}, actor) =>
 
 const getPositionOrThrow = async (id, actor) => {
   const position = await prisma.position.findUnique({ where: { id } });
-  if (!position) throw notFound('Position not found');
+  if (!position || position.archivedAt) throw notFound('Position not found');
   await assertScope(actor, PERMISSIONS.OFFICE_MANAGE, position.officeId);
   return position;
 };
@@ -497,7 +498,7 @@ export const updatePosition = async (id, { title, isHead } = {}, actor) => {
   const update = {};
   if (title !== undefined) {
     update.title = requireString(title, 'title');
-    const duplicate = await prisma.position.findFirst({ where: { id: { not: id }, officeId: existing.officeId, title: { equals: update.title, mode: 'insensitive' } } });
+    const duplicate = await prisma.position.findFirst({ where: { id: { not: id }, officeId: existing.officeId, archivedAt: null, title: { equals: update.title, mode: 'insensitive' } } });
     if (duplicate) throw conflict(`Position "${duplicate.title}" already exists in this office`);
   }
   const head = parseBoolean(isHead, 'isHead');
@@ -505,7 +506,7 @@ export const updatePosition = async (id, { title, isHead } = {}, actor) => {
   if (Object.keys(update).length === 0) throw badRequest('No updatable fields provided');
 
   if (update.isHead && !existing.isHead) {
-    const existingHead = await prisma.position.findFirst({ where: { officeId: existing.officeId, isHead: true } });
+    const existingHead = await prisma.position.findFirst({ where: { officeId: existing.officeId, isHead: true, archivedAt: null } });
     if (existingHead) throw conflict(`This office already has a head position ("${existingHead.title}")`);
     const holders = await prisma.officePerson.count({ where: { positionId: id, ...activeOn('startDate', 'endDate') } });
     if (holders > 1) throw conflict('A head position has a single holder, and this position has several');
@@ -517,15 +518,28 @@ export const updatePosition = async (id, { title, isHead } = {}, actor) => {
 };
 
 /**
- * A position anyone has held stays, because past placements point to it.
+ * Removes a position nobody holds today. One that was never held is deleted; one held before is archived instead,
+ * because past placements point to it: it leaves every list, and history still shows its title.
+ * Returns { archived }.
  */
 export const deletePosition = async (id, actor) => {
   const existing = await getPositionOrThrow(id, actor);
-  const placements = await prisma.officePerson.count({ where: { positionId: id } });
-  if (placements > 0) throw conflict(`"${existing.title}" has been held by someone, so it is kept as history`);
+  const current = await prisma.officePerson.findFirst({
+    where: { positionId: id, OR: [{ endDate: null }, { endDate: { gte: startOfTodayUtc() } }] },
+    include: { person: { select: PERSON_REF_SELECT } },
+  });
+  if (current) throw conflict(`${fullName(current.person)} still holds "${existing.title}". End their placement first.`);
+
+  const held = await prisma.officePerson.count({ where: { positionId: id } });
+  if (held > 0) {
+    await prisma.position.update({ where: { id }, data: { archivedAt: new Date() } });
+    await auditAction(actor, { action: 'POSITION_ARCHIVED', entityType: 'position', entityId: id, oldValues: existing });
+    return { archived: true };
+  }
 
   await prisma.position.delete({ where: { id } });
   await auditAction(actor, { action: 'POSITION_DELETED', entityType: 'position', entityId: id, oldValues: existing });
+  return { archived: false };
 };
 
 // ===== Members (OfficePerson placements) =====
@@ -584,7 +598,7 @@ export const assignMember = async (officeId, { personId, positionId, startDate, 
   if (!person.isActive) throw badRequest(`${fullName(person)} is inactive and cannot be placed`);
 
   const position = await prisma.position.findUnique({ where: { id: positionId } });
-  if (!position || position.officeId !== officeId) throw badRequest('Position not found in this office');
+  if (!position || position.archivedAt || position.officeId !== officeId) throw badRequest('Position not found in this office');
 
   const window = overlaps('startDate', 'endDate', start, end);
   const samePersonOverlap = await prisma.officePerson.findFirst({ where: { personId, positionId, ...window } });

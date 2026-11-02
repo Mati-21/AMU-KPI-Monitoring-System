@@ -24,7 +24,7 @@ const canRead = requirePermission(PERMISSIONS.DASHBOARD_READ);
  *       - { in: query, name: fiscalYearId, schema: { type: string, format: uuid }, description: Defaults to the active year }
  *       - { in: query, name: reportingPeriodId, schema: { type: string, format: uuid }, description: Just this period }
  *     responses:
- *       200: { description: "{ fiscalYear, office, score, summary, kpis, trend, history, byStrategicObjective, byOfficeType }" }
+ *       200: { description: "{ fiscalYear, office, score, summary, kpis, trend, history, byOfficeType }" }
  *       403: { description: Not over the top office }
  *       404: { description: "No such year or period, or no active year" }
  * /api/v1/dashboards/offices/{officeId}:

@@ -20,7 +20,7 @@ const router = Router();
  *     tags: [Persons]
  *     parameters:
  *       - { in: query, name: search, schema: { type: string }, description: Name, email, phone or username }
- *       - { in: query, name: isActive, schema: { type: boolean } }
+ *       - { in: query, name: isActive, schema: { type: boolean, default: true }, description: false lists archived people }
  *       - { in: query, name: officeId, schema: { type: string, format: uuid } }
  *       - { in: query, name: roleId, schema: { type: string, format: uuid }, description: People holding this role today }
  *       - { in: query, name: hasRole, schema: { type: boolean }, description: Whether they hold any role today }
@@ -88,11 +88,10 @@ router.post('/persons', protect, requirePermission(PERMISSIONS.USER_CREATE), per
  *               lastName: { type: string }
  *               email: { type: string }
  *               phone: { type: string }
- *               isActive: { type: boolean }
  *     responses:
  *       200: { description: Updated }
  *   delete:
- *     summary: Archive a person. Nothing is deleted; login stops and their placements end
+ *     summary: Archive a person for good. The row stays for history; login stops, placements end, email and staff number are freed
  *     tags: [Persons]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }

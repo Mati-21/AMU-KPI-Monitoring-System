@@ -20,6 +20,13 @@
     "seed:roles": "node scripts/seedRoles.js",
     "seed:roles:sync": "node scripts/seedRoles.js --sync",
     "seed:kpis": "node scripts/seedKpis.js",
+    "seed:scales": "node scripts/seedScalesUnits.js",
+    "clear:fiscal": "node scripts/clearFiscalData.js",
+    "clear:fiscal:confirm": "node scripts/clearFiscalData.js --yes",
+    "clear:kpis": "node scripts/clearKpiData.js",
+    "clear:kpis:confirm": "node scripts/clearKpiData.js --yes",
+    "clear:kpis:all": "node scripts/clearKpiData.js --with-catalog",
+    "clear:kpis:all:confirm": "node scripts/clearKpiData.js --with-catalog --yes",
     "test:auth": "node scripts/testAuthFlow.js"
   },
   "keywords": [],

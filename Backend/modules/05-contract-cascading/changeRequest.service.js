@@ -22,7 +22,7 @@ const REQUEST_INCLUDE = {
     select: {
       id: true,
       status: true,
-      kpi: { select: { id: true, code: true, name: true } },
+      kpi: { select: { id: true, name: true } },
       contract: { select: { id: true, officeId: true, assigningOfficeId: true, fiscalYearId: true, office: { select: { id: true, name: true } } } },
     },
   },
@@ -43,7 +43,7 @@ const getRequestOrThrow = async (id) => {
 const assertMayRequest = async (actor, contract) => {
   if (await actor.access.can(PERMISSIONS.CONTRACT_REQUEST_CHANGE, contract.officeId)) return;
   if (contract.assigningOfficeId && (await actor.access.can(PERMISSIONS.CONTRACT_MANAGE, contract.assigningOfficeId))) return;
-  if (!contract.assigningOfficeId && actor.access.canGlobally(PERMISSIONS.CONTRACT_MANAGE)) return;
+  if (!contract.assigningOfficeId && (await actor.access.can(PERMISSIONS.CONTRACT_MANAGE, contract.officeId))) return;
   throw forbidden('You cannot request changes to this assignment');
 };
 

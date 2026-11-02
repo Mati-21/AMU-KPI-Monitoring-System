@@ -2,7 +2,7 @@ import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { forbidden, notFound } from '../../utils/httpError.js';
 import { OFFICE_REF, loadContracts, loadYearHistory, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
-import { compareOffices, groupByObjective, summarize } from './dashboard.rules.js';
+import { compareOffices, summarize } from './dashboard.rules.js';
 
 /**
  * Module 11 — University dashboard (SRS 12.1). The university's figures are the top office's contract: its KPIs were
@@ -45,7 +45,6 @@ export const getUniversityDashboard = async (query, actor) => {
     kpis: (own?.lines ?? []).map(publicLine),
     trend: own?.trend ?? [],
     history: await loadYearHistory(root.id),
-    byStrategicObjective: groupByObjective(own?.lines ?? []),
     byOfficeType: byOfficeType(offices.map((office) => toOfficeRow(office, snapshots.get(office.id)))),
   };
 };

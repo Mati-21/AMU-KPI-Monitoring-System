@@ -39,7 +39,7 @@ const loadResponsibilities = async (lines) => {
     const given = allocations.filter((row) => row.parentAssignmentId === assignmentId);
     return {
       assignmentId,
-      kpi: { id: kpi.id, code: kpi.code, name: kpi.name },
+      kpi: { id: kpi.id, name: kpi.name },
       requiredImprovement: requiredImprovement(assignment.kpi, assignment.baselines[0], assignment.targets[0]),
       retained: sumAmounts(given.filter((row) => row.allocationType === 'RETAINED')),
       distributed: sumAmounts(given.filter((row) => row.allocationType === 'DISTRIBUTED')),

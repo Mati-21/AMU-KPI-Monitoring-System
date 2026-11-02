@@ -10,7 +10,7 @@ const canManage = requirePermission(PERMISSIONS.KPI_MANAGE);
  * @swagger
  * tags:
  *   name: KPI Catalog
- *   description: Module 04 — Fiscal years, strategic objectives, themes, units, frequencies, scales, currencies and the master KPI catalog
+ *   description: Module 04 — Fiscal years, themes, units, frequencies, scales, currencies and the master KPI catalog
  */
 
 // ===== Fiscal years =====
@@ -127,61 +127,6 @@ router.patch('/fiscal-years/:id/close', protect, canManage, kpiController.closeF
  *       409: { description: Year is not closed, or another year is active }
  */
 router.patch('/fiscal-years/:id/reopen', protect, requireSuperAdmin, kpiController.reopenFiscalYear);
-
-// ===== Strategic objectives =====
-
-/**
- * @swagger
- * /api/v1/strategic-objectives:
- *   get:
- *     summary: List strategic objectives with KPI counts
- *     tags: [KPI Catalog]
- *     parameters:
- *       - { in: query, name: isActive, schema: { type: boolean } }
- *     responses:
- *       200: { description: Objectives }
- *   post:
- *     summary: Create a strategic objective
- *     tags: [KPI Catalog]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [code, name]
- *             properties:
- *               code: { type: string, example: SO-1 }
- *               name: { type: string, example: Strengthen research output }
- *               description: { type: string }
- *     responses:
- *       201: { description: Created }
- */
-router.get('/strategic-objectives', protect, kpiController.listObjectives);
-router.post('/strategic-objectives', protect, canManage, kpiController.createObjective);
-
-/**
- * @swagger
- * /api/v1/strategic-objectives/{id}:
- *   put:
- *     summary: Update a strategic objective
- *     tags: [KPI Catalog]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               code: { type: string }
- *               name: { type: string }
- *               description: { type: string }
- *               isActive: { type: boolean }
- *     responses:
- *       200: { description: Updated }
- */
-router.put('/strategic-objectives/:id', protect, canManage, kpiController.updateObjective);
 
 // ===== Themes =====
 
@@ -547,7 +492,6 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *     parameters:
  *       - { in: query, name: search, schema: { type: string }, description: Code or name }
  *       - { in: query, name: themeId, schema: { type: string, format: uuid }, description: This theme and every sub-theme below it }
- *       - { in: query, name: strategicObjectiveId, schema: { type: string, format: uuid } }
  *       - { in: query, name: measurementType, schema: { type: string, enum: [NUMBER, PERCENTAGE, RATIO, STAGE, CATEGORY, MONEY] } }
  *       - { in: query, name: direction, schema: { type: string, enum: [HIGHER_IS_BETTER, LOWER_IS_BETTER, MAINTAIN] } }
  *       - { in: query, name: isActive, schema: { type: boolean } }
@@ -568,13 +512,12 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *         application/json:
  *           schema:
  *             type: object
- *             required: [code, name, description, themeId, strategicObjectiveId, measurementType, direction, defaultFrequencyId]
+ *             required: [name, description, themeId, measurementType, direction, defaultFrequencyId]
  *             properties:
- *               code: { type: string, example: KPI-RES-001 }
  *               name: { type: string, example: Number of research publications }
  *               description: { type: string }
  *               themeId: { type: string, format: uuid }
- *               strategicObjectiveId: { type: string, format: uuid }
+ *               remark: { type: string, description: Optional note about the KPI }
  *               measurementType: { type: string, enum: [NUMBER, PERCENTAGE, RATIO, STAGE, CATEGORY, MONEY] }
  *               unitId: { type: string, format: uuid }
  *               scaleId: { type: string, format: uuid }

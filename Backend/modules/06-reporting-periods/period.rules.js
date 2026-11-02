@@ -1,7 +1,8 @@
 /**
  * Module 06 — Date rules for reporting periods. Pure functions with no database access.
- * Dates are UTC calendar dates, as stored in @db.Date columns.
+ * Dates are UTC calendar dates, as stored in @db.Date columns. Periods follow Ethiopian months.
  */
+import { addEthiopianMonths } from '../../utils/ethiopianDate.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -12,16 +13,6 @@ export const isFullYear = (period, fiscalYear) =>
   period.isYearEnd || (period.startDate.getTime() === fiscalYear.startDate.getTime() && period.endDate.getTime() === fiscalYear.endDate.getTime());
 
 export const addDays = (date, days) => new Date(date.getTime() + days * DAY_MS);
-
-/**
- * Add months, keeping the day of the month where possible: 31 Jan + 1 month is 28 or 29 Feb.
- */
-export const addMonths = (date, months) => {
-  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
-  const lastDayOfMonth = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  target.setUTCDate(Math.min(date.getUTCDate(), lastDayOfMonth));
-  return target;
-};
 
 export const defaultDeadline = (endDate, submissionWindowDays) => addDays(endDate, submissionWindowDays);
 
@@ -35,13 +26,14 @@ const periodName = (intervalMonths, number, total) => {
 };
 
 /**
- * Split a fiscal year into consecutive periods of intervalMonths. The last period ends on the year's last day.
+ * Split a fiscal year into consecutive periods of intervalMonths Ethiopian months. Pagume belongs to the period holding
+ * Nehase, so Q1 of a year starting Hamle 1 ends Meskerem 30. The last period ends on the year's last day.
  * An annual period is the year-end period: its report is the year's final report.
  */
 export const buildPeriods = ({ startDate, endDate }, intervalMonths, submissionWindowDays) => {
   const ranges = [];
   for (let start = startDate, index = 1; start <= endDate; index += 1) {
-    const nextStart = addMonths(startDate, index * intervalMonths);
+    const nextStart = addEthiopianMonths(startDate, index * intervalMonths);
     const isLast = addDays(nextStart, -1) >= endDate;
     const end = isLast ? endDate : addDays(nextStart, -1);
     ranges.push({ startDate: start, endDate: end });
@@ -67,4 +59,4 @@ export const periodPhase = ({ isClosed, startDate, endDate, submissionDeadline }
   return 'OVERDUE';
 };
 
-export default { addDays, addMonths, defaultDeadline, buildPeriods, periodPhase };
+export default { addDays, defaultDeadline, buildPeriods, periodPhase };

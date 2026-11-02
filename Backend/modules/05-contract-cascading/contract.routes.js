@@ -54,6 +54,17 @@ router.post('/contracts', protect, canManage, contractController.createContract)
 
 /**
  * @swagger
+ * /api/v1/contract-offices:
+ *   get:
+ *     summary: Offices a new contract can be created for, the ones directly below the caller's own office
+ *     tags: [Contracts & Cascading]
+ *     responses:
+ *       200: { description: "Offices { id, name, parentOfficeId }" }
+ */
+router.get('/contract-offices', protect, canManage, contractController.listContractOffices);
+
+/**
+ * @swagger
  * /api/v1/contracts/{id}:
  *   get:
  *     summary: Contract with its assignments and weight total
@@ -109,6 +120,42 @@ router.get('/contracts/:id', protect, canRead, contractController.getContractByI
  */
 router.get('/contract-rejections', protect, canRead, contractController.listRejections);
 router.patch('/contracts/:id/assign', protect, canManage, contractController.assignContract);
+
+/**
+ * @swagger
+ * /api/v1/contracts/{id}/kpi-import:
+ *   post:
+ *     summary: Register KPIs from a file straight into the top office's self contract, with baselines, targets and weights
+ *     description: A row naming an active KPI reuses it. A name close to an existing one is a possible duplicate until rows[].decision gives that KPI's id or 'new'. With dryRun nothing is saved; otherwise every row is saved or none.
+ *     tags: [Contracts & Cascading]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [rows]
+ *             properties:
+ *               dryRun: { type: boolean }
+ *               rows:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     kpi: { type: object, description: KPI fields as for POST /kpis }
+ *                     kpiErrors: { type: array, items: { type: string }, description: Problems found reading the file, used only if the KPI is new }
+ *                     baseline: { type: object, description: "{ status, value, numerator, denominator, level, justification }" }
+ *                     target: { type: object, description: "{ value, numerator, denominator, level }" }
+ *                     weight: { type: number }
+ *                     decision: { type: string, description: An existing KPI's id, or new }
+ *     responses:
+ *       200: { description: "{ summary, rows } with each row's status: NEW, EXISTING, POSSIBLE_DUPLICATE or ERROR" }
+ *       400: { description: Rows still need attention; nothing was saved }
+ *       409: { description: Not a draft self contract }
+ */
+router.post('/contracts/:id/kpi-import', protect, canManage, contractController.importIntoContract);
 router.patch('/contracts/:id/reject', protect, canAcknowledge, contractController.rejectContract);
 router.patch('/contracts/:id/sign', protect, canAcknowledge, contractController.signContract);
 

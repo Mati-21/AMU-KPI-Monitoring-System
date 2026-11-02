@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 const modules = [
   { icon: Users, label: "Total Users", desc: "Manage profiles & permissions", route: "/user-management", tab: "add" },
-  { icon: BarChart3, label: "KPIs", desc: "Set and track objectives", route: "/kpi", tab: "addKpi" },
+  { icon: BarChart3, label: "KPIs", desc: "Register and track KPIs", route: "/kpi", tab: "addKpi" },
   { icon: Palette, label: "Themes", desc: "Manage Themes", route: "/kpi", tab: "addKpiCategory" },
   { icon: Shield, label: "Roles", desc: "Security & role restrictions", route: "/role-management", tab: "addRole" },
   { icon: FolderTree, label: "Categories", desc: "Organize functional groups", route: "/role-management", tab: "addCategory" },

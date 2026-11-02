@@ -8,11 +8,7 @@ export const BASELINE_OPTIONS = [
   { value: 'PENDING_VERIFICATION', label: 'Pending verification' },
 ];
 
-export const SCOPE_OPTIONS = [
-  { value: 'EXCLUSIVE_COMPLETE', label: 'Split between offices below (their parts add up to this)' },
-  { value: 'OVERLAPPING', label: 'Shared with offices below (each works on the same result)' },
-  { value: 'INSTITUTION_WIDE', label: 'Whole institution (one result for everyone)' },
-];
+export const SHARE_METHOD_WORDS = { EQUAL: 'Equally', FULL: 'Fully', CUSTOM: 'Custom' };
 
 const APPROVED_STATUSES = ['APPROVED', 'ACKNOWLEDGED'];
 const STATUS_WORDS = { SUBMITTED: 'Awaiting signature', ACKNOWLEDGED: 'Accepted' };
@@ -43,11 +39,15 @@ export const nextStep = (contract) => {
   if (contract.status !== 'DRAFT') return '';
   if (onlyLive(contract).length === 0) return `${issuer} adds the KPIs of this contract.`;
   if (!contract.isWeightBalanced) return `Make the weights total ${contract.requiredTotalWeight}. They now total ${contract.totalWeight}.`;
+  if (!contract.assigningOfficeId) return `${contract.office.name} approves and signs its self contract.`;
   return `${issuer} assigns the contract to ${contract.office.name}.`;
 };
 
+// Shared equally or fully, the server works the target out, so none is sent
+const targetIsWorkedOut = (form) => form.shareMethod === 'EQUAL' || form.shareMethod === 'FULL';
+
 // Levels come from dropdowns, which a browser's required check cannot cover
-export const hasLevels = (kpi, form) => !usesLevels(kpi) || Boolean(form.target.scaleLevelId && (form.baselineStatus !== 'KNOWN' || form.baseline.scaleLevelId));
+export const hasLevels = (kpi, form) => !usesLevels(kpi) || Boolean((targetIsWorkedOut(form) || form.target.scaleLevelId) && (form.baselineStatus !== 'KNOWN' || form.baseline.scaleLevelId));
 
 /**
  * Why a selected KPI cannot go on this contract, or null when it can.
@@ -74,16 +74,12 @@ export const measureText = (kpi, row) => {
 };
 
 /**
- * Offices that can get a contract this year: active, without one yet, and with a parent that may assign KPIs.
- * The top office has no parent, so it always qualifies.
+ * Offices that can get a contract this year: those the server offers (directly below the person's own office, or
+ * their own top office) that have no contract yet.
  */
 export const contractOfficeOptions = (offices, contracts) => {
   const taken = new Set(contracts.map((contract) => contract.officeId));
-  const byId = new Map(offices.map((office) => [office.id, office]));
-  return offices
-    .filter((office) => office.isActive && !taken.has(office.id))
-    .filter((office) => !office.parentOfficeId || byId.get(office.parentOfficeId)?.canAssignKpi)
-    .map((office) => ({ value: office.id, label: office.name }));
+  return offices.filter((office) => !taken.has(office.id)).map((office) => ({ value: office.id, label: office.name }));
 };
 
 /**
@@ -113,23 +109,86 @@ export const equalShares = (total, count) => {
 // What this office was given of the KPI above it, if that KPI is shared
 export const shareFor = (parent, officeId) => parent?.sharing?.offices?.find((line) => line.office.id === officeId)?.amount ?? null;
 
-const targetFromShare = (kpi, baseline, share) => String(Math.round((kpi.direction === 'LOWER_IS_BETTER' ? Number(baseline) - share : Number(baseline) + share) * 10000) / 10000);
+/**
+ * The most an office can be given of a divided KPI: what remains, plus what it already holds on its contract.
+ */
+export const mostFor = (sharing, officeId) => {
+  const held = sharing.offices.find((line) => line.office.id === officeId && line.assignmentId)?.amount ?? 0;
+  return Math.max(0, Math.round((sharing.parentAmount - sharing.assigned + held) * 10000) / 10000);
+};
+
+const round4 = (value) => Math.round(value * 10000) / 10000;
 
 /**
- * Typing a baseline fills in the target that delivers the office's share.
+ * The ways the KPI above can be shared for an office below. Once a contract holding it was sent, only the way it was
+ * sent. Equally needs a number or money KPI with an improvement and offices to divide it between.
  */
-export const withShareTarget = (kpi, share, before, next) => {
-  if (share === null || next.baselineStatus !== 'KNOWN' || next.baseline.value === '' || next.baseline.value === before.baseline.value) return next;
-  return { ...next, target: { ...next.target, value: targetFromShare(kpi, next.baseline.value, share) } };
+export const shareMethodOptions = (sharing) => {
+  if (!sharing) return [];
+  if (sharing.locked) return [{ value: sharing.method, label: SHARE_METHOD_WORDS[sharing.method] }];
+  const canDivide = sharing.divisible && sharing.parentAmount > 0 && sharing.officesBelow.length > 0;
+  return [
+    ...(canDivide ? [{ value: 'EQUAL', label: `Equally - the improvement divided between the ${sharing.officesBelow.length} offices below` }] : []),
+    { value: 'FULL', label: 'Fully - every office below gets the whole improvement' },
+    { value: 'CUSTOM', label: 'Custom - set the target yourself' },
+  ];
+};
+
+export const equalAmountFor = (sharing, officeId) => {
+  if (sharing.equalAmounts?.[officeId] !== undefined) return sharing.equalAmounts[officeId];
+  const index = sharing.officesBelow.findIndex((office) => office.id === officeId);
+  return index < 0 ? null : equalShares(sharing.parentAmount, sharing.officesBelow.length)[index];
+};
+
+const baselineNumber = (kpi, form) => {
+  if (form.baselineStatus !== 'KNOWN') return null;
+  if (isFraction(kpi)) {
+    if (form.baseline.numerator === '' || !Number(form.baseline.denominator)) return null;
+    const ratio = Number(form.baseline.numerator) / Number(form.baseline.denominator);
+    return kpi.measurementType === 'PERCENTAGE' ? ratio * 100 : ratio;
+  }
+  return form.baseline.value === '' ? null : Number(form.baseline.value);
+};
+
+/**
+ * The target an office gets when the KPI above is shared equally or fully, worked out as the server does: its own
+ * baseline moved by its share, or the same target as above where no improvement can be worked out.
+ * Null for Custom, where the target is entered.
+ */
+export const sharedTarget = (kpi, parent, method, form, officeId) => {
+  if (!parent?.sharing || !method || method === 'CUSTOM') return null;
+  const { sharing } = parent;
+  const sameAsAbove = usesLevels(kpi) || kpi.direction === 'MAINTAIN' || sharing.parentAmount === null || form.baselineStatus !== 'KNOWN';
+  if (sameAsAbove) return method === 'FULL' ? { text: `${measureText(kpi, parent.target)}, the same as the office above` } : { problem: 'Sharing equally needs a known baseline, because the target is the baseline plus the share.' };
+
+  const amount = method === 'EQUAL' ? equalAmountFor(sharing, officeId) : sharing.parentAmount;
+  if (amount === null) return { problem: 'This office is not an active office directly below, so it has no equal share.' };
+  const lower = kpi.direction === 'LOWER_IS_BETTER';
+  const share = measureText(kpi, { value: amount });
+  const start = baselineNumber(kpi, form);
+  if (start === null) return { text: `Your baseline ${lower ? 'minus' : 'plus'} ${share}`, amount };
+  const value = round4(lower ? start - amount : start + amount);
+  if (value < 0) return { problem: `Starting from ${round4(start)}, a reduction of ${amount} would go below zero.` };
+  return { text: `${measureText(kpi, { value })} (baseline ${measureText(kpi, { value: round4(start) })} ${lower ? '-' : '+'} share ${share})`, amount, value };
+};
+
+/**
+ * An office reports a KPI as often as the office above, or more often. Custom periods only follow Custom.
+ */
+export const frequencyChoices = (usable, frequencies, aboveFrequencyId) => {
+  if (!aboveFrequencyId) return usable;
+  const above = frequencies.find((frequency) => frequency.id === aboveFrequencyId);
+  return usable.filter((frequency) => frequency.id === aboveFrequencyId || (above?.intervalMonths && frequency.intervalMonths && frequency.intervalMonths < above.intervalMonths));
 };
 
 const text = (value) => (value === null || value === undefined ? '' : String(Number(value)));
 
 const startMeasure = (row) => ({ value: text(row?.value), numerator: text(row?.numerator), denominator: text(row?.denominator), scaleLevelId: row?.scaleLevelId ?? '' });
 
+// Below the top office the KPI starts from the way the office above already shares it, if it chose one
 export const defaultsForKpi = (kpi, parent) => ({
   reportingFrequencyId: parent?.reportingFrequencyId ?? kpi?.defaultFrequencyId ?? '',
-  scopeRelation: kpi?.isAdditive ? 'EXCLUSIVE_COMPLETE' : 'OVERLAPPING',
+  ...(parent && { shareMethod: parent.sharing?.method ?? '' }),
   baselineStatus: 'KNOWN',
   justification: '',
   baseline: startMeasure(),
@@ -137,9 +196,9 @@ export const defaultsForKpi = (kpi, parent) => ({
   weight: '',
 });
 
-export const formFromAssignment = (assignment) => ({
+export const formFromAssignment = (assignment, parent) => ({
   reportingFrequencyId: assignment.reportingFrequencyId,
-  scopeRelation: assignment.scopeRelation,
+  ...(parent && { shareMethod: parent.sharing?.method ?? 'CUSTOM' }),
   baselineStatus: assignment.baseline.baselineStatus === 'VERIFIED' ? 'KNOWN' : assignment.baseline.baselineStatus,
   justification: assignment.baseline.unknownJustification ?? '',
   baseline: startMeasure(assignment.baseline),
@@ -159,9 +218,9 @@ const baselinePayload = (kpi, form) =>
 
 export const assignmentPayload = (kpi, form) => ({
   reportingFrequencyId: form.reportingFrequencyId,
-  scopeRelation: form.scopeRelation,
+  ...(form.shareMethod !== undefined && { shareMethod: form.shareMethod }),
   baseline: baselinePayload(kpi, form),
-  target: measurePayload(kpi, form.target, false),
+  ...(!targetIsWorkedOut(form) && { target: measurePayload(kpi, form.target, false) }),
   weight: Number(form.weight),
 });
 

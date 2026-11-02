@@ -54,7 +54,7 @@ const ShareForm = ({ assignment, sharing, readOnly, onClose }) => {
       { id: assignment.id, values: { distributionMethod: method, retainedAmount: Number(retained || 0), shares } },
       {
         onSuccess: () => {
-          notify(`${assignment.kpi.code} shared.`, 'success');
+          notify(`${assignment.kpi.name} shared.`, 'success');
           close();
         },
       }
@@ -62,7 +62,7 @@ const ShareForm = ({ assignment, sharing, readOnly, onClose }) => {
   };
 
   return (
-    <FormDialog open onClose={close} className="sm:max-w-2xl" title={`Share ${assignment.kpi.code}`} description={assignment.kpi.name} onSubmit={readOnly ? close : submit} error={save.error} pending={save.isPending} submitLabel={readOnly ? 'Close' : 'Save Shares'} submitDisabled={!readOnly && (difference < 0 || !allFilled)}>
+    <FormDialog open onClose={close} className="sm:max-w-2xl" title={`Share ${assignment.kpi.name}`} description="Share its improvement between the offices below." onSubmit={readOnly ? close : submit} error={save.error} pending={save.isPending} submitLabel={readOnly ? 'Close' : 'Save Shares'} submitDisabled={!readOnly && (difference < 0 || !allFilled)}>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-sm text-foreground">
         <p>
           To share: <span className="font-semibold">{sharing.parentAmount}</span>. Assigned: <span className="font-semibold">{total}</span>.
@@ -106,7 +106,7 @@ const ShareTargetDialog = ({ assignment, readOnly, onClose }) => {
 
   if (isLoading || error) {
     return (
-      <FormDialog open onClose={onClose} title={`Share ${assignment.kpi.code}`} description={assignment.kpi.name} onSubmit={(event) => event.preventDefault()} error={error} submitDisabled>
+      <FormDialog open onClose={onClose} title={`Share ${assignment.kpi.name}`} description="Share its improvement between the offices below." onSubmit={(event) => event.preventDefault()} error={error} submitDisabled>
         {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
       </FormDialog>
     );

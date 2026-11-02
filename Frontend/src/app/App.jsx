@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import LandingPage from '../features/00-landing/pages/LandingPage';
 
+import ContractKpiImportPage from '../features/05-contracts/pages/ContractKpiImportPage';
 import ContractPage from '../features/05-contracts/pages/ContractPage';
 import KpiAllocationPage from '../features/05-contracts/pages/KpiAllocationPage';
 import SignIn from '../features/01-identity/pages/LoginPage';
@@ -73,6 +74,7 @@ function App() {
                     <Route element={<RequirePermission permission="contract:read" />}>
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
                       <Route path="/assign-kpi/:contractId" element={<ContractPage />} />
+                      <Route path="/assign-kpi/:contractId/register" element={<ContractKpiImportPage />} />
                     </Route>
 
                     <Route path="/offices" element={<OfficesPage />} />

@@ -2,6 +2,7 @@ import * as contractService from './contract.service.js';
 import * as assignmentService from './assignment.service.js';
 import * as allocationService from './allocation.service.js';
 import * as changeRequestService from './changeRequest.service.js';
+import * as contractImportService from './contractImport.service.js';
 import { actorOf } from '../../utils/requestContext.js';
 
 const send = (res, data, status = 200) => res.status(status).json({ status: 'success', data });
@@ -12,6 +13,8 @@ export const listContracts = async (req, res) => {
   send(res, await contractService.listContracts({ fiscalYearId, officeId, status }, actorOf(req)));
 };
 export const getContractById = async (req, res) => send(res, await contractService.getContractById(req.params.id, actorOf(req)));
+export const importIntoContract = async (req, res) => send(res, await contractImportService.importIntoContract(req.params.id, req.body || {}, actorOf(req)));
+export const listContractOffices = async (req, res) => send(res, await contractService.listContractOffices(actorOf(req)));
 export const createContract = async (req, res) => send(res, await contractService.createContract(req.body || {}, actorOf(req)), 201);
 export const listRejections = async (req, res) => send(res, await contractService.listRejections({ fiscalYearId: req.query.fiscalYearId }, actorOf(req)));
 export const assignContract = async (req, res) => send(res, await contractService.assignContract(req.params.id, actorOf(req)));

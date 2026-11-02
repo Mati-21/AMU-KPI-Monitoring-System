@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatEthiopianDateTime } from '../../../../shared/lib/ethiopianDate';
 import { Laptop, Lock, ShieldCheck } from 'lucide-react';
 
 import Button from '../../../../shared/components/ui/Button';
@@ -189,7 +190,7 @@ export const SessionsCard = () => {
                 {session.isCurrent && <span className="ml-2 text-xs font-semibold text-green-600">This device</span>}
               </p>
               <p className="text-xs text-muted-foreground">
-                {session.ipAddress || 'Unknown address'} · Last used {new Date(session.lastUsedAt).toLocaleString()}
+                {session.ipAddress || 'Unknown address'} · Last used {formatEthiopianDateTime(session.lastUsedAt)}
               </p>
             </div>
             {!session.isCurrent && (

@@ -1,0 +1,71 @@
+{
+  "description": "Measurement units and stage and category scales for university KPIs, seeded by `npm run seed:scales`. Only missing rows are created, matched by name, so anything edited later stays as edited. Scale scoring starts unapproved: approve it in KPI Management after checking the scores.",
+  "measurementUnits": [
+    { "name": "Count", "symbol": "#", "description": "A quantity of something" },
+    { "name": "Person", "symbol": "persons", "description": "People, such as staff or participants" },
+    { "name": "Student", "symbol": "students", "description": "Enrolled, graduating or served students" },
+    { "name": "Hour", "symbol": "hrs", "description": "Time spent, such as training or service hours" },
+    { "name": "Day", "symbol": "days", "description": "Durations, such as days to process a request" },
+    { "name": "Square metre", "symbol": "m²", "description": "Areas, such as buildings or farmland" }
+  ],
+  "scales": [
+    {
+      "name": "Project Implementation Stages",
+      "scaleType": "STAGE",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Not started", "sortOrder": 1, "score": 0, "assessmentCriteria": "No approved plan or budget yet" },
+        { "name": "Planned", "sortOrder": 2, "score": 1, "assessmentCriteria": "Plan, budget and team approved" },
+        { "name": "In progress", "sortOrder": 3, "score": 2, "assessmentCriteria": "Work started and at least a quarter of the activities done" },
+        { "name": "Nearly complete", "sortOrder": 4, "score": 3, "assessmentCriteria": "At least three quarters of the activities done" },
+        { "name": "Completed", "sortOrder": 5, "score": 4, "assessmentCriteria": "All activities done and handed over" }
+      ]
+    },
+    {
+      "name": "Accreditation Progress",
+      "scaleType": "STAGE",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Not applied", "sortOrder": 1, "score": 0, "assessmentCriteria": "No application submitted" },
+        { "name": "Applied", "sortOrder": 2, "score": 1, "assessmentCriteria": "Application submitted to the accrediting body" },
+        { "name": "Self-study done", "sortOrder": 3, "score": 2, "assessmentCriteria": "Self-study report completed and submitted" },
+        { "name": "Site visit done", "sortOrder": 4, "score": 3, "assessmentCriteria": "Accreditors have visited and reported" },
+        { "name": "Accredited", "sortOrder": 5, "score": 4, "assessmentCriteria": "Accreditation granted" }
+      ]
+    },
+    {
+      "name": "Digital Service Maturity",
+      "scaleType": "STAGE",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Paper based", "sortOrder": 1, "score": 1, "assessmentCriteria": "The service runs on paper" },
+        { "name": "Partly digital", "sortOrder": 2, "score": 2, "assessmentCriteria": "Some steps use computers, records are kept digitally" },
+        { "name": "Fully digital", "sortOrder": 3, "score": 3, "assessmentCriteria": "The whole service runs in a system" },
+        { "name": "Integrated", "sortOrder": 4, "score": 4, "assessmentCriteria": "The system shares data with other university systems" },
+        { "name": "Optimized", "sortOrder": 5, "score": 5, "assessmentCriteria": "Data from the system is used to improve the service" }
+      ]
+    },
+    {
+      "name": "Five-Point Rating",
+      "scaleType": "CATEGORY",
+      "isOrdered": true,
+      "levels": [
+        { "name": "Poor", "sortOrder": 1, "score": 1, "assessmentCriteria": "Far below expectations" },
+        { "name": "Fair", "sortOrder": 2, "score": 2, "assessmentCriteria": "Below expectations" },
+        { "name": "Good", "sortOrder": 3, "score": 3, "assessmentCriteria": "Meets expectations" },
+        { "name": "Very good", "sortOrder": 4, "score": 4, "assessmentCriteria": "Above expectations" },
+        { "name": "Excellent", "sortOrder": 5, "score": 5, "assessmentCriteria": "Far above expectations" }
+      ]
+    },
+    {
+      "name": "Compliance",
+      "scaleType": "CATEGORY",
+      "isOrdered": true,
+      "isBinary": true,
+      "levels": [
+        { "name": "Not compliant", "sortOrder": 1, "assessmentCriteria": "The requirement is not met" },
+        { "name": "Compliant", "sortOrder": 2, "assessmentCriteria": "The requirement is met" }
+      ]
+    }
+  ]
+}

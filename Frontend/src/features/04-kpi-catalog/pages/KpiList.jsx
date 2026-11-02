@@ -15,13 +15,13 @@ import { useNotification } from '../../09-notifications/context/NotificationCont
 import { optionLabel } from '../../10-system/lib/settingValues';
 import KpiDetailDialog from '../components/KpiDetailDialog';
 import { IconAction } from '../components/RecordTable';
-import { fetchAllKpis, useKpis, useObjectives, useSaveRecord, useThemeTree } from '../hooks/useCatalog';
+import { fetchAllKpis, useKpis, useSaveRecord, useThemeTree } from '../hooks/useCatalog';
 import { MEASUREMENT_TYPES, themeNames, themeOptions, toOptions } from '../lib/kpiRules';
 
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
 const ALL = 'all';
-const NO_FILTERS = { themeId: ALL, strategicObjectiveId: ALL, measurementType: ALL, isActive: ALL };
+const NO_FILTERS = { themeId: ALL, measurementType: ALL, isActive: ALL };
 const STATUS_OPTIONS = [
   { value: ALL, label: 'All statuses' },
   { value: 'true', label: 'Active' },
@@ -37,22 +37,20 @@ const Filter = ({ allLabel, options, value, onChange }) => (
 const sentFilters = (filters) => Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ALL));
 
 const toSheetRow = (kpi, themes) => ({
-  Code: kpi.code,
   Name: kpi.name,
   Theme: themeNames(themes, kpi.themeId).theme ?? kpi.theme?.name ?? '',
   'Sub-Theme': themeNames(themes, kpi.themeId).subTheme ?? '',
-  'Strategic Objective': kpi.strategicObjective?.name ?? '',
   'Measurement Type': optionLabel(kpi.measurementType),
   Direction: optionLabel(kpi.direction),
   'Reporting Frequency': kpi.defaultFrequency?.name ?? '',
   Status: kpi.isActive ? 'Active' : 'Retired',
+  Remark: kpi.remark ?? '',
 });
 
 function KpiList({ onEdit, onReplace }) {
   const can = useCan();
   const { notify } = useNotification();
   const { data: themes = [] } = useThemeTree();
-  const { data: objectives = [] } = useObjectives();
   const save = useSaveRecord('kpis');
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -112,7 +110,7 @@ function KpiList({ onEdit, onReplace }) {
       { id: kpi.id, values: { isActive } },
       {
         onSuccess: () => {
-          notify(isActive ? `${kpi.code} is active again.` : `${kpi.code} was retired.`, 'success');
+          notify(isActive ? `${kpi.name} is active again.` : `${kpi.name} was retired.`, 'success');
           closeRetire();
         },
         onError: (failure) => {
@@ -139,10 +137,9 @@ function KpiList({ onEdit, onReplace }) {
     <div className="rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
         <div className="min-w-56 flex-1">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search by code or name..." />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search by name..." />
         </div>
         <Filter allLabel="All themes" options={themeOptions(themes)} value={filters.themeId} onChange={setFilter('themeId')} />
-        <Filter allLabel="All objectives" options={objectives.map((objective) => ({ value: objective.id, label: objective.name }))} value={filters.strategicObjectiveId} onChange={setFilter('strategicObjectiveId')} />
         <Filter allLabel="All types" options={toOptions(MEASUREMENT_TYPES)} value={filters.measurementType} onChange={setFilter('measurementType')} />
         <div className="w-40">
           <CustomSelect compact options={STATUS_OPTIONS} value={filters.isActive} onChange={setFilter('isActive')} />
@@ -170,7 +167,6 @@ function KpiList({ onEdit, onReplace }) {
                   <input type="checkbox" aria-label="Select all KPIs on this page" checked={allOnPageSelected} disabled={selectable.length === 0} onChange={togglePage} />
                 </TableHead>
               )}
-              <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Theme</TableHead>
               <TableHead>Sub-Theme</TableHead>
@@ -195,10 +191,9 @@ function KpiList({ onEdit, onReplace }) {
               <TableRow key={kpi.id}>
                 {canSelect && (
                   <TableCell>
-                    <input type="checkbox" aria-label={`Select ${kpi.code}`} checked={Boolean(selected[kpi.id])} disabled={!kpi.isActive} onChange={() => toggleKpi(kpi)} />
+                    <input type="checkbox" aria-label={`Select ${kpi.name}`} checked={Boolean(selected[kpi.id])} disabled={!kpi.isActive} onChange={() => toggleKpi(kpi)} />
                   </TableCell>
                 )}
-                <TableCell className="font-medium text-foreground">{kpi.code}</TableCell>
                 <TableCell>{kpi.name}</TableCell>
                 <TableCell>{themeNames(themes, kpi.themeId).theme ?? kpi.theme?.name ?? '-'}</TableCell>
                 <TableCell>{themeNames(themes, kpi.themeId).subTheme ?? '-'}</TableCell>
@@ -212,10 +207,10 @@ function KpiList({ onEdit, onReplace }) {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <IconAction icon={Eye} label={`View ${kpi.code}`} onClick={() => setViewing(kpi)} />
-                    {can('kpi:update') && <IconAction icon={Edit3} label={`Edit ${kpi.code}`} onClick={() => onEdit(kpi)} />}
-                    {can('kpi:create') && kpi.replacedBy?.length === 0 && <IconAction icon={Replace} label={`Replace ${kpi.code}`} onClick={() => onReplace(kpi)} />}
-                    {can('kpi:update') && kpi.replacedBy?.length === 0 && <IconAction icon={Power} label={`${kpi.isActive ? 'Retire' : 'Reactivate'} ${kpi.code}`} danger={kpi.isActive} onClick={() => (kpi.isActive ? setRetiring(kpi) : setActive(kpi, true))} />}
+                    <IconAction icon={Eye} label={`View ${kpi.name}`} onClick={() => setViewing(kpi)} />
+                    {can('kpi:update') && <IconAction icon={Edit3} label={`Edit ${kpi.name}`} onClick={() => onEdit(kpi)} />}
+                    {can('kpi:create') && kpi.replacedBy?.length === 0 && <IconAction icon={Replace} label={`Replace ${kpi.name}`} onClick={() => onReplace(kpi)} />}
+                    {can('kpi:update') && kpi.replacedBy?.length === 0 && <IconAction icon={Power} label={`${kpi.isActive ? 'Retire' : 'Reactivate'} ${kpi.name}`} danger={kpi.isActive} onClick={() => (kpi.isActive ? setRetiring(kpi) : setActive(kpi, true))} />}
                   </div>
                 </TableCell>
               </TableRow>
@@ -228,7 +223,7 @@ function KpiList({ onEdit, onReplace }) {
 
       {addingToContract && <AddToContractDialog kpis={selectedKpis} onAdded={removeFromSelection} onClose={() => setAddingToContract(false)} />}
       {viewing && <KpiDetailDialog kpi={viewing} onClose={() => setViewing(null)} />}
-      <ConfirmDialog open={Boolean(retiring)} onClose={closeRetire} title="Retire KPI" description={`Retire ${retiring?.code}? It stays in the history and can be reactivated, but it can no longer be chosen for new work.`} onConfirm={() => setActive(retiring, false)} error={save.error} pending={save.isPending} confirmLabel="Retire" />
+      <ConfirmDialog open={Boolean(retiring)} onClose={closeRetire} title="Retire KPI" description={`Retire ${retiring?.name}? It stays in the history and can be reactivated, but it can no longer be chosen for new work.`} onConfirm={() => setActive(retiring, false)} error={save.error} pending={save.isPending} confirmLabel="Retire" />
     </div>
   );
 }

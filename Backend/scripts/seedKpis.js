@@ -21,21 +21,17 @@ const idOf = async (model, where, label) => {
 };
 
 export const seedKpis = async () => {
-  for (const objective of samples.objectives) {
-    await prisma.strategicObjective.upsert({ where: { code: objective.code }, update: {}, create: objective });
-  }
   for (const theme of samples.themes) {
     await prisma.kpiTheme.upsert({ where: { code: theme.code }, update: {}, create: theme });
   }
 
   let added = 0;
-  for (const { theme, objective, frequency, unit, scale, currency, ...kpi } of samples.kpis) {
-    if (await prisma.kpi.findUnique({ where: { code: kpi.code } })) continue;
+  for (const { theme, frequency, unit, scale, currency, ...kpi } of samples.kpis) {
+    if (await prisma.kpi.findFirst({ where: { name: kpi.name } })) continue;
     await createKpi(
       {
         ...kpi,
         themeId: await idOf(prisma.kpiTheme, { code: theme }, `Theme ${theme}`),
-        strategicObjectiveId: await idOf(prisma.strategicObjective, { code: objective }, `Objective ${objective}`),
         defaultFrequencyId: await idOf(prisma.reportingFrequency, { name: frequency }, `Frequency ${frequency}`),
         ...(unit && { unitId: await idOf(prisma.measurementUnit, { name: unit }, `Unit ${unit}`) }),
         ...(scale && { scaleId: await idOf(prisma.kpiScale, { name: scale }, `Scale ${scale}`) }),

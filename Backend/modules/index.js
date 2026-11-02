@@ -37,7 +37,7 @@ router.use(profileRoutes); // 01 /auth/me (changes), /persons/:id/profile-pictur
 router.use(personRoutes); // 01 /persons, /users/:id/*
 router.use(officeRoutes); // 02 /office-types, /offices
 router.use(roleRoutes); // 03 /roles, /permissions, /office-persons, /office-person-roles, /auth/check-permission
-router.use(kpiRoutes); // 04 /fiscal-years, /strategic-objectives, /kpi-themes, /measurement-units, /reporting-frequencies, /kpi-scales, /currencies, /exchange-rates, /kpis
+router.use(kpiRoutes); // 04 /fiscal-years, /kpi-themes, /measurement-units, /reporting-frequencies, /kpi-scales, /currencies, /exchange-rates, /kpis
 router.use(contractRoutes); // 05 /contracts, /assignments, /change-requests
 router.use(periodRoutes); // 06 /reporting-periods
 router.use(performanceRoutes); // 07 /reports, /scorecards, /performance-thresholds

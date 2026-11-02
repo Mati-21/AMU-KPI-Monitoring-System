@@ -176,7 +176,7 @@ function UserList({ onAdd }) {
         <TablePagination currentPage={page} totalItems={data?.pagination?.total ?? 0} itemsPerPage={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
-      <ConfirmDialog open={Boolean(archiving)} onClose={closeArchive} title="Archive User" description={`Archive ${archiving?.fullName}? They can no longer sign in, and they leave this list, their offices and their roles. Their history stays.`} onConfirm={confirmArchive} error={archivePerson.error} pending={archivePerson.isPending} confirmLabel="Archive" />
+      <ConfirmDialog open={Boolean(archiving)} onClose={closeArchive} title="Archive User" description={`Archive ${archiving?.fullName}? This is permanent: they can no longer sign in, and they leave this list, their offices and their roles. Their email and staff number become free to register again. Their history stays.`} onConfirm={confirmArchive} error={archivePerson.error} pending={archivePerson.isPending} confirmLabel="Archive" />
     </>
   );
 }

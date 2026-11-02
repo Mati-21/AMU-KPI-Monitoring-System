@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatEthiopianDay } from '../../../shared/lib/ethiopianDate';
 import {
   BarChart3,
   Target,
@@ -235,7 +236,7 @@ const PerformanceDetailModal = ({ open, onOpenChange, kpi }) => {
                                 {entry.quarter}
                               </span>
                               <span className="text-[10px] text-muted-foreground">
-                                {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString() : 'N/A'}
+                                {entry.createdAt ? formatEthiopianDay(entry.createdAt) : 'N/A'}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">

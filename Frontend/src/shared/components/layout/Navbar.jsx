@@ -1,4 +1,5 @@
 import { Home, Bell, Moon, Sun, Layers, User, Settings, LogOut, MessageSquare, X } from 'lucide-react';
+import { formatEthiopianDateTime } from '../../lib/ethiopianDate';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -47,17 +48,7 @@ const Navbar = () => {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const audioUnlockedRef = useRef(false);
 
-  const formatDateLabel = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString(undefined, {
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDateLabel = formatEthiopianDateTime;
 
   const fetchUnreadCount = async () => {
     try {

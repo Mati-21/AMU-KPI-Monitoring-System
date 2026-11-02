@@ -13,11 +13,6 @@ export const activateFiscalYear = async (req, res) => send(res, await fiscalYear
 export const closeFiscalYear = async (req, res) => send(res, await fiscalYearService.closeFiscalYear(req.params.id, req.body || {}, actorOf(req)));
 export const reopenFiscalYear = async (req, res) => send(res, await fiscalYearService.reopenFiscalYear(req.params.id, req.body || {}, actorOf(req)));
 
-// ===== Strategic objectives =====
-export const listObjectives = async (req, res) => send(res, await catalogService.listObjectives({ isActive: req.query.isActive }));
-export const createObjective = async (req, res) => send(res, await catalogService.createObjective(req.body || {}, actorOf(req)), 201);
-export const updateObjective = async (req, res) => send(res, await catalogService.updateObjective(req.params.id, req.body || {}, actorOf(req)));
-
 // ===== Themes =====
 export const getThemeTree = async (req, res) => send(res, await catalogService.getThemeTree());
 export const createTheme = async (req, res) => send(res, await catalogService.createTheme(req.body || {}, actorOf(req)), 201);
@@ -52,8 +47,8 @@ export const createExchangeRate = async (req, res) => send(res, await catalogSer
 
 // ===== KPIs =====
 export const listKpis = async (req, res) => {
-  const { search, themeId, strategicObjectiveId, measurementType, direction, isActive, page, limit } = req.query;
-  const result = await kpiService.listKpis({ search, themeId, strategicObjectiveId, measurementType, direction, isActive, page, limit });
+  const { search, themeId, measurementType, direction, isActive, page, limit } = req.query;
+  const result = await kpiService.listKpis({ search, themeId, measurementType, direction, isActive, page, limit });
   res.json({ status: 'success', ...result });
 };
 export const getKpiById = async (req, res) => send(res, await kpiService.getKpiById(req.params.id));

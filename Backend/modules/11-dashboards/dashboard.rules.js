@@ -101,24 +101,6 @@ const scoreOfficialLines = (lines) =>
   );
 
 /**
- * Scores per strategic objective, using each KPI's own weight. Only official achievements are scored.
- */
-export const groupByObjective = (lines) => {
-  const groups = new Map();
-  for (const line of lines) {
-    const { strategicObjective } = line.kpi;
-    if (!groups.has(strategicObjective.id)) groups.set(strategicObjective.id, { strategicObjective, lines: [] });
-    groups.get(strategicObjective.id).lines.push(line);
-  }
-  return [...groups.values()]
-    .map((group) => {
-      const { totalWeight, reportedWeight, weightedImprovementScore, weightedTargetScore } = scoreOfficialLines(group.lines);
-      return { strategicObjective: group.strategicObjective, summary: summarize(group.lines), totalWeight, reportedWeight, weightedImprovementScore, weightedTargetScore };
-    })
-    .sort((a, b) => a.strategicObjective.code.localeCompare(b.strategicObjective.code));
-};
-
-/**
  * Best official score first. Offices with no official score are listed last rather than treated as zero.
  */
 export const compareOffices = (rows) => {
@@ -151,4 +133,4 @@ export const countEvidence = (values) => {
   };
 };
 
-export default { resultState, isSubmitted, isDue, pickCurrent, isRunningTotal, classifyOutcome, summarize, formatScore, groupByObjective, compareOffices, isOverdue, countEvidence };
+export default { resultState, isSubmitted, isDue, pickCurrent, isRunningTotal, classifyOutcome, summarize, formatScore, compareOffices, isOverdue, countEvidence };

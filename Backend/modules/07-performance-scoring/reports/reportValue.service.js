@@ -66,7 +66,7 @@ export const saveValues = async (reportId, { values } = {}, actor) => {
     const field = `values[${index}]`;
     const assignment = due.get(parseUuid(entry?.assignmentId, `${field}.assignmentId`));
     if (!assignment) throw badRequest(`${field}: this KPI is not reported in this period`);
-    if (!isDirectEntry(assignment, report.reportingPeriod)) throw badRequest(`${field}: ${assignment.kpi.code} is reported by its own periods and adds up here automatically`);
+    if (!isDirectEntry(assignment, report.reportingPeriod)) throw badRequest(`${field}: "${assignment.kpi.name}" is reported by its own periods and adds up here automatically`);
     rows.push({ assignmentId: assignment.id, ...(await parseEntry(assignment, entry, report.reportingPeriod, field)) });
   }
   if (new Set(rows.map((row) => row.assignmentId)).size !== rows.length) throw badRequest('A KPI can appear only once in values');
