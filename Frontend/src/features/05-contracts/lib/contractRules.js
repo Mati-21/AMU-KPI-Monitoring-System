@@ -18,6 +18,28 @@ export const REJECTED_ROW = 'bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:
 const OPEN_STATUSES = ['DRAFT', 'REJECTED'];
 
 export const isOpen = (record) => OPEN_STATUSES.includes(record.status);
+
+// A staff contract is given by an office to one person working in it
+export const isStaffContract = (contract) => Boolean(contract?.personId ?? contract?.person);
+export const personName = (person) => (person ? [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' ') : '');
+
+// Who a contract is for: the person of a staff contract, otherwise the office
+export const holderName = (contract) => (isStaffContract(contract) ? personName(contract.person) : contract.office.name);
+
+/**
+ * Whether the person signs a contract or flags its KPIs: on a staff contract only its person, on an office contract
+ * whoever acknowledges for the office.
+ */
+export const canReceive = (can, contract) => (isStaffContract(contract) ? Boolean(contract.isMine) : can('contract:acknowledge'));
+
+/**
+ * What can be done to one KPI of a contract right now: the office above edits or cancels it while the contract is
+ * with them; the receiving side flags it while the contract waits for its signature.
+ */
+export const assignmentActions = (can, assignment, contract, isClosed) => ({
+  change: !isClosed && can('contract:manage') && isOpen(assignment),
+  flag: !isClosed && canReceive(can, contract) && contract.status === 'SUBMITTED' && assignment.status === 'SUBMITTED',
+});
 export const isApproved = (assignment) => APPROVED_STATUSES.includes(assignment.status);
 export const rejectedRow = (record) => (record.status === 'REJECTED' ? REJECTED_ROW : '');
 export const isFlagged = (assignment) => assignment.status !== 'CANCELLED' && Boolean(assignment.reviewComment);
@@ -33,14 +55,15 @@ const onlyLive = (contract) => contract.assignments.filter((assignment) => assig
  */
 export const nextStep = (contract) => {
   const issuer = contract.assigningOffice?.name ?? 'The university';
-  if (contract.status === 'SUBMITTED') return flaggedCount(contract) > 0 ? `${flaggedCount(contract)} KPI(s) flagged. ${contract.office.name} rejects the contract, or removes the flags to sign it.` : `${contract.office.name} reviews it, then accepts and signs it, or flags KPIs and rejects it.`;
-  if (contract.status === 'SIGNED') return 'This contract is signed. Its KPIs can now pass down to the offices below.';
+  const holder = holderName(contract);
+  if (contract.status === 'SUBMITTED') return flaggedCount(contract) > 0 ? `${flaggedCount(contract)} KPI(s) flagged. ${holder} rejects the contract, or removes the flags to sign it.` : `${holder} reviews it, then accepts and signs it, or flags KPIs and rejects it.`;
+  if (contract.status === 'SIGNED') return isStaffContract(contract) ? `This contract is signed. ${holder} reports results on it under My Contract.` : 'This contract is signed. Its KPIs can now pass down to the offices below.';
   if (contract.status === 'REJECTED') return `${issuer} corrects the contract and assigns it again.`;
   if (contract.status !== 'DRAFT') return '';
   if (onlyLive(contract).length === 0) return `${issuer} adds the KPIs of this contract.`;
   if (!contract.isWeightBalanced) return `Make the weights total ${contract.requiredTotalWeight}. They now total ${contract.totalWeight}.`;
   if (!contract.assigningOfficeId) return `${contract.office.name} approves and signs its self contract.`;
-  return `${issuer} assigns the contract to ${contract.office.name}.`;
+  return `${issuer} assigns the contract to ${holder}.`;
 };
 
 // Shared equally or fully, the server works the target out, so none is sent
@@ -59,28 +82,47 @@ export const blockedReason = (contract, kpi) => {
 };
 
 /**
- * A baseline or target as people read it, following the KPI's measurement type.
+ * A baseline or target as people read it, following the KPI's measurement type. `withUnit` false leaves the unit
+ * out, for tables with a Unit column.
  */
-export const measureText = (kpi, row) => {
+export const measureText = (kpi, row, withUnit = true) => {
   if (!row) return '-';
   if (BASELINE_WORDS[row.baselineStatus]) return BASELINE_WORDS[row.baselineStatus];
   if (row.scaleLevel) return row.scaleLevel.name;
   if (row.value === null || row.value === undefined) return '-';
 
   const value = Number(row.value);
+  if (!withUnit) return String(value);
   if (kpi.measurementType === 'PERCENTAGE') return `${value}%`;
   if (kpi.measurementType === 'MONEY') return `${value} ${kpi.currency?.code ?? ''}`.trim();
   return `${value} ${kpi.unit?.symbol ?? ''}`.trim();
 };
 
 /**
- * Offices that can get a contract this year: those the server offers (directly below the person's own office, or
- * their own top office) that have no contract yet.
+ * Who can get a new contract this year, as one list: the offices the server offers (directly below the person's own
+ * office, or their own top office), then the people working in the person's own office for a staff contract.
+ * Those already holding a contract are left out. Each value says which it is.
  */
-export const contractOfficeOptions = (offices, contracts) => {
-  const taken = new Set(contracts.map((contract) => contract.officeId));
-  return offices.filter((office) => !taken.has(office.id)).map((office) => ({ value: office.id, label: office.name }));
+export const contractHolderOptions = (offices, people, contracts) => {
+  const officesTaken = new Set(contracts.filter((contract) => !isStaffContract(contract)).map((contract) => contract.officeId));
+  const peopleTaken = new Set(contracts.filter(isStaffContract).map((contract) => `${contract.personId}:${contract.officeId}`));
+  return [
+    ...offices.filter((office) => !officesTaken.has(office.id)).map((office) => ({ value: `office:${office.id}`, label: `Office: ${office.name}` })),
+    ...people
+      .filter((person) => !peopleTaken.has(`${person.id}:${person.officeId}`))
+      .map((person) => ({ value: `person:${person.id}:${person.officeId}`, label: `Staff: ${person.name}${person.isYou ? ' (you)' : ''}, ${person.position ?? 'Staff'}, ${person.officeName}` })),
+  ];
 };
+
+// The request body for a holder chosen from contractHolderOptions
+export const holderPayload = (value) => {
+  const [kind, id, officeId] = value.split(':');
+  return kind === 'person' ? { personId: id, officeId } : { officeId: id };
+};
+
+// The contract a contract's KPIs come from: the office above, or for a staff contract the office's own contract
+export const sourceContractOf = (contract, contracts) =>
+  isStaffContract(contract) ? contracts.find((candidate) => !isStaffContract(candidate) && candidate.officeId === contract.officeId) : contracts.find((candidate) => !isStaffContract(candidate) && candidate.officeId === contract.assigningOfficeId);
 
 /**
  * What can still be added to a contract: for the top office any active KPI, for the others only what the office

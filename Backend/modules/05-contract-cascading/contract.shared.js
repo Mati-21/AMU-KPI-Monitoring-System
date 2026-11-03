@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database.js';
-import { PERMISSIONS } from '../../config/permissions.js';
+import { PERMISSIONS, SUPER_ADMIN_PERMISSION } from '../../config/permissions.js';
+import { ownOfficeOf } from '../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { parseUuid } from '../../utils/validation.js';
 import { getSetting } from '../10-system-governance/system.service.js';
@@ -20,7 +21,7 @@ const ASSIGNED_STATUSES = ['SUBMITTED', ...APPROVED_STATUSES];
 // The office that gives the contract. The top office has none above it, so its own authority covers its self contract.
 const authorityOfficeOf = (contract) => contract.assigningOfficeId ?? contract.officeId;
 
-const hasAuthorityFromAbove = (actor, code, contract) => actor.access.can(code, authorityOfficeOf(contract));
+export const hasAuthorityFromAbove = (actor, code, contract) => actor.access.can(code, authorityOfficeOf(contract));
 
 export const assertAuthorityFromAbove = async (actor, code, contract) => {
   if (await hasAuthorityFromAbove(actor, code, contract)) return;
@@ -28,8 +29,33 @@ export const assertAuthorityFromAbove = async (actor, code, contract) => {
   throw forbidden(`You need ${code} authority over ${office?.name ?? 'the assigning office'}, which gives this contract. Check that your role has it and applies to that office`);
 };
 
+/**
+ * The offices a person manages contracts from: where each contract:manage role applies, without the offices below it.
+ * Contracts pass down one level at a time, so only these offices create contracts for the offices directly below them
+ * and decide how much of a KPI they keep.
+ */
+export const contractHomeOffices = (actor) => new Set(actor.access.grants.filter((grant) => grant.code === PERMISSIONS.CONTRACT_MANAGE || grant.code === SUPER_ADMIN_PERMISSION).map(ownOfficeOf));
+
 export const assertAuthorityOnOffice = async (actor, code, officeId) => {
   if (!(await actor.access.can(code, officeId))) throw forbidden(`You need ${code} authority over the receiving office`);
+};
+
+// ===== Staff contracts =====
+// An office can give a contract to one person working in it: a staff member, or its head for their own work. It holds
+// KPIs from the office's own contract. The office gives and changes it; only that person signs it and reports on it.
+
+export const isStaffContract = (contract) => Boolean(contract.personId);
+export const isOwnStaffContract = (actor, contract) => isStaffContract(contract) && contract.personId === actor.personId;
+
+/**
+ * Whether the person may do the receiving side's work on a contract: sign it, enter and submit its results, attach
+ * evidence. On a staff contract only its person; on an office contract whoever holds the permission for that office.
+ */
+export const worksOnContract = async (actor, code, contract) => (isStaffContract(contract) ? isOwnStaffContract(actor, contract) : actor.access.can(code, contract.officeId));
+
+export const assertWorksOnContract = async (actor, code, contract) => {
+  if (await worksOnContract(actor, code, contract)) return;
+  throw forbidden(isStaffContract(contract) ? 'Only the person this contract belongs to can do this' : `You need ${code} authority over the receiving office`);
 };
 
 /**
@@ -47,14 +73,17 @@ const readsFromAbove = (actor, contract) => actor.access.can(PERMISSIONS.CONTRAC
 /**
  * Either side of a contract, whatever its status.
  */
-export const canReadEitherSide = async (actor, contract) => (await readsFromAbove(actor, contract)) || actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+export const canReadEitherSide = async (actor, contract) =>
+  isOwnStaffContract(actor, contract) || (await readsFromAbove(actor, contract)) || (!isStaffContract(contract) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId));
 
 /**
  * A draft or rejected contract is with the office above, so the receiving office sees it only once it is assigned.
  */
 export const canSeeContract = async (actor, contract) => {
   if (await readsFromAbove(actor, contract)) return true;
-  return !OPEN_CONTRACT_STATUSES.includes(contract.status) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+  if (OPEN_CONTRACT_STATUSES.includes(contract.status)) return false;
+  // A staff contract is seen by its person and by those who give it, never by the rest of the office
+  return isStaffContract(contract) ? isOwnStaffContract(actor, contract) : actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
 };
 
 /**
@@ -62,14 +91,16 @@ export const canSeeContract = async (actor, contract) => {
  */
 export const canSeeAssignment = async (actor, contract, status) => {
   if (await readsFromAbove(actor, contract)) return true;
-  return ASSIGNED_STATUSES.includes(status) && actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
+  if (!ASSIGNED_STATUSES.includes(status)) return false;
+  return isStaffContract(contract) ? isOwnStaffContract(actor, contract) : actor.access.can(PERMISSIONS.CONTRACT_READ, contract.officeId);
 };
 
 const OFFICE_REF = { select: { id: true, name: true, code: true } };
+export const PERSON_REF = { select: { id: true, firstName: true, middleName: true, lastName: true } };
 const current = { where: { isCurrent: true }, take: 1 };
 
 export const ASSIGNMENT_INCLUDE = {
-  contract: { include: { office: OFFICE_REF, assigningOffice: OFFICE_REF, fiscalYear: { select: { id: true, name: true, status: true } } } },
+  contract: { include: { office: OFFICE_REF, assigningOffice: OFFICE_REF, person: PERSON_REF, fiscalYear: { select: { id: true, name: true, status: true } } } },
   kpi: {
     include: {
       unit: { select: { id: true, name: true, symbol: true } },
@@ -109,6 +140,7 @@ export const formatAssignment = (assignment) => {
     kpi: kpiSummary(kpi),
     office: contract.office,
     assigningOffice: contract.assigningOffice,
+    person: contract.person,
     fiscalYear: contract.fiscalYear,
     baseline,
     target,

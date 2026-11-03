@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import * as contractController from './contract.controller.js';
-import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { protect, withAccess, requirePermission } from '../../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
 const canRead = requirePermission(PERMISSIONS.CONTRACT_READ);
 const canManage = requirePermission(PERMISSIONS.CONTRACT_MANAGE);
 const canApprove = requirePermission(PERMISSIONS.CONTRACT_APPROVE);
-const canAcknowledge = requirePermission(PERMISSIONS.CONTRACT_ACKNOWLEDGE);
 const canRequest = requirePermission(PERMISSIONS.CONTRACT_REQUEST_CHANGE, PERMISSIONS.CONTRACT_MANAGE);
+// Reading, signing, rejecting and flagging need only a signed-in person: someone with a staff contract does them
+// without any contract permission, and the service checks who may act on which contract
 
 /**
  * @swagger
@@ -49,7 +50,7 @@ const canRequest = requirePermission(PERMISSIONS.CONTRACT_REQUEST_CHANGE, PERMIS
  *       201: { description: Created }
  *       409: { description: Office already has a contract, or the year is closed }
  */
-router.get('/contracts', protect, canRead, contractController.listContracts);
+router.get('/contracts', protect, withAccess, contractController.listContracts);
 router.post('/contracts', protect, canManage, contractController.createContract);
 
 /**
@@ -64,6 +65,19 @@ router.post('/contracts', protect, canManage, contractController.createContract)
 router.get('/contract-offices', protect, canManage, contractController.listContractOffices);
 
 /**
+ * @openapi
+ * /api/contract-people:
+ *   get:
+ *     tags: [Contracts]
+ *     summary: People who can be given a staff contract
+ *     description: Everyone working today in an office where the person manages contracts, themselves included.
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: People with their office and position }
+ */
+router.get('/contract-people', protect, canManage, contractController.listContractPeople);
+
+/**
  * @swagger
  * /api/v1/contracts/{id}:
  *   get:
@@ -74,7 +88,7 @@ router.get('/contract-offices', protect, canManage, contractController.listContr
  *     responses:
  *       200: { description: "Contract with assignments, totalWeight and isWeightBalanced" }
  */
-router.get('/contracts/:id', protect, canRead, contractController.getContractById);
+router.get('/contracts/:id', protect, withAccess, contractController.getContractById);
 
 /**
  * @swagger
@@ -156,8 +170,8 @@ router.patch('/contracts/:id/assign', protect, canManage, contractController.ass
  *       409: { description: Not a draft self contract }
  */
 router.post('/contracts/:id/kpi-import', protect, canManage, contractController.importIntoContract);
-router.patch('/contracts/:id/reject', protect, canAcknowledge, contractController.rejectContract);
-router.patch('/contracts/:id/sign', protect, canAcknowledge, contractController.signContract);
+router.patch('/contracts/:id/reject', protect, withAccess, contractController.rejectContract);
+router.patch('/contracts/:id/sign', protect, withAccess, contractController.signContract);
 
 /**
  * @swagger
@@ -271,7 +285,7 @@ router.put('/assignments/:id', protect, canManage, contractController.updateAssi
  *     responses:
  *       200: { description: Cancelled }
  */
-router.patch('/assignments/:id/flag', protect, canAcknowledge, contractController.flagAssignment);
+router.patch('/assignments/:id/flag', protect, withAccess, contractController.flagAssignment);
 router.patch('/assignments/:id/cancel', protect, canManage, contractController.cancelAssignment);
 
 /**
@@ -319,34 +333,6 @@ router.post('/assignments/:id/baseline/evidence', protect, canManage, contractCo
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
  *       200: { description: "Sharing; shareable is false for rates and other KPIs that cannot be split" }
- *   put:
- *     summary: Save how this KPI is shared, replacing the previous split
- *     description: Shares and the kept amount must reach at least the improvement. More is allowed. A KPI still in draft on an office's contract takes its new target from its share.
- *     tags: [Contracts & Cascading]
- *     parameters:
- *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [distributionMethod, shares]
- *             properties:
- *               distributionMethod: { type: string, enum: [EQUAL, CUSTOM] }
- *               retainedAmount: { type: number, example: 10 }
- *               shares:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required: [officeId, amount]
- *                   properties:
- *                     officeId: { type: string, format: uuid }
- *                     amount: { type: number, example: 20 }
- *     responses:
- *       200: { description: Saved }
- *       400: { description: "Short of the improvement, or an invalid split" }
- *       409: { description: "An office already has this KPI, or the KPI cannot be shared" }
  * /api/v1/assignments/{id}/reconciliation:
  *   patch:
  *     summary: Formally justify a difference that stays
@@ -362,7 +348,25 @@ router.post('/assignments/:id/baseline/evidence', protect, canManage, contractCo
  *       200: { description: Justified }
  */
 router.get('/assignments/:id/allocations', protect, canRead, contractController.getAllocations);
-router.put('/assignments/:id/allocations', protect, canManage, contractController.saveAllocations);
+
+/**
+ * @swagger
+ * /api/v1/assignments/{id}/kept:
+ *   put:
+ *     summary: Keep part of a received KPI for the office's own work, beside what it gives to the offices below
+ *     tags: [Contracts & Cascading]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { type: object, required: [amount], properties: { amount: { type: number, example: 6, description: 0 keeps nothing } } }
+ *     responses:
+ *       200: { description: The sharing with the kept part }
+ *       400: { description: More than the offices below left }
+ */
+router.put('/assignments/:id/kept', protect, canManage, contractController.saveKept);
 router.patch('/assignments/:id/reconciliation', protect, canManage, contractController.justifyReconciliation);
 
 // ===== Change requests =====

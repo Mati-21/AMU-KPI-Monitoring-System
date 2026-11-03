@@ -6,7 +6,7 @@ import { useFrequencies } from '../../04-kpi-catalog/hooks/useCatalog';
 import { usePeriods } from '../../06-reporting-periods/hooks/usePlanning';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useSaveAssignment } from '../hooks/useContracts';
-import { assignmentPayload, changedPayload, defaultsForKpi, formFromAssignment, frequencyChoices, hasLevels, shareFor, sharedTarget } from '../lib/contractRules';
+import { assignmentPayload, changedPayload, defaultsForKpi, formFromAssignment, frequencyChoices, hasLevels, holderName, isStaffContract, measureText, shareFor, sharedTarget } from '../lib/contractRules';
 import AssignmentValueFields from './AssignmentValueFields';
 import ParentKpiSummary from './ParentKpiSummary';
 import ShareMethodField from './ShareMethodField';
@@ -15,22 +15,26 @@ import ShareMethodField from './ShareMethodField';
  * Add a KPI to a contract, or edit one still in draft. `choices` lists what can be added, and `kpi` is the
  * catalog record of the assignment being edited. Below the top office the KPI comes from the office above: how its
  * target is shared decides this office's target, and it is reported as often as above or more often.
+ * On a staff contract the KPI comes from the office's own contract: nothing is shared, and the target is typed in.
  */
 const AssignmentFormDialog = ({ contract, assignment, kpi: editedKpi, parentContract, choices = [], onClose }) => {
   const { notify } = useNotification();
   const save = useSaveAssignment();
   const { data: frequencies = [] } = useFrequencies();
   const { data: periods = [] } = usePeriods(contract.fiscalYear.id);
+  const isStaff = isStaffContract(contract);
   const [kpiId, setKpiId] = useState('');
   const [form, setForm] = useState(() => (assignment ? formFromAssignment(assignment) : defaultsForKpi()));
 
   const choice = choices.find((item) => item.kpi.id === kpiId);
   const kpi = editedKpi ?? choice?.kpi;
-  const parent = choice?.parent ?? parentContract?.assignments.find((candidate) => candidate.id === assignment?.parentAssignmentId);
+  const parent = choice?.parent ?? parentContract?.assignments.find((candidate) => candidate.id === (assignment?.parentAssignmentId ?? assignment?.sourceAssignmentId));
+  // Only a KPI passed to an office below is shared; a staff contract's comes from the office's own contract
+  const shareParent = isStaff ? null : parent;
   // While editing, the way the KPI above is shared counts until another is chosen here
-  const shareMethod = parent ? (form.shareMethod ?? parent.sharing?.method ?? 'CUSTOM') : undefined;
-  const current = parent ? { ...form, shareMethod } : form;
-  const targetNote = kpi && parent ? sharedTarget(kpi, parent, shareMethod, current, contract.officeId) : null;
+  const shareMethod = shareParent ? (form.shareMethod ?? shareParent.sharing?.method ?? 'CUSTOM') : undefined;
+  const current = shareParent ? { ...form, shareMethod } : form;
+  const targetNote = kpi && shareParent ? sharedTarget(kpi, shareParent, shareMethod, current, contract.officeId) : null;
 
   // Only frequencies the year has periods for, because a KPI is reported only in periods of its own frequency
   const usable = frequencies.filter((frequency) => periods.some((period) => period.frequencyId === frequency.id));
@@ -46,7 +50,7 @@ const AssignmentFormDialog = ({ contract, assignment, kpi: editedKpi, parentCont
   const chooseKpi = (id) => {
     const next = choices.find((item) => item.kpi.id === id);
     setKpiId(id);
-    setForm(defaultsForKpi(next.kpi, next.parent));
+    setForm(isStaff ? { ...defaultsForKpi(next.kpi), reportingFrequencyId: next.parent.reportingFrequencyId } : defaultsForKpi(next.kpi, next.parent));
   };
 
   const close = () => {
@@ -56,7 +60,7 @@ const AssignmentFormDialog = ({ contract, assignment, kpi: editedKpi, parentCont
 
   const submit = (event) => {
     event.preventDefault();
-    const values = assignment ? changedPayload(kpi, current, formFromAssignment(assignment, parent)) : { kpiId, ...(choice.parent && { parentAssignmentId: choice.parent.id }), ...assignmentPayload(kpi, current) };
+    const values = assignment ? changedPayload(kpi, current, formFromAssignment(assignment, shareParent)) : { kpiId, ...(choice.parent && { parentAssignmentId: choice.parent.id }), ...assignmentPayload(kpi, current) };
     if (assignment && Object.keys(values).length === 0) {
       close();
       return;
@@ -78,18 +82,22 @@ const AssignmentFormDialog = ({ contract, assignment, kpi: editedKpi, parentCont
       onClose={close}
       className="sm:max-w-3xl"
       title={assignment ? `Edit ${assignment.kpi.name}` : 'Add KPI'}
-      description={`For ${contract.office.name}, ${contract.fiscalYear.name}.`}
+      description={`For ${holderName(contract)}, ${contract.fiscalYear.name}.`}
       onSubmit={submit}
       error={save.error}
       pending={save.isPending}
       submitLabel={assignment ? 'Save' : 'Add KPI'}
-      submitDisabled={!kpi || !offered.some((frequency) => frequency.id === form.reportingFrequencyId) || !hasLevels(kpi, current) || (parent && !shareMethod) || Boolean(targetNote?.problem)}
+      submitDisabled={!kpi || !offered.some((frequency) => frequency.id === form.reportingFrequencyId) || !hasLevels(kpi, current) || (shareParent && !shareMethod) || Boolean(targetNote?.problem)}
     >
       {assignment ? (
         <p className="text-sm font-medium text-foreground">{assignment.kpi.name}</p>
       ) : choices.length === 0 ? (
         <p className="rounded-md border border-border p-3 text-sm text-foreground">
-          {contract.assigningOfficeId ? `${contract.assigningOffice.name} has no signed KPI to pass down yet. Its own contract must be signed first.` : 'No KPI is available. Register an active KPI under KPI Management, or check whether every one is already on this contract.'}
+          {isStaff
+            ? `${contract.office.name} has no signed KPI left to give. Its own contract must be signed first, and every KPI on it may already be on this contract.`
+            : contract.assigningOfficeId
+              ? `${contract.assigningOffice.name} has no signed KPI to pass down yet. Its own contract must be signed first.`
+              : 'No KPI is available. Register an active KPI under KPI Management, or check whether every one is already on this contract.'}
         </p>
       ) : (
         <Field label="KPI" required group>
@@ -99,8 +107,13 @@ const AssignmentFormDialog = ({ contract, assignment, kpi: editedKpi, parentCont
 
       {kpi && (
         <>
-          {parent && <ParentKpiSummary kpi={kpi} parent={parent} fromOffice={contract.assigningOffice} toOffice={contract.office} share={shareFor(parent, contract.officeId)} shareMethod={shareMethod} />}
-          {parent?.sharing && <ShareMethodField parent={parent} fromOffice={contract.assigningOffice} value={shareMethod ?? ''} onChange={set('shareMethod')} />}
+          {isStaff && parent && (
+            <p className="rounded-md border border-border p-3 text-sm text-foreground">
+              {contract.office.name}&apos;s own target is {measureText(kpi, parent.target)}, from a baseline of {measureText(kpi, parent.baseline)}. Set {holderName(contract)}&apos;s part of it below.
+            </p>
+          )}
+          {shareParent && <ParentKpiSummary kpi={kpi} parent={shareParent} fromOffice={contract.assigningOffice} toOffice={contract.office} share={shareFor(shareParent, contract.officeId)} shareMethod={shareMethod} />}
+          {shareParent?.sharing && <ShareMethodField parent={shareParent} fromOffice={contract.assigningOffice} value={shareMethod ?? ''} onChange={set('shareMethod')} />}
 
           <AssignmentValueFields kpi={kpi} form={form} onChange={setForm} targetNote={targetNote} weightHint={`Other KPIs use ${others} of ${contract.requiredTotalWeight}, leaving ${contract.requiredTotalWeight - others}.`} />
 

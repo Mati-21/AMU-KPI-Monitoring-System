@@ -1,4 +1,4 @@
-import { Home, Bell, Moon, Sun, Layers, User, Settings, LogOut, MessageSquare, X } from 'lucide-react';
+import { Bell, Building2, Moon, Sun, Layers, User, Settings, LogOut, MessageSquare, X } from 'lucide-react';
 import { formatEthiopianDateTime } from '../../lib/ethiopianDate';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -35,6 +35,9 @@ const Navbar = () => {
   const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
   const displayRole = String(user?.role || user?.roleName || 'User').trim();
   const [showFullRole, setShowFullRole] = useState(false);
+  // The office the person works in: their primary placement, or the first one
+  const placement = user?.placements?.find((item) => item.isPrimary) ?? user?.placements?.[0];
+  const otherOffices = Math.max(0, (user?.placements?.length ?? 0) - 1);
 
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationLoading, setNotificationLoading] = useState(false);
@@ -296,17 +299,28 @@ const Navbar = () => {
 
   return (isAuthenticated && !isLandingPage) ? (
     <header className="h-16 bg-[var(--navbar-background)] border-b border-[var(--navbar-border)] flex items-center justify-between px-6 w-full">
-      <div className="flex items-center gap-4">
-        <button className="p-2 rounded-lg hover:bg-muted">
-          <Home className="w-5 h-5 text-muted-foreground" />
-        </button>
-
-        <button className="p-2 rounded-lg hover:bg-muted" onClick={toggleTheme}>
-          {isDark ? <Sun className="w-5 h-5 text-muted-foreground" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
-        </button>
+      <div className="flex min-w-0 items-center gap-3">
+        {placement && (
+          <>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground" title={placement.office?.name}>
+                {placement.office?.name}
+                {otherOffices > 0 && <span className="ml-1 text-xs font-normal text-muted-foreground">+{otherOffices} more</span>}
+              </p>
+              {placement.position?.title && <p className="truncate text-xs text-muted-foreground">{placement.position.title}</p>}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
+        <button type="button" className="p-2 rounded-lg hover:bg-muted" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Light mode' : 'Dark mode'}>
+          {isDark ? <Sun className="w-5 h-5 text-muted-foreground" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
+        </button>
+
         {location.pathname === '/direct-messages' ? (
           <button
             type="button"

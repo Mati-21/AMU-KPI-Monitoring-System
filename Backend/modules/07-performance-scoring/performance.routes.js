@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import reportRoutes from './reports/report.routes.js';
 import scoringRoutes from './scoring/scoring.routes.js';
+import sheetRoutes from './sheets/sheet.routes.js';
 import thresholdRoutes from './thresholds/threshold.routes.js';
 
 /**
@@ -8,6 +9,7 @@ import thresholdRoutes from './thresholds/threshold.routes.js';
  *   rules/       calculations only, with no database access
  *   reports/     entering, submitting and reviewing results
  *   scoring/     achievements, roll-ups, contract scores and scorecards
+ *   sheets/      the year views: the performance sheet for entering results and the year report
  *   thresholds/  the university's performance bands
  *
  * @swagger
@@ -19,6 +21,7 @@ const router = Router();
 
 router.use(reportRoutes);
 router.use(scoringRoutes);
+router.use(sheetRoutes);
 router.use(thresholdRoutes);
 
 export default router;

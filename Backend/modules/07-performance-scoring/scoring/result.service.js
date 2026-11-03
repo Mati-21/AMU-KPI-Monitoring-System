@@ -1,12 +1,13 @@
 import { prisma } from '../../../config/database.js';
 import { toNumber } from '../../05-contract-cascading/measurement.js';
-import { APPROVED_STATUSES } from '../../05-contract-cascading/contract.shared.js';
+import { APPROVED_STATUSES, PERSON_REF } from '../../05-contract-cascading/contract.shared.js';
 import { addDays } from '../../06-reporting-periods/period.rules.js';
-import { aggregateOffices, combineDirectAndAggregated, rollUpPeriods } from '../rules/aggregation.rules.js';
+import { aggregateOffices, combineDirectAndAggregated, combineStaff, rollUpPeriods } from '../rules/aggregation.rules.js';
 
 /**
  * Module 07 — Where a KPI's result comes from for one period:
- *  - the office's own figure (DIRECT), plus what its subordinate offices achieved (AGGREGATED), giving the TOTAL;
+ *  - the office's own figure (DIRECT), plus what its subordinate offices achieved (AGGREGATED), giving the TOTAL.
+ *    When people of the office hold the KPI on their staff contracts, its own figure is theirs added up, not typed;
  *  - or, in a longer period such as the year end, the approved totals of the shorter periods inside it.
  * Only approved results of other reports count. Nothing here writes to the database.
  */
@@ -26,6 +27,16 @@ export const LINE_INCLUDE = {
       id: true,
       reportingFrequencyId: true,
       contract: { select: { office: { select: { id: true, name: true, code: true } } } },
+      weights: { where: { isCurrent: true }, take: 1, select: { weight: true } },
+    },
+  },
+  // The parts of this KPI the office gave its own people on their staff contracts
+  staffParts: {
+    where: { status: { in: APPROVED_STATUSES } },
+    select: {
+      id: true,
+      reportingFrequencyId: true,
+      contract: { select: { office: { select: { id: true, name: true, code: true } }, person: PERSON_REF } },
       weights: { where: { isCurrent: true }, take: 1, select: { weight: true } },
     },
   },
@@ -98,6 +109,7 @@ const childResult = async (child, kpi, period) => {
   return {
     assignmentId: child.id,
     office: child.contract.office,
+    ...(child.contract.person && { person: child.contract.person }),
     result: rollUpPeriods(kpi, rows.map(toResult)),
     isComplete: expected > 0 && rows.length >= expected,
     targetMet: latest?.targetMet ?? null,
@@ -116,32 +128,46 @@ const resolveFromShorterPeriods = async (assignment, period) => {
     direct: null,
     aggregated: { kind: 'NONE' },
     children: [],
+    staff: [],
+    fromStaff: false,
     total: rollUpPeriods(assignment.kpi, rows.map(toResult)),
     scorePercent: null,
+    needsOwnFigure: false,
+    retained: 0,
     isComplete: expected > 0 && rows.length >= expected,
   };
 };
 
 /**
  * Result of a KPI reported in this very period: own figure plus subordinate offices.
- * directRow is the office's DIRECT value on this report, if any.
+ * directRow is the office's DIRECT value on this report, if any. Where the office's people hold the KPI, its own
+ * figure is their approved results added up instead, whatever is stored.
  */
 const resolveFromOfficeWork = async (assignment, period, directRow) => {
-  const direct = toResult(directRow);
+  const staff = await Promise.all((assignment.staffParts ?? []).map((part) => childResult(part, assignment.kpi, period)));
+  const fromStaff = staff.length > 0;
+  const direct = fromStaff ? combineStaff(assignment.kpi, staff) : toResult(directRow);
   const children = await Promise.all(assignment.children.map((child) => childResult(child, assignment.kpi, period)));
   const aggregated = aggregateOffices(assignment.kpi, children);
   const total = combineDirectAndAggregated(assignment.kpi, assignment.scopeRelation, direct, aggregated);
   const scorePercent = aggregated.kind === 'SCORE' ? aggregated.scorePercent : null;
 
   const retainsWork = assignment.allocationsGiven.some((row) => toNumber(row.allocatedAmount) > 0);
-  const needsOwnFigure = children.length === 0 || retainsWork || assignment.scopeRelation !== 'EXCLUSIVE_COMPLETE';
+  // Bottom offices and offices that kept part of the target do their own work. They type its figure, unless their
+  // people hold the KPI, whose results make it up.
+  const doesOwnWork = children.length === 0 || retainsWork;
+  const needsOwnFigure = doesOwnWork && !fromStaff;
   return {
     direct,
     aggregated,
     children,
+    staff,
+    fromStaff,
     total: scorePercent === null ? total : null,
     scorePercent,
-    isComplete: children.every((child) => child.isComplete) && (!needsOwnFigure || Boolean(direct) || scorePercent !== null),
+    needsOwnFigure,
+    retained: assignment.allocationsGiven.reduce((sum, row) => sum + (toNumber(row.allocatedAmount) ?? 0), 0),
+    isComplete: children.every((child) => child.isComplete) && staff.every((part) => part.isComplete) && (!needsOwnFigure || Boolean(direct) || scorePercent !== null),
   };
 };
 

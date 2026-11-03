@@ -14,7 +14,8 @@ const Sidebar = () => {
   const logoUrl = getFileUrl(systemSettings?.systemLogo);
 
   const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
-  const hiddenForAdminLabels = new Set(['Performance', 'KPI Approvals', 'Drived KPI Allocation', 'Sub Unit', 'Registered KPIs', 'Report']);
+  // The Super Admin needs Performance and Report too: to allow late submissions, reopen reports and read results
+  const hiddenForAdminLabels = new Set(['Registered KPIs', 'My Contract']);
 
   const canAccessFullUserManagement = permissionUtils.hasPermission(userPermissions, [
     permissionUtils.permissionKey('view', 'User Management'),

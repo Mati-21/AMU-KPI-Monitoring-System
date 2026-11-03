@@ -46,9 +46,10 @@ const ParentKpiSummary = ({ kpi, parent, fromOffice, toOffice, share, shareMetho
 
       {divided ? (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className={`grid grid-cols-2 gap-3 ${sharing.retained > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
             <Fact label="To Share">{amount(sharing.parentAmount)}</Fact>
-            <Fact label="Shared So Far">{amount(sharing.assigned)}</Fact>
+            {sharing.retained > 0 && <Fact label={`Kept by ${fromOffice.name}`}>{amount(sharing.retained)}</Fact>}
+            <Fact label="Shared So Far">{amount(sharing.distributed)}</Fact>
             <Fact label="Remaining to Meet It" tone={remaining > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}>
               {remaining > 0 ? amount(remaining) : sharing.difference > 0 ? `None, over by ${amount(sharing.difference)}` : 'None'}
             </Fact>

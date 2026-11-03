@@ -112,6 +112,21 @@ export const aggregateOffices = (kpi, children) => {
 };
 
 /**
+ * An office's own figure for a KPI its people hold on their staff contracts: counts and amounts add up, percentages
+ * and ratios add their two parts, and anything else (a stage, a rating, an average) is only as strong as the weakest
+ * person. Null until someone's result is approved.
+ */
+const staffMethod = (kpi) => {
+  if (kpi.isAdditive) return 'SUM';
+  return ['PERCENTAGE', 'RATIO'].includes(kpi.measurementType) ? 'RATIO_OF_SUMS' : 'WEAKEST_LINK';
+};
+
+export const combineStaff = (kpi, staff) => {
+  const combined = aggregateOffices({ ...kpi, aggregationMethod: staffMethod(kpi) }, staff);
+  return combined.kind === 'VALUE' ? combined.result : null;
+};
+
+/**
  * The parent's total, without double counting (SRS 8.4).
  * Exclusive, complete scopes add the parent's own direct work to what its offices did. Where scopes overlap, or the KPI
  * measures an institution-wide outcome, adding would double count, so the parent's own reported figure stands.
@@ -120,10 +135,11 @@ export const combineDirectAndAggregated = (kpi, scopeRelation, direct, aggregate
   const directResult = hasResult(direct) ? direct : null;
   if (aggregated.kind !== 'VALUE') return directResult;
   if (kpi.aggregationMethod === 'WEAKEST_LINK') return aggregated.result;
-  if (scopeRelation !== 'EXCLUSIVE_COMPLETE') return directResult;
+  // Overlapping offices cannot be added to the parent's own work: its own figure wins, otherwise the offices below
+  if (scopeRelation !== 'EXCLUSIVE_COMPLETE') return directResult ?? aggregated.result;
   if (!directResult) return aggregated.result;
   if (kpi.aggregationMethod === 'RATIO_OF_SUMS') return ratioOfSums(kpi, [directResult, aggregated.result]);
   return { ...emptyResult, value: round4(toNumber(directResult.value) + toNumber(aggregated.result.value)) };
 };
 
-export default { rollUpPeriods, aggregateOffices, combineDirectAndAggregated };
+export default { rollUpPeriods, aggregateOffices, combineStaff, combineDirectAndAggregated };

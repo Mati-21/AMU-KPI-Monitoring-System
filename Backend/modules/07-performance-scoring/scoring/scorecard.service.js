@@ -32,7 +32,7 @@ export const getOfficeScorecard = async (officeId, { fiscalYearId, reportingPeri
   await assertCanRead(actor, office);
 
   const contract = await prisma.performanceContract.findFirst({
-    where: { officeId: office, fiscalYearId: parseUuid(fiscalYearId, 'fiscalYearId') },
+    where: { officeId: office, personId: null, fiscalYearId: parseUuid(fiscalYearId, 'fiscalYearId') },
     include: { office: OFFICE_REF, fiscalYear: { select: { id: true, name: true, status: true } } },
   });
   if (!contract) throw notFound('This office has no contract for that fiscal year');

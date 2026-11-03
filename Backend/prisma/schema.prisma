@@ -212,6 +212,7 @@ model Person {
   scalesApproved          KpiScale[]
   kpisCreated             Kpi[]
   contractsSigned         PerformanceContract[]      @relation("ContractSigner")
+  personalContracts       PerformanceContract[]      @relation("ContractPerson")
   contractsApproved       PerformanceContract[]      @relation("ContractApprover")
   assignmentsCreated      KpiAssignment[]            @relation("AssignmentCreator")
   assignmentsApproved     KpiAssignment[]            @relation("AssignmentApprover")
@@ -231,6 +232,7 @@ model Person {
   documentsCreated        Document[]
   reportsPrepared         PerformanceReport[]        @relation("ReportPreparer")
   reportsSubmitted        PerformanceReport[]        @relation("ReportSubmitter")
+  reportsAllowedLate      PerformanceReport[]        @relation("ReportLateAllower")
   valuesEntered           PerformanceValue[]
   evidenceVerified        PerformanceEvidence[]
   reviewsGiven            PerformanceReview[]
@@ -663,6 +665,8 @@ model PerformanceContract {
   fiscalYearId        String         @map("fiscal_year_id") @db.Uuid
   officeId            String         @map("office_id") @db.Uuid
   assigningOfficeId   String?        @map("assigning_office_id") @db.Uuid
+  // Set for a staff contract: the office gives it to one person working in it. Null for an office's own contract
+  personId            String?        @map("person_id") @db.Uuid
   versionNo           Int            @default(1) @map("version_no")
   requiredTotalWeight Decimal        @default(100) @map("required_total_weight") @db.Decimal(7, 4)
   status              ContractStatus @default(DRAFT)
@@ -676,6 +680,7 @@ model PerformanceContract {
   fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
   office          Office     @relation("ContractOffice", fields: [officeId], references: [id])
   assigningOffice Office?    @relation("ContractAssigningOffice", fields: [assigningOfficeId], references: [id])
+  person          Person?    @relation("ContractPerson", fields: [personId], references: [id])
   signedBy        Person?    @relation("ContractSigner", fields: [signedByPersonId], references: [id])
   approvedBy      Person?    @relation("ContractApprover", fields: [approvedByPersonId], references: [id])
 
@@ -684,9 +689,12 @@ model PerformanceContract {
   scores      ContractScore[]
   rejections  ContractRejection[]
 
-  @@unique([fiscalYearId, officeId, versionNo])
+  // One office contract per office and one staff contract per person and office each year, both enforced by partial
+  // unique indexes in the migration, which Prisma cannot describe
+  @@index([fiscalYearId, officeId, versionNo])
   @@index([officeId])
   @@index([assigningOfficeId])
+  @@index([personId])
   @@map("performance_contract")
 }
 
@@ -711,6 +719,8 @@ model KpiAssignment {
   contractId               String               @map("contract_id") @db.Uuid
   kpiId                    String               @map("kpi_id") @db.Uuid
   parentAssignmentId       String?              @map("parent_assignment_id") @db.Uuid
+  // On a staff contract: the office's own assignment of the same KPI that this person's part comes from
+  sourceAssignmentId       String?              @map("source_assignment_id") @db.Uuid
   reportingFrequencyId     String               @map("reporting_frequency_id") @db.Uuid
   distributionMethod       DistributionMethod   @default(NONE) @map("distribution_method")
   scopeRelation            ScopeRelation        @map("scope_relation")
@@ -730,6 +740,8 @@ model KpiAssignment {
   kpi                Kpi                 @relation(fields: [kpiId], references: [id])
   parent             KpiAssignment?      @relation("AssignmentTree", fields: [parentAssignmentId], references: [id])
   children           KpiAssignment[]     @relation("AssignmentTree")
+  source             KpiAssignment?      @relation("AssignmentSource", fields: [sourceAssignmentId], references: [id])
+  staffParts         KpiAssignment[]     @relation("AssignmentSource")
   reportingFrequency ReportingFrequency  @relation(fields: [reportingFrequencyId], references: [id])
   createdBy          Person?             @relation("AssignmentCreator", fields: [createdByPersonId], references: [id])
   approvedBy         Person?             @relation("AssignmentApprover", fields: [approvedByPersonId], references: [id])
@@ -747,6 +759,7 @@ model KpiAssignment {
   @@unique([contractId, kpiId])
   @@index([kpiId])
   @@index([parentAssignmentId])
+  @@index([sourceAssignmentId])
   @@map("kpi_assignment")
 }
 
@@ -990,6 +1003,12 @@ model PerformanceReport {
   submittedByPersonId String?      @map("submitted_by_person_id") @db.Uuid
   submittedAt         DateTime?    @map("submitted_at") @db.Timestamptz(6)
   isProvisional       Boolean      @default(true) @map("is_provisional")
+  // Submitted after the deadline. Stays set once true, as the record behind any penalty given outside the system
+  isLate              Boolean      @default(false) @map("is_late")
+  // The Super Admin can let one office submit after the deadline and grace period, until this day
+  lateAllowedUntil      DateTime? @map("late_allowed_until") @db.Date
+  lateAllowedReason     String?   @map("late_allowed_reason")
+  lateAllowedByPersonId String?   @map("late_allowed_by_person_id") @db.Uuid
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -997,6 +1016,7 @@ model PerformanceReport {
   reportingPeriod ReportingPeriod     @relation(fields: [reportingPeriodId], references: [id])
   preparedBy      Person?             @relation("ReportPreparer", fields: [preparedByPersonId], references: [id])
   submittedBy     Person?             @relation("ReportSubmitter", fields: [submittedByPersonId], references: [id])
+  lateAllowedBy   Person?             @relation("ReportLateAllower", fields: [lateAllowedByPersonId], references: [id])
 
   values  PerformanceValue[]
   reviews PerformanceReview[]

@@ -3,10 +3,10 @@ import { auditAction } from '../../../utils/auditLogger.js';
 import { PERMISSIONS } from '../../../config/permissions.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
 import { optionalString, parseEnum, parseNumber, parseUuid } from '../../../utils/validation.js';
+import { assertWorksOnContract } from '../../05-contract-cascading/contract.shared.js';
 import { parseMeasuredValue } from '../../05-contract-cascading/measurement.js';
 import { assertPeriodOpen } from '../../06-reporting-periods/period.service.js';
 import { dueAssignments, isDirectEntry } from '../scoring/result.service.js';
-import { assertOfficeAuthority } from './report.access.js';
 
 /**
  * Module 07 — Entering an office's own results (SRS 10.2). Fields follow the KPI's measurement type.
@@ -52,10 +52,10 @@ const parseEntry = async (assignment, entry, period, field) => {
 export const saveValues = async (reportId, { values } = {}, actor) => {
   const report = await prisma.performanceReport.findUnique({
     where: { id: parseUuid(reportId, 'id') },
-    include: { contract: { select: { id: true, officeId: true } }, reportingPeriod: true },
+    include: { contract: { select: { id: true, officeId: true, personId: true } }, reportingPeriod: true },
   });
   if (!report) throw notFound('Report not found');
-  await assertOfficeAuthority(actor, PERMISSIONS.REPORT_CREATE, report.contract.officeId);
+  await assertWorksOnContract(actor, PERMISSIONS.REPORT_CREATE, report.contract);
   await assertPeriodOpen(report.reportingPeriodId);
   if (!EDITABLE_STATUSES.includes(report.status)) throw conflict(`A ${report.status} report cannot be edited`);
   if (!Array.isArray(values) || values.length === 0) throw badRequest('values must be a non-empty list');
@@ -67,6 +67,7 @@ export const saveValues = async (reportId, { values } = {}, actor) => {
     const assignment = due.get(parseUuid(entry?.assignmentId, `${field}.assignmentId`));
     if (!assignment) throw badRequest(`${field}: this KPI is not reported in this period`);
     if (!isDirectEntry(assignment, report.reportingPeriod)) throw badRequest(`${field}: "${assignment.kpi.name}" is reported by its own periods and adds up here automatically`);
+    if (assignment.staffParts.length > 0) throw badRequest(`${field}: "${assignment.kpi.name}" is held by people of the office, whose approved results add up here automatically`);
     rows.push({ assignmentId: assignment.id, ...(await parseEntry(assignment, entry, report.reportingPeriod, field)) });
   }
   if (new Set(rows.map((row) => row.assignmentId)).size !== rows.length) throw badRequest('A KPI can appear only once in values');

@@ -1,5 +1,5 @@
 import { prisma } from '../../config/database.js';
-import { PERMISSIONS, SUPER_ADMIN_PERMISSION } from '../../config/permissions.js';
+import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { activeOn } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
@@ -7,11 +7,14 @@ import { optionalString, parseEnum, parseUuid } from '../../utils/validation.js'
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
 import { contractAssigned, contractRejected, contractSigned } from '../09-notifications/notification.events.js';
 import { getSetting } from '../10-system-governance/system.service.js';
-import { ownOfficeOf } from '../03-access-control/access.service.js';
 import {
   ASSIGNMENT_INCLUDE,
+  PERSON_REF,
   assertAuthorityFromAbove,
-  assertAuthorityOnOffice,
+  assertWorksOnContract,
+  contractHomeOffices,
+  isOwnStaffContract,
+  isStaffContract,
   OPEN_CONTRACT_STATUSES,
   canReadEitherSide,
   canSeeContract,
@@ -26,6 +29,8 @@ import { toNumber } from './measurement.js';
  * Workflow: the office above builds it in DRAFT and assigns it (SUBMITTED). The receiving office reviews it, then
  * signs it (SIGNED) or rejects it (REJECTED), which returns it to the office above to correct and assign again.
  * The top office's self contract has nobody to assign it to, so the top office signs it straight from DRAFT.
+ * An office can also give a staff contract to one person working in it, with KPIs from its own contract. It follows
+ * the same steps, but only that person signs it, and their results do not feed the office's own figures.
  */
 
 const CONTRACT_STATUSES = ['DRAFT', 'SUBMITTED', 'REJECTED', 'APPROVED', 'SIGNED', 'CLOSED'];
@@ -33,8 +38,10 @@ const OFFICE_REF = { select: { id: true, name: true, code: true } };
 const CONTRACT_INCLUDE = {
   office: OFFICE_REF,
   assigningOffice: OFFICE_REF,
+  person: PERSON_REF,
   fiscalYear: { select: { id: true, name: true, status: true } },
 };
+const fullName = (person) => [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' ');
 
 const getContractOrThrow = async (id) => {
   const contract = await prisma.performanceContract.findUnique({ where: { id: parseUuid(id, 'id') }, include: CONTRACT_INCLUDE });
@@ -79,7 +86,11 @@ const assertStatus = (contract, expected) => {
 /**
  * How a contract relates to the offices the person works in today. Null when it is between two other offices.
  */
-const directionFor = (contract, ownOfficeIds) => {
+const directionFor = (contract, ownOfficeIds, actor) => {
+  if (isStaffContract(contract)) {
+    if (isOwnStaffContract(actor, contract)) return 'MINE';
+    return ownOfficeIds.has(contract.officeId) ? 'STAFF' : null;
+  }
   if (!contract.assigningOfficeId) return 'SELF';
   if (ownOfficeIds.has(contract.officeId)) return 'RECEIVED';
   return ownOfficeIds.has(contract.assigningOfficeId) ? 'SENT' : null;
@@ -87,9 +98,11 @@ const directionFor = (contract, ownOfficeIds) => {
 
 /**
  * Contracts the actor may see: those of offices below them, and their own once it is assigned to them.
+ * mine: only the person's own staff contracts.
  */
-export const listContracts = async ({ fiscalYearId, officeId, status } = {}, actor) => {
+export const listContracts = async ({ fiscalYearId, officeId, status, mine } = {}, actor) => {
   const where = {
+    ...(mine === 'true' && { personId: actor.personId }),
     ...(fiscalYearId && { fiscalYearId: parseUuid(fiscalYearId, 'fiscalYearId') }),
     ...(officeId && { officeId: parseUuid(officeId, 'officeId') }),
     ...(status && { status: parseEnum(status, 'status', CONTRACT_STATUSES) }),
@@ -100,7 +113,7 @@ export const listContracts = async ({ fiscalYearId, officeId, status } = {}, act
   const ownOfficeIds = new Set(placements.map((placement) => placement.officeId));
   const visible = [];
   for (const contract of contracts) {
-    if (await canSeeContract(actor, contract)) visible.push({ ...contract, direction: directionFor(contract, ownOfficeIds) });
+    if (await canSeeContract(actor, contract)) visible.push({ ...contract, direction: directionFor(contract, ownOfficeIds, actor) });
   }
   return visible;
 };
@@ -138,7 +151,7 @@ export const getContractById = async (id, actor) => {
   for (const assignment of assignments) {
     if (await canSeeAssignment(actor, contract, assignment.status)) visible.push({ ...formatAssignment(assignment), sharing: sharing.get(assignment.id) });
   }
-  return { ...contract, ...weightSummary(contract, assignments.filter((a) => a.status !== 'CANCELLED')), assignments: visible };
+  return { ...contract, isMine: isOwnStaffContract(actor, contract), ...weightSummary(contract, assignments.filter((a) => a.status !== 'CANCELLED')), assignments: visible };
 };
 
 // ===== Workflow =====
@@ -147,12 +160,6 @@ export const getContractById = async (id, actor) => {
  * The assigning office comes from the hierarchy: it is the receiving office's parent, and it must be allowed to
  * assign KPIs (SRS 2.2.10). Only the top office has no assigning office.
  */
-/**
- * The offices a person manages contracts from: where each contract:manage role applies, without the offices below it.
- * Contracts pass down one level at a time, so they are created only for offices directly below these.
- */
-const contractHomeOffices = (actor) => new Set(actor.access.grants.filter((grant) => grant.code === PERMISSIONS.CONTRACT_MANAGE || grant.code === SUPER_ADMIN_PERMISSION).map(ownOfficeOf));
-
 /**
  * Offices a new contract can be created for: active offices directly below the person's own (when that office may
  * assign KPIs), and their own office when it is the top office, for its Self Contract.
@@ -166,9 +173,56 @@ export const listContractOffices = async (actor) => {
   });
 };
 
-export const createContract = async ({ fiscalYearId, officeId } = {}, actor) => {
+/**
+ * People a staff contract can be given to: everyone working today in an office where the person manages contracts,
+ * themselves included.
+ */
+export const listContractPeople = async (actor) => {
+  const placements = await prisma.officePerson.findMany({
+    where: { officeId: { in: [...contractHomeOffices(actor)] }, ...activeOn('startDate', 'endDate'), person: { archivedAt: null } },
+    select: { office: OFFICE_REF, position: { select: { title: true, isHead: true } }, person: PERSON_REF },
+  });
+  return placements
+    .map(({ person, office, position }) => ({ id: person.id, name: fullName(person), officeId: office.id, officeName: office.name, position: position?.title ?? null, isHead: Boolean(position?.isHead), isYou: person.id === actor.personId }))
+    .sort((a, b) => a.officeName.localeCompare(b.officeName) || Number(b.isHead) - Number(a.isHead) || a.name.localeCompare(b.name));
+};
+
+/**
+ * A staff contract, given by an office to one person working in it today. The office's own contract for the year
+ * must exist, because its KPIs come from there.
+ */
+const createStaffContract = async (yearId, personId, requestedOfficeId, actor) => {
+  const home = contractHomeOffices(actor);
+  const placements = await prisma.officePerson.findMany({
+    where: { personId, ...activeOn('startDate', 'endDate'), person: { archivedAt: null } },
+    select: { officeId: true, office: { select: { id: true, name: true } }, person: PERSON_REF },
+  });
+  if (placements.length === 0) throw badRequest('This person does not work in any office today');
+  const placement = placements.find((item) => home.has(item.officeId) && (!requestedOfficeId || item.officeId === requestedOfficeId));
+  if (!placement) throw forbidden('Staff contracts are given by the office the person works in, and you do not manage contracts there');
+  const { office, person } = placement;
+  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, { assigningOfficeId: office.id, officeId: office.id });
+
+  const officeContract = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id, personId: null } });
+  if (!officeContract) throw conflict(`${office.name} has no contract for this fiscal year yet. Its KPIs come from there`);
+  const existing = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id, personId } });
+  if (existing) throw conflict(`${fullName(person)} already has a contract in ${office.name} for this fiscal year`);
+
+  const contract = await prisma.performanceContract.create({
+    data: { fiscalYearId: yearId, officeId: office.id, assigningOfficeId: office.id, personId, requiredTotalWeight: await getSetting('kpi', 'contract_total_weight') },
+    include: CONTRACT_INCLUDE,
+  });
+  await auditAction(actor, { action: 'CONTRACT_CREATED', entityType: 'performance_contract', entityId: contract.id, newValues: { fiscalYearId: yearId, officeId: office.id, personId } });
+  return contract;
+};
+
+/**
+ * An office's contract, or with personId a staff contract for one person in the actor's office.
+ */
+export const createContract = async ({ fiscalYearId, officeId, personId } = {}, actor) => {
   const yearId = parseUuid(fiscalYearId, 'fiscalYearId');
   await assertFiscalYearOpen(yearId);
+  if (personId) return createStaffContract(yearId, parseUuid(personId, 'personId'), parseUuid(officeId, 'officeId', { required: false }), actor);
 
   const office = await prisma.office.findUnique({ where: { id: parseUuid(officeId, 'officeId') }, include: { parent: true } });
   if (!office) throw badRequest('Office not found');
@@ -181,7 +235,7 @@ export const createContract = async ({ fiscalYearId, officeId } = {}, actor) => 
     throw forbidden(`Contracts are created by the office directly above. ${office.name} sits under ${office.parent.name}, so its contract is created there`);
   }
 
-  const existing = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id } });
+  const existing = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id, personId: null } });
   if (existing) throw conflict(`${office.name} already has a contract for this fiscal year`);
 
   const contract = await prisma.performanceContract.create({
@@ -217,6 +271,10 @@ export const assignContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
   await assertFiscalYearOpen(contract.fiscalYearId);
   if (!contract.assigningOfficeId) throw conflict('A self contract has no office to assign it to. Sign it when it is ready');
+  // The office gives a staff contract once its own contract is signed, so the KPIs are settled
+  if (isStaffContract(contract) && !(await prisma.performanceContract.findFirst({ where: { fiscalYearId: contract.fiscalYearId, officeId: contract.officeId, personId: null, status: { in: ['SIGNED', 'APPROVED'] } } }))) {
+    throw conflict(`${contract.office.name} signs its own contract before giving staff contracts`);
+  }
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
   if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) throw conflict(`Only a draft or rejected contract can be assigned; this one is ${contract.status}`);
   await assertComplete(contract);
@@ -236,7 +294,7 @@ export const assignContract = async (id, actor) => {
 export const rejectContract = async (id, { comment } = {}, actor) => {
   const contract = await getContractOrThrow(id);
   await assertFiscalYearOpen(contract.fiscalYearId);
-  await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract.officeId);
+  await assertWorksOnContract(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract);
   assertStatus(contract, 'SUBMITTED');
   const note = optionalString(comment, 'comment') ?? null;
   const flagged = await prisma.kpiAssignment.findMany({ where: FLAGGED(contract.id), select: { reviewComment: true, kpi: { select: { name: true } } } });
@@ -260,7 +318,7 @@ export const rejectContract = async (id, { comment } = {}, actor) => {
 export const signContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
   await assertFiscalYearOpen(contract.fiscalYearId);
-  await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract.officeId);
+  await assertWorksOnContract(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract);
   const isSelf = !contract.assigningOfficeId;
   assertStatus(contract, isSelf ? 'DRAFT' : 'SUBMITTED');
   if (isSelf) await assertComplete(contract);
@@ -279,4 +337,4 @@ export const signContract = async (id, actor) => {
   return updated;
 };
 
-export default { listContracts, listContractOffices, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };
+export default { listContracts, listContractOffices, listContractPeople, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };

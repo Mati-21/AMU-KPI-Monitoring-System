@@ -81,6 +81,15 @@ export const requirePermission =
   };
 
 /**
+ * For a route open to anyone signed in, whose service decides what each person may do: loads req.access without
+ * requiring any permission. Must be used after `protect`.
+ */
+export const withAccess = async (req, res, next) => {
+  await loadAccess(req);
+  next();
+};
+
+/**
  * Route guard: caller must hold the Super Admin wildcard permission.
  */
 export const requireSuperAdmin = async (req, res, next) => {
@@ -89,4 +98,4 @@ export const requireSuperAdmin = async (req, res, next) => {
   next();
 };
 
-export default { protect, optionalAuth, loadAccess, requirePermission, requireSuperAdmin };
+export default { protect, optionalAuth, loadAccess, withAccess, requirePermission, requireSuperAdmin };

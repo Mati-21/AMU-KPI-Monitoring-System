@@ -13,6 +13,14 @@ export const useContracts = (fiscalYearId) =>
     enabled: Boolean(fiscalYearId),
   });
 
+// The person's own staff contracts for a year
+export const useMyContracts = (fiscalYearId) =>
+  useQuery({
+    queryKey: [...queryKeys.contracts.list(fiscalYearId), 'mine'],
+    queryFn: () => api.get('/contracts', { params: { fiscalYearId, mine: true } }).then(unwrap),
+    enabled: Boolean(fiscalYearId),
+  });
+
 export const useContract = (id) =>
   useQuery({
     queryKey: queryKeys.contracts.detail(id),
@@ -35,10 +43,12 @@ export const useContractOffices = (enabled) =>
     enabled,
   });
 
-export const useAllocations = (assignmentId) =>
+// People working in the person's own office, who can be given a staff contract
+export const useContractPeople = (enabled) =>
   useQuery({
-    queryKey: [...queryKeys.contracts.all, 'allocations', assignmentId],
-    queryFn: () => api.get(`/assignments/${assignmentId}/allocations`).then(unwrap),
+    queryKey: [...queryKeys.contracts.all, 'people'],
+    queryFn: () => api.get('/contract-people').then(unwrap),
+    enabled,
   });
 
 export const useAllKpis = () => useQuery({ queryKey: queryKeys.catalog.part('kpis', 'all'), queryFn: () => fetchAllKpis() });
@@ -61,7 +71,8 @@ export const useCreateContract = () => useContractAction((values) => api.post('/
 export const useContractStep = () => useContractAction(({ id, step, values }) => api.patch(`/contracts/${id}/${step}`, values ?? {}).then(unwrap));
 export const useAssignmentStep = () => useContractAction(({ id, step, values }) => api.patch(`/assignments/${id}/${step}`, values ?? {}).then(unwrap));
 
-export const useSaveAllocations = () => useContractAction(({ id, values }) => api.put(`/assignments/${id}/allocations`, values).then(unwrap));
+// How much of a received KPI the office does itself
+export const useKeepPart = () => useContractAction(({ id, amount }) => api.put(`/assignments/${id}/kept`, { amount }).then(unwrap));
 
 // Checking a file changes nothing, so it refreshes nothing
 export const useCheckContractImport = () => useMutation({ mutationFn: ({ id, rows }) => api.post(`/contracts/${id}/kpi-import`, { rows, dryRun: true }).then(unwrap) });

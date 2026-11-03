@@ -21,10 +21,11 @@ const reportEntity = (report) => ({ entityType: 'performance_report', entityId: 
 
 // The office above decides. The top office has none, so those with university-wide authority do.
 const fromAbove = (contract, code) => (contract.assigningOfficeId ? { targetOfficeId: contract.assigningOfficeId, requiredPermissionCode: code } : { requiredPermissionCode: code });
-const receivingOffice = (contract, code) => ({ targetOfficeId: contract.officeId, requiredPermissionCode: code });
+// A staff contract goes to its one person; an office contract to whoever acts for that office
+const receivingOffice = (contract, code) => (contract.personId ? { personIds: [contract.personId] } : { targetOfficeId: contract.officeId, requiredPermissionCode: code });
 
 const kpiLabel = (assignment) => `"${assignment.kpi.name}"`;
-const officeName = (contract) => contract.office?.name ?? 'An office';
+const officeName = (contract) => (contract.person ? `${contract.person.firstName} ${contract.person.lastName}` : contract.office?.name ?? 'An office');
 
 // ===== Support =====
 

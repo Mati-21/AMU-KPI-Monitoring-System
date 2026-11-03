@@ -7,7 +7,7 @@ import RecordDialog from '../../04-kpi-catalog/components/RecordDialog';
 import { IconAction } from '../../04-kpi-catalog/components/RecordTable';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useAssignmentStep } from '../hooks/useContracts';
-import { isFlagged, isOpen } from '../lib/contractRules';
+import { assignmentActions, isFlagged } from '../lib/contractRules';
 
 const COMMENT_FIELDS = [{ key: 'comment', label: 'Comment', type: 'textarea', required: true, hint: 'Kept with this KPI and in the system logs.' }];
 const FLAG_FIELDS = [{ key: 'note', label: 'What Needs Correcting?', type: 'textarea', required: true, hint: 'The office above sees this note on the KPI.' }];
@@ -16,17 +16,16 @@ const FLAG_FIELDS = [{ key: 'note', label: 'What Needs Correcting?', type: 'text
  * The office above can change a KPI only while the contract is with them. While it waits for a signature,
  * the receiving office can flag the KPI with a note.
  */
-const AssignmentActions = ({ assignment, contractStatus, isClosed, onEdit }) => {
+const AssignmentActions = ({ assignment, contract, isClosed, onEdit }) => {
   const can = useCan();
   const { notify } = useNotification();
   const run = useAssignmentStep();
   const [cancelling, setCancelling] = useState(false);
   const [flagging, setFlagging] = useState(false);
   const { kpi } = assignment;
-  const canChange = can('contract:manage') && isOpen(assignment);
-  const canFlag = can('contract:acknowledge') && contractStatus === 'SUBMITTED' && assignment.status === 'SUBMITTED';
+  const { change: canChange, flag: canFlag } = assignmentActions(can, assignment, contract, isClosed);
 
-  if (isClosed || (!canChange && !canFlag)) return null;
+  if (!canChange && !canFlag) return null;
 
   const closeFlag = () => {
     run.reset();

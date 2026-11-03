@@ -5,6 +5,7 @@ import LandingPage from '../features/00-landing/pages/LandingPage';
 import ContractKpiImportPage from '../features/05-contracts/pages/ContractKpiImportPage';
 import ContractPage from '../features/05-contracts/pages/ContractPage';
 import KpiAllocationPage from '../features/05-contracts/pages/KpiAllocationPage';
+import MyContractPage from '../features/05-contracts/pages/MyContractPage';
 import SignIn from '../features/01-identity/pages/LoginPage';
 import NotFoundPage from '../shared/pages/PageNotFound';
 import UserManagment from '../features/01-identity/pages/users/UserManagment';
@@ -22,11 +23,12 @@ import SupportRequests from '../features/12-support/pages/SupportRequests';
 import DirectMessageView from '../features/13-messaging/pages/DirectMessageView';
 
 import DashboardHome from '../features/11-dashboards/pages/DashboardHome';
-import OfficeReport from '../features/07-performance/pages/OfficeReport';
 import PlanningPage from '../features/06-reporting-periods/pages/PlanningPage';
 import RegisteredKpis from '../features/04-kpi-catalog/pages/RegisteredKpis';
-import AssignedKpisPage from '../features/07-performance/pages/AssignedKpisPage';
-import KpiApprovalsPage from '../features/07-performance/pages/KpiApprovalsPage';
+import PerformancePage from '../features/07-performance/pages/PerformancePage';
+import ApprovalsPage from '../features/07-performance/pages/ApprovalsPage';
+import YearReportPage from '../features/07-performance/pages/YearReportPage';
+import ReportPage from '../features/07-performance/pages/ReportPage';
 import OfficesPage from '../features/02-offices/pages/OfficesPage';
 import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from '../features/01-identity/components/RouteGuards';
 import { NotificationProvider } from '../features/09-notifications/context/NotificationContext';
@@ -63,13 +65,20 @@ function App() {
                     {/* Dashboard is accessible to all authenticated users — role-based variants are handled inside DashboardHome */}
                     <Route path="/dashboard" element={<DashboardHome />} />
 
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Assigned KPI')} />}>
-                      <Route path="/assigned-kpis" element={<AssignedKpisPage />} />
+                    <Route element={<RequirePermission permission="report:read" />}>
+                      <Route path="/performance" element={<PerformancePage />} />
+                      <Route path="/report" element={<YearReportPage />} />
                     </Route>
-
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'KPI Approvals')} />}>
-                      <Route path="/kpi-approvals" element={<KpiApprovalsPage />} />
+                    {/* Anyone signed in: someone with a staff contract opens their own reports, and the server decides who sees which */}
+                    <Route path="/reports/:reportId" element={<ReportPage />} />
+                    <Route path="/my-contract" element={<MyContractPage />} />
+                    {/* Older addresses of the performance pages */}
+                    <Route path="/reports" element={<Navigate to="/performance" replace />} />
+                    <Route path="/assigned-kpis" element={<Navigate to="/performance" replace />} />
+                    <Route element={<RequirePermission permission="report:review" />}>
+                      <Route path="/approvals" element={<ApprovalsPage />} />
                     </Route>
+                    <Route path="/kpi-approvals" element={<Navigate to="/approvals" replace />} />
 
                     <Route element={<RequirePermission permission="contract:read" />}>
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
@@ -84,20 +93,6 @@ function App() {
                       <Route path="/registered-kpis" element={<RegisteredKpis />} />
                     </Route>
 
-                    <Route
-                      element={
-                        <RequirePermission
-                          permissions={[
-                            permissionUtils.permissionKey('view', 'KPI Reporting'),
-                            permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),
-                            permissionUtils.permissionKey('view', 'Other Role Reports'),
-                          ]}
-                        />
-                      }
-                    >
-                      <Route path="/report" element={<OfficeReport />} />
-                      <Route path="/reports" element={<Navigate to="/report" replace />} />
-                    </Route>
 
                     <Route element={<RequirePermission permissions={['kpi:create', 'kpi:update', 'kpi:manage']} />}>
                       <Route path="/kpi" element={<KpiManagement />} />

@@ -38,6 +38,14 @@ export const queryKeys = {
     detail: (id) => ['contracts', 'detail', id],
     rejections: (fiscalYearId) => ['contracts', 'rejections', fiscalYearId],
   },
+  reports: {
+    all: ['reports'],
+    offices: (fiscalYearId) => ['reports', 'offices', fiscalYearId],
+    sheet: (fiscalYearId, officeId) => ['reports', 'sheet', fiscalYearId, officeId],
+    year: (fiscalYearId, officeId) => ['reports', 'year', fiscalYearId, officeId],
+    list: (params) => ['reports', 'list', params],
+    detail: (id) => ['reports', 'detail', id],
+  },
   messaging: {
     all: ['messages'],
     conversations: ['messages', 'conversations'],

@@ -12,13 +12,14 @@ import {
   OPEN_CONTRACT_STATUSES,
   addVersion,
   assertAuthorityFromAbove,
-  assertAuthorityOnOffice,
   assertFrequencyFollowsAbove,
   assertSeparateApprover,
+  assertWorksOnContract,
   assertYearReportsFrequency,
   canSeeAssignment,
   formatAssignment,
   getAssignmentOrThrow,
+  isStaffContract,
   requireComment,
 } from './contract.shared.js';
 import { applyShareMethod, assertChildShare, loadShareContext, recordChildShare, releaseChildShare, resolveShareMethod, targetForShare } from './allocation.service.js';
@@ -30,6 +31,7 @@ import { parseBaseline, parseTarget, parseWeight, requiredImprovement } from './
  * receiving office signs, or REJECTED if that office flagged it. It can also be CANCELLED before assigning.
  * While in draft the baseline, target and weight are edited in place. After signing they change only through a
  * change request, which adds a new version.
+ * On a staff contract a KPI comes from the office's own contract instead (its source), and its target is set by hand.
  */
 
 const SCOPE_RELATIONS = ['EXCLUSIVE_COMPLETE', 'OVERLAPPING', 'INSTITUTION_WIDE'];
@@ -73,6 +75,21 @@ const assertParentAssignment = async (contract, kpiId, parentAssignmentId) => {
   }
   if (!APPROVED_STATUSES.includes(parent.status)) throw conflict('The parent assignment must be approved before it can cascade');
   return parent;
+};
+
+/**
+ * A staff contract takes its KPIs from the office's own signed contract of the same year: the source of each one.
+ */
+const assertSourceAssignment = async (contract, kpiId, sourceAssignmentId) => {
+  if (!sourceAssignmentId) throw badRequest('parentAssignmentId is required: a staff contract takes its KPIs from the office\'s own contract');
+  const source = await prisma.kpiAssignment.findUnique({ where: { id: sourceAssignmentId }, include: { contract: true } });
+  if (!source) throw badRequest('The office\'s assignment was not found');
+  if (source.kpiId !== kpiId) throw badRequest('The office\'s assignment is for a different KPI');
+  if (source.contract.personId || source.contract.officeId !== contract.officeId || source.contract.fiscalYearId !== contract.fiscalYearId) {
+    throw badRequest('A staff contract takes its KPIs from the contract of the office the person works in, in the same fiscal year');
+  }
+  if (!APPROVED_STATUSES.includes(source.status)) throw conflict('The office must sign this KPI on its own contract first');
+  return source;
 };
 
 // ===== Queries =====
@@ -137,15 +154,19 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   const existing = await prisma.kpiAssignment.findUnique({ where: { contractId_kpiId: { contractId: contract.id, kpiId } } });
   if (existing && existing.status !== 'CANCELLED') throw conflict(`"${kpi.name}" is already on this contract`);
 
-  const parentAssignmentId = parseUuid(data.parentAssignmentId, 'parentAssignmentId', { required: false }) ?? null;
-  const parent = await assertParentAssignment(contract, kpiId, parentAssignmentId);
+  // On a staff contract the KPI above is the office's own one, its source; nothing is shared from it
+  const staff = isStaffContract(contract);
+  const aboveId = parseUuid(data.parentAssignmentId, 'parentAssignmentId', { required: false }) ?? null;
+  const source = staff ? await assertSourceAssignment(contract, kpiId, aboveId) : null;
+  const parentAssignmentId = staff ? null : aboveId;
+  const parent = staff ? source : await assertParentAssignment(contract, kpiId, parentAssignmentId);
 
   // Below the top office the frequency starts from the office above, and may only be more often
   const reportingFrequencyId = parseUuid(data.reportingFrequencyId, 'reportingFrequencyId', { required: false }) ?? parent?.reportingFrequencyId ?? kpi.defaultFrequencyId;
   await assertYearReportsFrequency(contract.fiscalYearId, reportingFrequencyId);
   await assertFrequencyFollowsAbove(parent?.reportingFrequencyId, reportingFrequencyId);
 
-  const shareContext = parent ? await loadShareContext(parent.id) : null;
+  const shareContext = parent && !staff ? await loadShareContext(parent.id) : null;
   const shareMethod = shareContext ? resolveShareMethod(shareContext, data.shareMethod) : null;
   const baseline = parseBaseline(kpi, data.baseline);
   const shared = shareContext && targetForShare(shareContext, shareMethod, kpi, baseline, contract.officeId);
@@ -156,6 +177,7 @@ export const createAssignment = async (contractId, data = {}, actor) => {
   if (shareMethod === 'CUSTOM') await assertChildShare(parentAssignmentId, contract.officeId, improvement);
   const fields = {
     parentAssignmentId,
+    sourceAssignmentId: source?.id ?? null,
     reportingFrequencyId,
     scopeRelation: parseScopeRelation(data.scopeRelation, kpi),
     maxOverAllocationPercent: parseNumber(data.maxOverAllocationPercent, 'maxOverAllocationPercent') ?? (await getSetting('kpi', 'default_max_over_allocation_percent')),
@@ -193,7 +215,7 @@ export const createAssignment = async (contractId, data = {}, actor) => {
     action: 'ASSIGNMENT_CREATED',
     entityType: 'kpi_assignment',
     entityId: assignment.id,
-    newValues: { contractId: contract.id, kpiId, parentAssignmentId, reportingFrequencyId, shareMethod, baseline, target, weight },
+    newValues: { contractId: contract.id, kpiId, parentAssignmentId, sourceAssignmentId: source?.id, reportingFrequencyId, shareMethod, baseline, target, weight },
   });
   return formatAssignment(assignment);
 };
@@ -215,7 +237,8 @@ export const updateAssignment = async (id, data = {}, actor) => {
   if (data.reportingFrequencyId !== undefined) {
     update.reportingFrequencyId = parseUuid(data.reportingFrequencyId, 'reportingFrequencyId');
     await assertYearReportsFrequency(assignment.contract.fiscalYearId, update.reportingFrequencyId);
-    await assertFrequencyFollowsAbove(shareContext?.parent.reportingFrequencyId, update.reportingFrequencyId);
+    const source = assignment.sourceAssignmentId ? await prisma.kpiAssignment.findUnique({ where: { id: assignment.sourceAssignmentId }, select: { reportingFrequencyId: true } }) : null;
+    await assertFrequencyFollowsAbove(shareContext?.parent.reportingFrequencyId ?? source?.reportingFrequencyId, update.reportingFrequencyId);
   }
   if (data.scopeRelation !== undefined) update.scopeRelation = parseEnum(data.scopeRelation, 'scopeRelation', SCOPE_RELATIONS);
   if (data.maxOverAllocationPercent !== undefined) update.maxOverAllocationPercent = parseNumber(data.maxOverAllocationPercent, 'maxOverAllocationPercent') ?? null;
@@ -260,7 +283,7 @@ export const updateAssignment = async (id, data = {}, actor) => {
 export const flagAssignment = async (id, { note } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
   await assertEditableYear(assignment);
-  await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, assignment.contract.officeId);
+  await assertWorksOnContract(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, assignment.contract);
   if (assignment.contract.status !== 'SUBMITTED' || assignment.status !== 'SUBMITTED') throw conflict('KPIs can be flagged only while their contract is waiting for a signature');
 
   const reviewComment = note === null || note === undefined ? null : requireComment(note);

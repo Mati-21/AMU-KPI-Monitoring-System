@@ -1,10 +1,10 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
-import { badRequest, conflict, notFound } from '../../utils/httpError.js';
-import { parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
+import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
+import { parseEnum, parseNumber } from '../../utils/validation.js';
 import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
-import { APPROVED_STATUSES, OPEN_CONTRACT_STATUSES, assertAuthorityOnOffice, canSeeAssignment, getAssignmentOrThrow, requireComment } from './contract.shared.js';
+import { APPROVED_STATUSES, OPEN_CONTRACT_STATUSES, assertAuthorityOnOffice, canSeeAssignment, contractHomeOffices, getAssignmentOrThrow, requireComment } from './contract.shared.js';
 import { numericValue, requiredImprovement, toNumber } from './measurement.js';
 
 /**
@@ -13,10 +13,9 @@ import { numericValue, requiredImprovement, toNumber } from './measurement.js';
  * Fully (every office below gets the whole improvement) or Custom (each target set by hand). The choice is fixed once
  * the first contract holding the KPI is sent. Only number and money KPIs can be divided.
  * When divided, a share counts once the KPI is on that office's contract, and no office can be given more than what
- * remains. A share can be planned in the Share window before that office has a contract, but it counts only then.
+ * remains. The office can also keep part of it for its own work; what is kept counts as given.
  */
 
-const WINDOW_METHODS = ['EQUAL', 'CUSTOM'];
 export const SHARE_METHODS = ['EQUAL', 'FULL', 'CUSTOM'];
 const METHOD_WORDS = { EQUAL: 'equally', FULL: 'fully', CUSTOM: 'by custom targets' };
 const SPLITTABLE_TYPES = ['NUMBER', 'MONEY'];
@@ -140,85 +139,32 @@ export const getAllocations = async (id, actor) => {
   return { ...sharing, candidates: below.filter((office) => !sharing.offices.some((line) => line.office.id === office.id)) };
 };
 
-const targetFromShare = (child, amount) => {
-  const start = numericValue(child.kpi, child.baselines[0]);
-  if (start === null || ['UNKNOWN', 'PENDING_VERIFICATION'].includes(child.baselines[0].baselineStatus)) return null;
-  const value = round4(child.kpi.direction === 'LOWER_IS_BETTER' ? start - amount : start + amount);
-  if (value < 0) throw badRequest(`${child.contract.office.name} starts from ${start}, so it cannot reduce by ${amount}`);
-  return value;
-};
-
 /**
- * Save the whole split at once, replacing the previous one. A KPI still in draft takes its new target from its share.
- * A KPI the office below already has cannot change here, and an office holding the KPI cannot be left out.
+ * Keep part of a KPI for the office's own work. What is kept and what is given to the offices below together make
+ * the improvement, so no more can be kept than the offices below have left. 0 keeps nothing.
  */
-export const saveAllocations = async (id, data = {}, actor) => {
+export const saveKept = async (id, data = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
   await assertFiscalYearOpen(assignment.contract.fiscalYearId);
+  if (assignment.contract.personId) throw conflict('A staff contract is one person\'s work, so nothing on it is kept or shared');
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract.officeId);
-  if (!APPROVED_STATUSES.includes(assignment.status)) throw conflict('A KPI can be shared only after its contract is signed');
+  // The office that received the KPI decides what it does itself, not the office above it
+  if (!contractHomeOffices(actor).has(assignment.contract.officeId)) throw forbidden(`Only ${assignment.contract.office?.name ?? 'the receiving office'} decides how much of its KPI it keeps`);
+  if (!APPROVED_STATUSES.includes(assignment.status)) throw conflict('Part of a KPI can be kept once its contract is signed');
 
   const sharing = await sharingOf(assignment);
-  if (!sharing.shareable) throw conflict('This KPI cannot be split: every office works towards the same target');
+  if (!sharing.shareable) throw conflict(`"${assignment.kpi.name}" is not divided by amounts, so there is no part to keep`);
+  const kept = parseNumber(data.amount, 'amount', { required: true });
+  if (kept < 0) throw badRequest('amount cannot be negative');
+  const most = round4(sharing.parentAmount - sharing.distributed);
+  if (kept > most) throw badRequest(`${sharing.distributed} is already given to the offices below, so at most ${Math.max(0, most)} can be kept`);
 
-  const asked = parseEnum(data.distributionMethod, 'distributionMethod', WINDOW_METHODS);
-  // Once a contract holding the KPI is sent, amounts can still be set by hand but the way it is shared stays
-  const method = sharing.locked ? sharing.method : asked;
-  const retained = parseNumber(data.retainedAmount, 'retainedAmount') ?? 0;
-  if (retained < 0) throw badRequest('retainedAmount cannot be negative');
-
-  if (!Array.isArray(data.shares)) throw badRequest('shares must be a list');
-  const shares = data.shares.map((item, index) => {
-    const amount = parseNumber(item?.amount, `shares[${index}].amount`, { required: true });
-    if (amount <= 0) throw badRequest(`shares[${index}].amount must be above 0`);
-    return { officeId: parseUuid(item.officeId, `shares[${index}].officeId`), amount };
-  });
-  const givenIds = shares.map((share) => share.officeId);
-  if (new Set(givenIds).size !== givenIds.length) throw badRequest('An office can appear only once in shares');
-
-  const below = await prisma.office.findMany({ where: { parentOfficeId: assignment.contract.officeId, isActive: true }, select: { id: true } });
-  const allowed = new Set([...below.map((office) => office.id), ...sharing.offices.map((line) => line.office.id)]);
-  if (givenIds.some((officeId) => !allowed.has(officeId))) throw badRequest('A share can go only to an active office directly below');
-
-  for (const line of sharing.offices) {
-    const share = shares.find((candidate) => candidate.officeId === line.office.id);
-    if (line.locked && line.amount !== null && share?.amount !== line.amount) throw conflict(`${line.office.name} already has this KPI, so its share of ${line.amount} cannot change`);
-    if (line.assignmentId && !share && !(line.locked && line.amount === null)) throw conflict(`${line.office.name} has this KPI on its contract. Cancel it there first`);
-  }
-
-  const total = round4(shares.reduce((sum, share) => sum + share.amount, retained));
-  if (total < sharing.parentAmount) throw badRequest(`Short by ${round4(sharing.parentAmount - total)}: at least ${sharing.parentAmount} must be assigned`);
-
-  const children = await prisma.kpiAssignment.findMany({
-    where: { parentAssignmentId: assignment.id, status: { in: ['DRAFT', 'REJECTED'] } },
-    include: { kpi: { include: { scale: { include: { levels: true } } } }, baselines: current, targets: current, contract: { select: { office: OFFICE_REF } } },
-  });
-  const newTargets = children.flatMap((child) => {
-    const share = shares.find((candidate) => candidate.officeId === child.contract.office.id);
-    const value = share && targetFromShare(child, share.amount);
-    return value === null || value === undefined ? [] : [{ id: child.targets[0].id, value }];
-  });
-
-  const lines = new Map(sharing.offices.map((line) => [line.office.id, line]));
-  const personId = actor.personId;
-  await prisma.$transaction(async (tx) => {
-    await tx.responsibilityAllocation.deleteMany({ where: { parentAssignmentId: assignment.id } });
-    await tx.responsibilityAllocation.createMany({
-      data: [
-        ...shares.map((share) => ({ parentAssignmentId: assignment.id, childOfficeId: share.officeId, childAssignmentId: lines.get(share.officeId)?.assignmentId ?? null, allocationType: 'DISTRIBUTED', allocatedAmount: share.amount, createdByPersonId: personId })),
-        ...(retained > 0 ? [{ parentAssignmentId: assignment.id, allocationType: 'RETAINED', allocatedAmount: retained, createdByPersonId: personId }] : []),
-      ],
-    });
-    for (const target of newTargets) await tx.kpiTarget.update({ where: { id: target.id }, data: { value: target.value } });
-    await tx.kpiAssignment.update({ where: { id: assignment.id }, data: { distributionMethod: shares.length > 0 ? method : 'NONE', reconciliationStatus: statusFor(true, sharing.parentAmount, total), reconciliationNote: null } });
-  });
-  await auditAction(actor, {
-    action: 'RESPONSIBILITY_ALLOCATED',
-    entityType: 'kpi_assignment',
-    entityId: assignment.id,
-    oldValues: { retained: sharing.retained, shares: sharing.offices.map((line) => ({ officeId: line.office.id, amount: line.amount })) },
-    newValues: { method, retained, shares },
-  });
+  await prisma.$transaction([
+    prisma.responsibilityAllocation.deleteMany({ where: { parentAssignmentId: assignment.id, allocationType: 'RETAINED' } }),
+    ...(kept > 0 ? [prisma.responsibilityAllocation.create({ data: { parentAssignmentId: assignment.id, allocationType: 'RETAINED', allocatedAmount: kept, createdByPersonId: actor.personId } })] : []),
+  ]);
+  await refreshReconciliation(assignment.id);
+  await auditAction(actor, { action: 'KPI_PART_KEPT', entityType: 'kpi_assignment', entityId: assignment.id, oldValues: { kept: sharing.retained }, newValues: { kept } });
   return sharingOf(assignment);
 };
 
@@ -382,4 +328,4 @@ export const refreshReconciliation = async (id) => {
   }
 };
 
-export default { SHARE_METHODS, isDivisible, loadSharing, getAllocations, saveAllocations, loadShareContext, resolveShareMethod, targetForShare, applyShareMethod, assertChildShare, recordChildShare, releaseChildShare, justifyReconciliation, refreshReconciliation };
+export default { SHARE_METHODS, isDivisible, loadSharing, getAllocations, saveKept, loadShareContext, resolveShareMethod, targetForShare, applyShareMethod, assertChildShare, recordChildShare, releaseChildShare, justifyReconciliation, refreshReconciliation };

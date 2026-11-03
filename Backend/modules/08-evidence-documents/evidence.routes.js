@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as evidenceController from './evidence.controller.js';
 import { uploadOneFile } from './upload.middleware.js';
-import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { protect, withAccess, requirePermission } from '../../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
@@ -227,9 +227,11 @@ router.delete('/documents/:id', protect, canCreateDocuments, evidenceController.
  *     responses:
  *       200: { description: Reviewed }
  */
-router.get('/performance-values/:id/evidence', protect, requirePermission(PERMISSIONS.EVIDENCE_READ), evidenceController.listEvidence);
-router.post('/performance-values/:id/evidence', protect, requirePermission(PERMISSIONS.EVIDENCE_LINK), evidenceController.attachEvidence);
-router.delete('/performance-evidence/:id', protect, requirePermission(PERMISSIONS.EVIDENCE_LINK), evidenceController.removeEvidence);
+// Someone with a staff contract attaches evidence to their own results without evidence permissions; the service
+// checks who may act on which results
+router.get('/performance-values/:id/evidence', protect, withAccess, evidenceController.listEvidence);
+router.post('/performance-values/:id/evidence', protect, withAccess, evidenceController.attachEvidence);
+router.delete('/performance-evidence/:id', protect, withAccess, evidenceController.removeEvidence);
 router.patch('/performance-evidence/:id/verify', protect, requirePermission(PERMISSIONS.EVIDENCE_VERIFY), evidenceController.verifyEvidence);
 
 export default router;

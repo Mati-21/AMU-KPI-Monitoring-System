@@ -14,7 +14,7 @@ import { dueAssignments, isDirectEntry, resolveResult, resultSoFar, versionFor }
  */
 
 const REPORT_INCLUDE = {
-  contract: { select: { id: true, officeId: true, assigningOfficeId: true, fiscalYearId: true } },
+  contract: { select: { id: true, officeId: true, assigningOfficeId: true, personId: true, fiscalYearId: true } },
   reportingPeriod: { include: { fiscalYear: { select: { id: true, startDate: true, endDate: true } } } },
 };
 
@@ -92,7 +92,12 @@ const saveValue = (tx, report, line, contributionType, data) => {
 };
 
 const saveCalculatedValues = async (tx, report, line) => {
-  const { aggregated, total, scorePercent } = line.resolved;
+  const { aggregated, total, scorePercent, fromStaff, direct } = line.resolved;
+  if (fromStaff) {
+    // Money is read from its converted amount, so that is set too, replacing anything typed before
+    const converted = line.assignment.kpi.measurementType === 'MONEY' ? direct?.value ?? null : null;
+    await saveValue(tx, report, line, 'DIRECT', { ...resultColumns(direct), convertedValue: converted, exchangeRateId: null, reportingStatus: direct ? 'REPORTED' : 'NOT_REPORTED', note: 'Added up from staff results', enteredByPersonId: null });
+  }
   if (aggregated.kind === 'VALUE') await saveValue(tx, report, line, 'AGGREGATED', resultColumns(aggregated.result));
   if (scorePercent !== null) await saveValue(tx, report, line, 'AGGREGATED', { ...resultColumns(null), value: scorePercent, note: `Score across offices (${line.assignment.kpi.aggregationMethod})` });
 
@@ -140,13 +145,16 @@ const saveContractScore = (tx, report, lines, officialBasis) => {
 
 /**
  * Reports whose figures include this report: the same contract's longer periods and the contract of the office above.
+ * A staff contract's results make up its office's own figure, so the office's reports depend on it instead.
  */
 const dependentReports = async (report) => {
   const period = report.reportingPeriod;
   const contracts = [report.contractId];
-  if (report.contract.assigningOfficeId) {
+  // A person's results feed their office; an office's feed the office above
+  const feedsOfficeId = report.contract.personId ? report.contract.officeId : report.contract.assigningOfficeId;
+  if (feedsOfficeId) {
     const above = await prisma.performanceContract.findFirst({
-      where: { fiscalYearId: report.contract.fiscalYearId, officeId: report.contract.assigningOfficeId },
+      where: { fiscalYearId: report.contract.fiscalYearId, officeId: feedsOfficeId, personId: null },
       select: { id: true },
     });
     if (above) contracts.push(above.id);

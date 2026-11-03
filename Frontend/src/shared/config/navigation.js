@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
+  FileSignature,
   FileText,
   GraduationCap,
   LayoutDashboard,
@@ -37,14 +38,20 @@ export const navigationSections = [
       {
         icon: Target,
         label: 'Performance',
-        path: '/assigned-kpis',
-        permissions: [permissionUtils.permissionKey('view', 'Assigned KPI')],
+        path: '/performance',
+        permissions: ['report:read'],
+      },
+      {
+        icon: FileSignature,
+        label: 'My Contract',
+        path: '/my-contract',
+        permissions: [],
       },
       {
         icon: BadgeCheck,
-        label: 'KPI Approvals',
-        path: '/kpi-approvals',
-        permissions: [permissionUtils.permissionKey('view', 'KPI Approvals'), permissionUtils.permissionKey('create', 'KPI Approvals')],
+        label: 'Approve KPI',
+        path: '/approvals',
+        permissions: ['report:review'],
       },
       {
         icon: ClipboardList,
@@ -68,11 +75,7 @@ export const navigationSections = [
         icon: FileText,
         label: 'Report',
         path: '/report',
-        permissions: [
-          permissionUtils.permissionKey('view', 'KPI Reporting'),
-          permissionUtils.permissionKey('view', 'Other Affiliated Office Reports'),
-          permissionUtils.permissionKey('view', 'Other Role Reports'),
-        ],
+        permissions: ['report:read'],
       },
       {
         icon: Target,

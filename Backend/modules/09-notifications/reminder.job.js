@@ -36,6 +36,7 @@ const officesStillOwing = async (period) => {
   const contracts = await prisma.performanceContract.findMany({
     where: {
       fiscalYearId: period.fiscalYearId,
+      personId: null,
       status: { in: ['APPROVED', 'SIGNED'] },
       assignments: { some: { status: { in: ['APPROVED', 'ACKNOWLEDGED'] }, ...(period.isYearEnd ? {} : { reportingFrequencyId: period.frequencyId }) } },
       reports: { none: { reportingPeriodId: period.id, status: { in: STILL_OPEN_REPORT } } },

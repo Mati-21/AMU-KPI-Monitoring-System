@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as reportController from './report.controller.js';
-import { protect, requirePermission, requireSuperAdmin } from '../../../middleware/authMiddleware.js';
+import { protect, withAccess, requirePermission, requireSuperAdmin } from '../../../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../../../config/permissions.js';
 
 const router = Router();
-const canRead = requirePermission(PERMISSIONS.REPORT_READ);
-const canCreate = requirePermission(PERMISSIONS.REPORT_CREATE);
+// Reading, starting, filling in and submitting a report need only a signed-in person: someone with a staff contract
+// reports on it without report permissions, and the service checks who may act on which report
 const canReview = requirePermission(PERMISSIONS.REPORT_REVIEW);
 
 /**
@@ -45,7 +45,7 @@ const canReview = requirePermission(PERMISSIONS.REPORT_REVIEW);
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: "Report with lines: baseline, target, direct, aggregated, total, achievement" }
+ *       200: { description: "Report with lines (baseline, target, direct, aggregated, total, achievement, evidence) and can: what you may do now" }
  * /api/v1/reports/{id}/values:
  *   put:
  *     summary: Enter the office's own results. Fields follow each KPI's measurement type
@@ -118,11 +118,11 @@ const canReview = requirePermission(PERMISSIONS.REPORT_REVIEW);
  *       200: { description: Reviewed }
  *       409: { description: Evidence is not all verified }
  */
-router.get('/reports', protect, canRead, reportController.listReports);
-router.post('/reports', protect, canCreate, reportController.createReport);
-router.get('/reports/:id', protect, canRead, reportController.getReportById);
-router.put('/reports/:id/values', protect, canCreate, reportController.saveValues);
-router.patch('/reports/:id/submit', protect, requirePermission(PERMISSIONS.REPORT_SUBMIT), reportController.submitReport);
+router.get('/reports', protect, withAccess, reportController.listReports);
+router.post('/reports', protect, withAccess, reportController.createReport);
+router.get('/reports/:id', protect, withAccess, reportController.getReportById);
+router.put('/reports/:id/values', protect, withAccess, reportController.saveValues);
+router.patch('/reports/:id/submit', protect, withAccess, reportController.submitReport);
 router.patch('/reports/:id/start-review', protect, canReview, reportController.startReview);
 router.patch('/reports/:id/review', protect, canReview, reportController.reviewReport);
 
@@ -146,5 +146,30 @@ router.patch('/reports/:id/review', protect, canReview, reportController.reviewR
  *       409: { description: "Not approved, or the period or year is closed" }
  */
 router.patch('/reports/:id/reopen', protect, requireSuperAdmin, reportController.reopenReport);
+
+/**
+ * @swagger
+ * /api/v1/reports/allow-late:
+ *   post:
+ *     summary: Let one office submit a period after its deadline and grace period (Super Admin only)
+ *     description: The report is started if needed. The submission is marked late; the reason is kept in the system log.
+ *     tags: [Performance Scoring]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [contractId, reportingPeriodId, reason]
+ *             properties:
+ *               contractId: { type: string, format: uuid }
+ *               reportingPeriodId: { type: string, format: uuid }
+ *               days: { type: integer, minimum: 1, maximum: 60, default: 7, description: How many days from today it stays open }
+ *               reason: { type: string, example: Penalty agreed by the President's office }
+ *     responses:
+ *       200: { description: The report, open for a late submission }
+ *       403: { description: Not a Super Admin }
+ */
+router.post('/reports/allow-late', protect, requireSuperAdmin, reportController.allowLateSubmission);
 
 export default router;

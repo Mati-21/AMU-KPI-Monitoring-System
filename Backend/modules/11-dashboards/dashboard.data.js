@@ -67,7 +67,7 @@ export const findOffice = async (officeId) => {
 
 export const loadContracts = (fiscalYearId, officeIds) =>
   prisma.performanceContract.findMany({
-    where: { fiscalYearId, ...(officeIds ? { officeId: { in: officeIds } } : {}) },
+    where: { fiscalYearId, personId: null, ...(officeIds ? { officeId: { in: officeIds } } : {}) },
     include: CONTRACT_INCLUDE,
     orderBy: { versionNo: 'asc' },
   });
@@ -156,7 +156,7 @@ export const toOfficeRow = (office, snapshot) => {
  */
 export const loadYearHistory = async (officeId) => {
   const contracts = await prisma.performanceContract.findMany({
-    where: { officeId },
+    where: { officeId, personId: null },
     include: {
       fiscalYear: { select: { id: true, name: true, status: true, startDate: true } },
       reports: { where: { status: 'APPROVED' }, select: { reportingPeriodId: true } },

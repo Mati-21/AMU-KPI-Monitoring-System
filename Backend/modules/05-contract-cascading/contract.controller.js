@@ -9,12 +9,13 @@ const send = (res, data, status = 200) => res.status(status).json({ status: 'suc
 
 // ===== Contracts =====
 export const listContracts = async (req, res) => {
-  const { fiscalYearId, officeId, status } = req.query;
-  send(res, await contractService.listContracts({ fiscalYearId, officeId, status }, actorOf(req)));
+  const { fiscalYearId, officeId, status, mine } = req.query;
+  send(res, await contractService.listContracts({ fiscalYearId, officeId, status, mine }, actorOf(req)));
 };
 export const getContractById = async (req, res) => send(res, await contractService.getContractById(req.params.id, actorOf(req)));
 export const importIntoContract = async (req, res) => send(res, await contractImportService.importIntoContract(req.params.id, req.body || {}, actorOf(req)));
 export const listContractOffices = async (req, res) => send(res, await contractService.listContractOffices(actorOf(req)));
+export const listContractPeople = async (req, res) => send(res, await contractService.listContractPeople(actorOf(req)));
 export const createContract = async (req, res) => send(res, await contractService.createContract(req.body || {}, actorOf(req)), 201);
 export const listRejections = async (req, res) => send(res, await contractService.listRejections({ fiscalYearId: req.query.fiscalYearId }, actorOf(req)));
 export const assignContract = async (req, res) => send(res, await contractService.assignContract(req.params.id, actorOf(req)));
@@ -36,7 +37,7 @@ export const addBaselineEvidence = async (req, res) => send(res, await assignmen
 
 // ===== Responsibility =====
 export const getAllocations = async (req, res) => send(res, await allocationService.getAllocations(req.params.id, actorOf(req)));
-export const saveAllocations = async (req, res) => send(res, await allocationService.saveAllocations(req.params.id, req.body || {}, actorOf(req)));
+export const saveKept = async (req, res) => send(res, await allocationService.saveKept(req.params.id, req.body || {}, actorOf(req)));
 export const justifyReconciliation = async (req, res) => send(res, await allocationService.justifyReconciliation(req.params.id, req.body || {}, actorOf(req)));
 
 // ===== Change requests =====
