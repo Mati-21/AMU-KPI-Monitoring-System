@@ -121,17 +121,25 @@ const childResult = async (child, kpi, period) => {
 /**
  * Result of a KPI measured by shorter periods, for a longer period.
  */
+// Methods that turn the offices below into a score, such as the share of them meeting their target
+const SCORE_METHODS = ['SHARE_MEETING_TARGET', 'WEIGHTED_SCORE'];
+const isScoredFromBelow = (assignment) => assignment.children.length > 0 && SCORE_METHODS.includes(assignment.kpi.aggregationMethod);
+
 const resolveFromShorterPeriods = async (assignment, period) => {
   const rows = await approvedTotalsInWindow(assignment.id, assignment.reportingFrequencyId, period.startDate, period.endDate);
   const expected = await periodCountInWindow(period.fiscalYearId, assignment.reportingFrequencyId, period.startDate, period.endDate);
+  // Each period of a KPI scored from below holds a score, not a measured value, so the longer period takes the
+  // latest score as it is instead of adding scores up as if they were results
+  const scored = isScoredFromBelow(assignment);
+  const results = rows.map(toResult).filter(Boolean);
   return {
     direct: null,
     aggregated: { kind: 'NONE' },
     children: [],
     staff: [],
     fromStaff: false,
-    total: rollUpPeriods(assignment.kpi, rows.map(toResult)),
-    scorePercent: null,
+    total: scored ? null : rollUpPeriods(assignment.kpi, rows.map(toResult)),
+    scorePercent: scored ? results.at(-1)?.value ?? null : null,
     needsOwnFigure: false,
     retained: 0,
     isComplete: expected > 0 && rows.length >= expected,

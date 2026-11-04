@@ -55,8 +55,8 @@ const Navbar = () => {
 
   const fetchUnreadCount = async () => {
     try {
-      const res = await api.get('/notifications/my/unread-count');
-      const count = Number(res?.data?.data?.unread || 0);
+      const res = await api.get('/notifications/unread-count');
+      const count = Number(res?.data?.data?.count || 0);
       setUnreadCount(Number.isFinite(count) ? count : 0);
     } catch {
       // Silent: don't spam users for a non-critical badge update.

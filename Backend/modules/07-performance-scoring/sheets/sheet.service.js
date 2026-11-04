@@ -116,7 +116,8 @@ const contractRef = (contract) => ({
 export const listPerformanceOffices = async ({ fiscalYearId } = {}, actor) => {
   const contracts = await prisma.performanceContract.findMany({
     where: { fiscalYearId: parseUuid(fiscalYearId, 'fiscalYearId'), personId: null, status: { in: SIGNED } },
-    select: { officeId: true, office: OFFICE_REF, assigningOfficeId: true },
+    // parentOfficeId tells the top office apart, whose people may see the whole university
+    select: { officeId: true, office: { select: { ...OFFICE_REF.select, parentOfficeId: true } }, assigningOfficeId: true },
     orderBy: { office: { name: 'asc' } },
   });
   const own = await ownOfficeIdsOf(actor);

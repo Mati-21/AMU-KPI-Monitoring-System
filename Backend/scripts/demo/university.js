@@ -51,10 +51,12 @@ const HEAD_PERMISSIONS = [
   'contract:read', 'contract:manage', 'contract:acknowledge', 'contract:request_change',
   'report:read', 'report:create', 'report:submit', 'report:review',
   'evidence:read', 'evidence:link', 'evidence:verify', 'document:create', 'file:read',
-  'scorecard:read', 'dashboard:read',
+  // read_all within their own scope: the dashboards of the offices below them, to compare
+  'scorecard:read', 'dashboard:read', 'dashboard:read_all',
 ];
-// Staff see only their own staff contract, which needs no contract or report permission. They upload evidence for it.
-const STAFF_PERMISSIONS = ['document:create', 'file:read', 'dashboard:read'];
+// Staff see only their own staff contract and its dashboard, which need no contract, report or dashboard permission.
+// They upload evidence for it.
+const STAFF_PERMISSIONS = ['document:create', 'file:read'];
 
 const createAccount = async ({ firstName, lastName, username, office, position, roleId, scoped = true }) => {
   const person = await prisma.person.create({ data: { firstName, lastName, email: `${username}@amu.edu.et` } });

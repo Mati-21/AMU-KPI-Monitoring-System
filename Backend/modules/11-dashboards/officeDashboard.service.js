@@ -3,18 +3,19 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { startOfTodayUtc } from '../../utils/dates.js';
 import { requiredImprovement } from '../05-contract-cascading/measurement.js';
 import { holdsOnThisOffice } from '../07-performance-scoring/reports/report.access.js';
-import { assertCanView, findOffice, formatMeasured, loadContracts, loadYearHistory, publicLine, publicView, resolveView, toSnapshot } from './dashboard.data.js';
-import { countEvidence, isDue, isOverdue, resultState, summarize } from './dashboard.rules.js';
+import { assertCanView, findOffice, formatMeasured, loadBands, loadContracts, loadStaffContracts, loadYearHistory, publicLine, publicView, resolveView, toSnapshot } from './dashboard.data.js';
+import { countEvidence, isDue, isOverdue, pickCurrent, resultState, summarize } from './dashboard.rules.js';
 
 /**
  * Module 11 — An office's own dashboard (SRS 12.3): what it was given, how it is doing, what is due, its evidence,
  * the feedback it received and its history. An office above sees the same page, without evidence on drafts.
+ * Whoever reviews the office's staff also sees each staff contract's score side by side.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DRAFT_STATUSES = ['NOT_STARTED', 'DRAFT'];
 
-const withPlan = (line) => {
+export const withPlan = (line) => {
   const { kpi } = line.assignment;
   const baseline = line.assignment.baselines[0];
   const target = line.assignment.targets[0];
@@ -26,7 +27,7 @@ const withPlan = (line) => {
   };
 };
 
-const buildDeadlines = (contract, periods, today) => {
+export const buildDeadlines = (contract, periods, today) => {
   const statusIn = new Map(contract.reports.map((report) => [report.reportingPeriodId, report.status]));
   return periods
     .filter((period) => contract.assignments.some((assignment) => isDue(assignment, period)))
@@ -38,7 +39,7 @@ const buildDeadlines = (contract, periods, today) => {
     }));
 };
 
-const loadReports = (contractId, period) =>
+export const loadReports = (contractId, period) =>
   prisma.performanceReport.findMany({
     where: { contractId, ...(period ? { reportingPeriodId: period.id } : {}) },
     select: {
@@ -46,18 +47,43 @@ const loadReports = (contractId, period) =>
       status: true,
       reportingPeriod: { select: { id: true, name: true, endDate: true } },
       values: { where: { contributionType: 'DIRECT' }, select: { reportingStatus: true, evidence: { select: { verificationStatus: true } } } },
-      reviews: { select: { id: true, decision: true, comment: true, reviewedAt: true, reviewerOffice: { select: { id: true, name: true } } } },
+      reviews: { select: { id: true, decision: true, comment: true, reviewedAt: true, reviewer: { select: { id: true, firstName: true, lastName: true } }, reviewerOffice: { select: { id: true, name: true } } } },
     },
     orderBy: { reportingPeriod: { endDate: 'asc' } },
   });
+
+/**
+ * Each staff contract of the office side by side, best score first, for those who review the office's staff or see
+ * the offices below. Scores are compared, never averaged.
+ */
+const loadStaffRows = async (office, view, actor) => {
+  const seesStaff = actor.access.isSuperAdmin || holdsOnThisOffice(actor, PERMISSIONS.REPORT_REVIEW, office.id) || (await actor.access.reaches(PERMISSIONS.DASHBOARD_READ_ALL, office.id));
+  if (!seesStaff) return [];
+  const contracts = await loadStaffContracts(view.fiscalYear.id, office.id);
+  const rows = contracts.map((contract) => {
+    const snapshot = toSnapshot(contract, view.fiscalYear, view.period);
+    const latest = pickCurrent(contract.reports.filter((report) => resultState(report.status) !== 'MISSING'));
+    return {
+      person: contract.person,
+      contractId: contract.id,
+      contractStatus: contract.status,
+      score: snapshot.score,
+      summary: snapshot.summary,
+      latestReport: latest ? { reportId: latest.id, reportingPeriod: latest.reportingPeriod, state: resultState(latest.status) } : null,
+    };
+  });
+  // Best official score first; anyone without one yet comes last rather than counting as zero
+  const scoreOf = (row) => row.score?.officialScore ?? null;
+  return rows.sort((a, b) => (scoreOf(a) === null) - (scoreOf(b) === null) || (scoreOf(b) ?? 0) - (scoreOf(a) ?? 0) || a.person.firstName.localeCompare(b.person.firstName));
+};
 
 export const getOfficeDashboard = async (officeId, query, actor) => {
   const office = await findOffice(officeId);
   await assertCanView(actor, office.id);
 
   const view = await resolveView(query);
-  const [[contract], history] = await Promise.all([loadContracts(view.fiscalYear.id, [office.id]), loadYearHistory(office.id)]);
-  const empty = { ...publicView(view), office, contractStatus: null, score: null, summary: summarize([]), kpis: [], trend: [], deadlines: [], evidence: [], feedback: [], history };
+  const [[contract], history, bands, staff] = await Promise.all([loadContracts(view.fiscalYear.id, [office.id]), loadYearHistory(office.id), loadBands(), loadStaffRows(office, view, actor)]);
+  const empty = { ...publicView(view), bands, office, contractStatus: null, score: null, summary: summarize([]), kpis: [], trend: [], deadlines: [], evidence: [], feedback: [], history, staff };
   if (!contract) return empty;
 
   const snapshot = toSnapshot(contract, view.fiscalYear, view.period);
@@ -84,4 +110,4 @@ export const getOfficeDashboard = async (officeId, query, actor) => {
   };
 };
 
-export default { getOfficeDashboard };
+export default { getOfficeDashboard, withPlan, buildDeadlines, loadReports };

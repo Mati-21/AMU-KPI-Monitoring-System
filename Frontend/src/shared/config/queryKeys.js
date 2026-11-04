@@ -61,6 +61,12 @@ export const queryKeys = {
     audit: ['audit-logs'],
   },
   dashboard: {
-    admin: ['dashboard', 'admin'],
-  }
+    all: ['dashboard'],
+    system: ['dashboard', 'system'],
+    systemUsage: (range) => ['dashboard', 'system', 'usage', range],
+    me: (params) => ['dashboard', 'me', params],
+    office: (officeId, params) => ['dashboard', 'office', officeId, params],
+    below: (officeId, params) => ['dashboard', 'below', officeId, params],
+    university: (params) => ['dashboard', 'university', params],
+  },
 };

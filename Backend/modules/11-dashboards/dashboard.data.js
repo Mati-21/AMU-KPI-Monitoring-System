@@ -3,7 +3,7 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { forbidden, notFound } from '../../utils/httpError.js';
 import { parseUuid } from '../../utils/validation.js';
 import { toNumber } from '../05-contract-cascading/measurement.js';
-import { APPROVED_STATUSES } from '../05-contract-cascading/contract.shared.js';
+import { APPROVED_STATUSES, PERSON_REF } from '../05-contract-cascading/contract.shared.js';
 import { classifyOutcome, formatScore, isDue, isRunningTotal, pickCurrent, resultState, summarize } from './dashboard.rules.js';
 
 /**
@@ -12,12 +12,24 @@ import { classifyOutcome, formatScore, isDue, isRunningTotal, pickCurrent, resul
  */
 
 const PERIOD_REF = {
-  select: { id: true, fiscalYearId: true, frequencyId: true, name: true, startDate: true, endDate: true, submissionDeadline: true, isYearEnd: true, isClosed: true },
+  select: {
+    id: true,
+    fiscalYearId: true,
+    frequencyId: true,
+    name: true,
+    startDate: true,
+    endDate: true,
+    submissionDeadline: true,
+    isYearEnd: true,
+    isClosed: true,
+    frequency: { select: { id: true, name: true, intervalMonths: true } },
+  },
 };
 export const OFFICE_REF = { select: { id: true, name: true, code: true, parentOfficeId: true, officeType: { select: { id: true, name: true, levelOrder: true } } } };
 
 const CONTRACT_INCLUDE = {
   office: OFFICE_REF,
+  person: PERSON_REF,
   reports: { select: { id: true, status: true, reportingPeriodId: true, submittedAt: true, reportingPeriod: PERIOD_REF } },
   scores: { include: { reportingPeriod: PERIOD_REF } },
   assignments: {
@@ -26,6 +38,7 @@ const CONTRACT_INCLUDE = {
       kpi: {
         include: {
           unit: { select: { id: true, name: true, symbol: true } },
+          currency: { select: { id: true, code: true, symbol: true } },
           scale: { include: { levels: { orderBy: { sortOrder: 'asc' } } } },
         },
       },
@@ -73,6 +86,24 @@ export const loadContracts = (fiscalYearId, officeIds) =>
   });
 
 /**
+ * The staff contracts of one office for a year: one per person, the head's own included.
+ */
+export const loadStaffContracts = (fiscalYearId, officeId) =>
+  prisma.performanceContract.findMany({ where: { fiscalYearId, officeId, personId: { not: null } }, include: CONTRACT_INCLUDE });
+
+/**
+ * A person's own staff contracts for a year, normally one.
+ */
+export const loadPersonalContracts = (fiscalYearId, personId) =>
+  prisma.performanceContract.findMany({ where: { fiscalYearId, personId }, include: CONTRACT_INCLUDE, orderBy: { office: { name: 'asc' } } });
+
+/**
+ * The university's performance bands, best first, so a score is named and coloured the same way everywhere.
+ */
+export const loadBands = () =>
+  prisma.performanceStatusThreshold.findMany({ where: { isActive: true }, select: { id: true, name: true, minPercent: true, color: true }, orderBy: { minPercent: 'desc' } }).then((rows) => rows.map((row) => ({ ...row, minPercent: toNumber(row.minPercent) })));
+
+/**
  * A stored baseline or target as plain numbers.
  */
 export const formatMeasured = (row) =>
@@ -108,7 +139,7 @@ const buildLine = (assignment, stateOfPeriod, fiscalYear, period) => {
   return {
     assignment,
     assignmentId: assignment.id,
-    kpi: { id: kpi.id, name: kpi.name, measurementType: kpi.measurementType, direction: kpi.direction, scoringMethod: kpi.scoringMethod, unit: kpi.unit },
+    kpi: { id: kpi.id, name: kpi.name, measurementType: kpi.measurementType, direction: kpi.direction, scoringMethod: kpi.scoringMethod, unit: kpi.unit, currency: kpi.currency },
     weight: toNumber(officialRow?.weight.weight ?? assignment.weights[0]?.weight ?? 0),
     outcome: classifyOutcome({ official, latestState }),
     official,
@@ -171,4 +202,4 @@ export const loadYearHistory = async (officeId) => {
     .sort((a, b) => b.fiscalYear.startDate - a.fiscalYear.startDate);
 };
 
-export default { resolveView, publicView, assertCanView, findOffice, loadContracts, formatMeasured, publicLine, toSnapshot, toOfficeRow, loadYearHistory };
+export default { resolveView, publicView, assertCanView, findOffice, loadContracts, loadStaffContracts, loadPersonalContracts, loadBands, formatMeasured, publicLine, toSnapshot, toOfficeRow, loadYearHistory };

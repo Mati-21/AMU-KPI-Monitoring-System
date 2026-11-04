@@ -2,7 +2,7 @@ import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { startOfTodayUtc } from '../../utils/dates.js';
 import { requiredImprovement, toNumber } from '../05-contract-cascading/measurement.js';
-import { OFFICE_REF, assertCanView, findOffice, formatMeasured, loadContracts, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
+import { OFFICE_REF, assertCanView, findOffice, formatMeasured, loadBands, loadContracts, publicLine, publicView, resolveView, toOfficeRow, toSnapshot } from './dashboard.data.js';
 import { compareOffices, isDue, isOverdue, isSubmitted, resultState, summarize } from './dashboard.rules.js';
 
 /**
@@ -98,6 +98,7 @@ export const getParentOfficeDashboard = async (officeId, query, actor) => {
 
   return {
     ...publicView(view),
+    bands: await loadBands(),
     office,
     contractStatus: own?.contract.status ?? null,
     score: own?.score ?? null,

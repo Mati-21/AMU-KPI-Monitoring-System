@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as dashboardController from './dashboard.controller.js';
-import { protect, requirePermission } from '../../middleware/authMiddleware.js';
+import { protect, requirePermission, requireSuperAdmin, withAccess } from '../../middleware/authMiddleware.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 
 const router = Router();
@@ -50,6 +50,46 @@ const canRead = requirePermission(PERMISSIONS.DASHBOARD_READ);
  *       200: { description: "{ fiscalYear, office, score, summary, kpis, responsibilities, subordinates, reports: { awaitingReview, pending } }" }
  *       403: { description: Office not in your scope }
  */
+/**
+ * @swagger
+ * /api/v1/dashboards/me:
+ *   get:
+ *     summary: The signed-in person's own staff contract for a year
+ *     description: |
+ *       Their score, KPIs, trend, deadlines and the feedback of whoever reviews them. Needs no permission: everyone sees
+ *       only their own. With several contracts (people working in two offices) contractId picks one.
+ *     tags: [Dashboards]
+ *     parameters:
+ *       - { in: query, name: fiscalYearId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: reportingPeriodId, schema: { type: string, format: uuid } }
+ *       - { in: query, name: contractId, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: "{ fiscalYear, person, office, contracts, score, summary, kpis, trend, deadlines, feedback }" }
+ */
+router.get('/dashboards/me', protect, withAccess, dashboardController.getMyDashboard);
+
+/**
+ * @swagger
+ * /api/v1/dashboards/system:
+ *   get:
+ *     summary: The Super Admin's system dashboard
+ *     description: Counts of users, KPIs, themes and roles; who is online now; the latest audit activity.
+ *     tags: [Dashboards]
+ *     responses:
+ *       200: { description: "{ stats, status, activity }" }
+ *       403: { description: Not the Super Admin }
+ * /api/v1/dashboards/system/usage:
+ *   get:
+ *     summary: People who logged in and logins, by hour today or by day over the last 7 or 30 days
+ *     tags: [Dashboards]
+ *     parameters:
+ *       - { in: query, name: range, schema: { type: string, enum: [today, 7d, 30d], default: today } }
+ *     responses:
+ *       200: { description: "{ range, unit, slots: [{ hour | date, weekday, activeUsers, logins }] }" }
+ *       403: { description: Not the Super Admin }
+ */
+router.get('/dashboards/system', protect, requireSuperAdmin, dashboardController.getSystemDashboard);
+router.get('/dashboards/system/usage', protect, requireSuperAdmin, dashboardController.getSystemUsage);
 router.get('/dashboards/university', protect, canRead, dashboardController.getUniversityDashboard);
 router.get('/dashboards/offices/:officeId', protect, canRead, dashboardController.getOfficeDashboard);
 router.get('/dashboards/offices/:officeId/subordinates', protect, canRead, dashboardController.getParentOfficeDashboard);
