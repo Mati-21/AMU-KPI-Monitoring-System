@@ -49,12 +49,17 @@ export const queryKeys = {
   messaging: {
     all: ['messages'],
     conversations: ['messages', 'conversations'],
-    history: (userId) => ['messages', 'history', userId],
+    history: (personId) => ['messages', 'history', personId],
+    search: (query) => ['messages', 'search', query],
     unreadCount: ['messages', 'unread-count'],
   },
   notifications: {
     all: ['notifications'],
+    list: (params) => ['notifications', 'list', params],
     unreadCount: ['notifications', 'unread-count'],
+  },
+  support: {
+    all: ['support-requests'],
   },
   system: {
     settings: ['system-settings'],

@@ -45,7 +45,7 @@ const OfficesPage = () => {
           <TabButton label="Offices" value="offices" activeValue={tab} onChange={setTab} />
           <TabButton label="All Offices" value="list" activeValue={tab} onChange={setTab} />
           <TabButton label="Hierarchy" value="hierarchy" activeValue={tab} onChange={setTab} />
-          <TabButton label="Office Types" value="types" activeValue={tab} onChange={setTab} />
+          <TabButton label="Office Categories" value="types" activeValue={tab} onChange={setTab} />
         </div>
 
         {tab === 'types' && <OfficeTypesPanel />}

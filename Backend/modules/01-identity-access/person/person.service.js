@@ -7,6 +7,7 @@ import { activeOn, isActiveToday, startOfTodayUtc } from '../../../utils/dates.j
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
 import { parseBooleanQuery, parseUuid } from '../../../utils/validation.js';
+import { newStaffNumber } from '../../../utils/staffNumber.js';
 
 const ACCOUNT_SELECT = {
   id: true,
@@ -84,12 +85,6 @@ const assertUsernameAvailable = async (username, exceptAccountId) => {
   if (existing && existing.id !== exceptAccountId) throw conflict(`Username "${username}" is already taken`);
 };
 
-const assertStaffNumberAvailable = async (staffNumber, exceptPersonId) => {
-  if (!staffNumber) return;
-  const existing = await prisma.person.findUnique({ where: { staffNumber } });
-  if (existing && existing.id !== exceptPersonId) throw conflict(`Staff number "${staffNumber}" is already registered`);
-};
-
 const getPersonOrThrow = async (id) => {
   const person = await prisma.person.findUnique({ where: { id }, include: { userAccount: true } });
   if (!person) throw notFound('Person not found');
@@ -162,13 +157,13 @@ export const getPersonById = async (id) => {
 /**
  * Create a Person, optionally with a login account ({ account: { username, temporaryPassword, ... } }).
  */
-export const createPerson = async ({ staffNumber, firstName, middleName, lastName, email, phone, account }, actor) => {
+export const createPerson = async ({ firstName, middleName, lastName, email, phone, account }, actor) => {
   if (!firstName?.trim() || !lastName?.trim()) throw badRequest('firstName and lastName are required');
 
   const cleanEmail = normalizeEmail(email);
   await assertEmailAvailable(cleanEmail);
-  const cleanStaffNumber = staffNumber?.trim() || null;
-  await assertStaffNumberAvailable(cleanStaffNumber);
+  // The staff number is given by the system; one typed into the request is ignored
+  const staffNumber = await newStaffNumber();
 
   const username = account?.username?.trim();
   const temporaryPassword = account?.temporaryPassword;
@@ -181,7 +176,7 @@ export const createPerson = async ({ staffNumber, firstName, middleName, lastNam
   const person = await prisma.$transaction(async (tx) => {
     const created = await tx.person.create({
       data: {
-        staffNumber: cleanStaffNumber,
+        staffNumber,
         firstName: firstName.trim(),
         middleName: middleName?.trim() || null,
         lastName: lastName.trim(),
@@ -206,7 +201,7 @@ export const createPerson = async ({ staffNumber, firstName, middleName, lastNam
     return tx.person.findUnique({ where: { id: created.id }, include: PERSON_INCLUDE });
   });
 
-  await auditAction(actor, { action: 'PERSON_CREATED', entityType: 'person', entityId: person.id, newValues: { staffNumber: cleanStaffNumber, firstName: person.firstName, lastName: person.lastName, email: cleanEmail, username: username ?? null } });
+  await auditAction(actor, { action: 'PERSON_CREATED', entityType: 'person', entityId: person.id, newValues: { staffNumber, firstName: person.firstName, lastName: person.lastName, email: cleanEmail, username: username ?? null } });
   return formatPerson(person);
 };
 
@@ -229,10 +224,6 @@ export const updatePerson = async (id, data, actor) => {
   }
   if (data.middleName !== undefined) update.middleName = data.middleName?.trim() || null;
   if (data.phone !== undefined) update.phone = data.phone?.trim() || null;
-  if (data.staffNumber !== undefined) {
-    update.staffNumber = data.staffNumber?.trim() || null;
-    await assertStaffNumberAvailable(update.staffNumber, existing.id);
-  }
   if (data.email !== undefined) {
     update.email = normalizeEmail(data.email);
     await assertEmailAvailable(update.email, existing.id);

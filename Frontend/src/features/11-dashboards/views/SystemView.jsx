@@ -5,7 +5,7 @@ import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { actionLabel, entityLabel, formatDateTime } from '../../10-system/lib/auditFormat';
 import StatCard from '../components/system/StatCard';
 import UsageCharts from '../components/system/UsageCharts';
-import { useSystemDashboard } from '../hooks/useDashboards';
+import { useLivePresence, useSystemDashboard } from '../hooks/useDashboards';
 import { fullName } from '../lib/dashboardRules';
 
 /**
@@ -15,6 +15,7 @@ import { fullName } from '../lib/dashboardRules';
 const SystemView = ({ onOpenUniversity }) => {
   const navigate = useNavigate();
   const { data, isLoading, error } = useSystemDashboard();
+  useLivePresence();
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading the dashboard...</p>;
   if (error) return <p className="text-sm text-red-600 dark:text-red-400">{apiErrorMessage(error, 'Could not load the system dashboard.')}</p>;

@@ -7,6 +7,7 @@ import { seedSettings } from './seedSettings.js';
 import { seedReference } from './seedReference.js';
 import { startOfTodayUtc } from '../utils/dates.js';
 import { SUPER_ADMIN_ROLE } from '../config/permissions.js';
+import { newStaffNumber } from '../utils/staffNumber.js';
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'mati@gmail.com').trim().toLowerCase();
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'mati.admin').trim().toLowerCase();
@@ -61,14 +62,17 @@ export const seedAdmin = async () => {
         title: 'System Administrator',
       },
     });
+    // The administrator is not the head of the university: that is for the president or whoever leads it
     if (!adminPosition) {
       adminPosition = await prisma.position.create({
         data: {
           officeId: rootOffice.id,
           title: 'System Administrator',
-          isHead: true,
+          isHead: false,
         },
       });
+    } else if (adminPosition.isHead) {
+      adminPosition = await prisma.position.update({ where: { id: adminPosition.id }, data: { isHead: false } });
     }
 
     // 4. Role: Super Admin
@@ -104,6 +108,7 @@ export const seedAdmin = async () => {
     if (!adminPerson) {
       adminPerson = await prisma.person.create({
         data: {
+          staffNumber: await newStaffNumber(),
           firstName: ADMIN_FIRST_NAME,
           middleName: ADMIN_FATHER_NAME,
           lastName: ADMIN_GRANDFATHER_NAME,
@@ -111,6 +116,10 @@ export const seedAdmin = async () => {
           phone: ADMIN_PHONE,
         },
       });
+    }
+
+    if (!adminPerson.staffNumber) {
+      adminPerson = await prisma.person.update({ where: { id: adminPerson.id }, data: { staffNumber: await newStaffNumber() } });
     }
 
     // 7. Super Admin UserAccount (temporary password + mandatory MFA)

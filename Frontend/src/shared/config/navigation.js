@@ -14,8 +14,8 @@ import {
   Settings2,
   Shield,
   Target,
-  User,
   Users,
+  LifeBuoy,
   MessageSquare,
 } from 'lucide-react';
 import permissionUtils from '../../features/03-access-control/lib/permissionUtils';
@@ -122,7 +122,7 @@ export const navigationSections = [
         icon: Bell,
         label: 'Alerts',
         path: '/alert-notification',
-        permissions: [permissionUtils.permissionKey('view', 'Alerts & Notifications')],
+        permissions: [],
       },
       {
         icon: ScrollText,
@@ -131,7 +131,7 @@ export const navigationSections = [
         permissions: ['audit:read'],
       },
       {
-        icon: MessageSquare,
+        icon: LifeBuoy,
         label: 'Support Requests',
         path: '/support-requests',
         permissions: ['support:manage'],
@@ -140,17 +140,6 @@ export const navigationSections = [
         icon: MessageSquare,
         label: 'Direct Messages',
         path: '/direct-messages',
-        permissions: [permissionUtils.permissionKey('view', 'Direct Messages')],
-      },
-    ],
-  },
-  {
-    label: 'Account',
-    items: [
-      {
-        icon: User,
-        label: 'Profile',
-        path: '/profile',
         permissions: [],
       },
     ],

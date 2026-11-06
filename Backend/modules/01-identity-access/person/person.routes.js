@@ -40,7 +40,6 @@ const router = Router();
  *             type: object
  *             required: [firstName, lastName]
  *             properties:
- *               staffNumber: { type: string, example: AMU-00123 }
  *               firstName: { type: string, example: Abebe }
  *               middleName: { type: string, example: Kebede }
  *               lastName: { type: string, example: Alemu }
@@ -82,7 +81,6 @@ router.post('/persons', protect, requirePermission(PERMISSIONS.USER_CREATE), per
  *           schema:
  *             type: object
  *             properties:
- *               staffNumber: { type: string }
  *               firstName: { type: string }
  *               middleName: { type: string }
  *               lastName: { type: string }

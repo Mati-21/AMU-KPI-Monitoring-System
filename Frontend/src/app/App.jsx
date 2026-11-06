@@ -130,9 +130,7 @@ function App() {
                       <Route path="/support-requests" element={<SupportRequests />} />
                     </Route>
                     <Route path="/contact-messages" element={<Navigate to="/support-requests" replace />} />
-                    <Route element={<RequirePermission permission={permissionUtils.permissionKey('view', 'Direct Messages')} />}>
-                      <Route path="/direct-messages" element={<DirectMessageView />} />
-                    </Route>
+                    <Route path="/direct-messages" element={<DirectMessageView />} />
 
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Route>

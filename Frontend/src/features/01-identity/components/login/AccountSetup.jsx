@@ -205,6 +205,11 @@ const CodeBoxes = ({ value, onChange }) => {
   const boxes = useRef([]);
   const focusBox = (index) => boxes.current[Math.max(0, Math.min(index, CODE_LENGTH - 1))]?.focus();
 
+  // When the code is cleared after a wrong attempt, start again at the first box
+  useEffect(() => {
+    if (value === '') boxes.current[0]?.focus();
+  }, [value]);
+
   const enter = (index, text) => {
     const digits = text.replace(/\D/g, '').slice(0, CODE_LENGTH);
     if (!digits) return;
@@ -268,7 +273,7 @@ export const MfaSetupStep = ({ mutation, onCancel }) => {
 
   const submit = (event) => {
     event.preventDefault();
-    mutation.mutate(code);
+    mutation.mutate(code, { onError: () => setCode('') });
   };
 
   const error = mutation.error || setupError;

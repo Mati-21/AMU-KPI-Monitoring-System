@@ -8,10 +8,11 @@ import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
 import SearchInput from '../../../shared/components/ui/SearchInput';
 import { TablePagination } from '../../../shared/components/ui/Table';
+import { queryKeys } from '../../../shared/config/queryKeys';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 
-const QUERY_KEY = ['support-requests'];
+const QUERY_KEY = queryKeys.support.all;
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
 

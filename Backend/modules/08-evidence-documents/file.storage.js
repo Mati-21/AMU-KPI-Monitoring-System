@@ -15,6 +15,7 @@ export const UPLOAD_FOLDERS = Object.freeze({
   PROFILE_PICTURES: 'profile-pictures',
   KPI_EVIDENCE: 'kpi-evidence',
   SYSTEM_ASSETS: 'system-assets',
+  MESSAGE_ATTACHMENTS: 'message-attachments',
 });
 
 /**

@@ -13,11 +13,12 @@ const useAccountAction = (send) => {
   return useMutation({ mutationFn: send, onSuccess: refreshPeople });
 };
 
-export const usePersons = (params) =>
+export const usePersons = (params, { enabled = true } = {}) =>
   useQuery({
     queryKey: queryKeys.users.list(params),
     queryFn: () => api.get('/persons', { params }).then(({ data }) => data),
     placeholderData: keepPreviousData,
+    enabled,
   });
 
 export const usePerson = (personId) =>

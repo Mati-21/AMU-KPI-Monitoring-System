@@ -17,7 +17,7 @@ import { PlacementsCard } from '../../components/profile/AboutCards';
 import { useAccountSessions, useEnforceMfa, usePerson, useResetPassword, useRevokeAccountSessions, useSaveAccount, useSetAccountActive, useUpdatePerson } from '../../hooks/useUsers';
 
 const MIN_PASSWORD_LENGTH = 8;
-const EDITABLE_FIELDS = ['firstName', 'middleName', 'lastName', 'staffNumber', 'email', 'phone'];
+const EDITABLE_FIELDS = ['firstName', 'middleName', 'lastName', 'email', 'phone'];
 
 const Field = ({ label, ...props }) => (
   <label className="block space-y-1">
@@ -58,7 +58,7 @@ const DetailsCard = ({ person, canEdit }) => {
           <Field label="First name" required disabled={!canEdit} value={form.firstName} onChange={set('firstName')} />
           <Field label="Middle name" disabled={!canEdit} value={form.middleName} onChange={set('middleName')} />
           <Field label="Last name" required disabled={!canEdit} value={form.lastName} onChange={set('lastName')} />
-          <Field label="Staff number" disabled={!canEdit} value={form.staffNumber} onChange={set('staffNumber')} />
+          <Field label="Staff number" disabled readOnly value={person.staffNumber ?? ''} />
           <Field label="Email" type="email" disabled={!canEdit} value={form.email} onChange={set('email')} />
           <Field label="Phone" type="tel" disabled={!canEdit} value={form.phone} onChange={set('phone')} />
           {canEdit && (

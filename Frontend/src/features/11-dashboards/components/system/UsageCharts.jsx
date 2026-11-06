@@ -155,7 +155,7 @@ const StatusCard = ({ status }) => {
     { label: 'Offline', value: status.offline, color: SLATE },
   ];
   return (
-    <Card title="User Status" description="Active accounts online now (used in the last 15 minutes)">
+    <Card title="User Status" description="Active accounts with the app open right now. Updates live.">
       <div className="flex items-center gap-6">
         <div className="h-32 w-32 shrink-0" aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%">

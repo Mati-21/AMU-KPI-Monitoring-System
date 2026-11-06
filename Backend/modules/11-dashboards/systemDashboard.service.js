@@ -1,17 +1,16 @@
 import { prisma } from '../../config/database.js';
+import { getOnlineAccountIds } from '../../realtime/socket.js';
 import { badRequest } from '../../utils/httpError.js';
 
 /**
  * Module 11 — The Super Admin's system dashboard: what the system holds and how it is being used. Counts of users,
- * KPIs, themes and roles; who is online now; the latest activity in the audit log; and, asked for separately, how
+ * KPIs, themes and roles; who is online now (accounts with a live connection); the latest activity in the audit log; and, asked for separately, how
  * many people logged in and how many logins there were, today by the hour or over the last 7 or 30 days by the day.
  * Performance itself is on the university dashboard.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RANGES = { today: 1, '7d': 7, '30d': 30 };
-// A session used in the last 15 minutes counts as online
-const ONLINE_WINDOW_MS = 15 * 60 * 1000;
 // Days are counted on Ethiopian time (UTC+3), so a day's logins match the university's own day
 const LOCAL_OFFSET_MS = 3 * 60 * 60 * 1000;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -69,15 +68,11 @@ export const getSystemUsage = async ({ range = 'today' } = {}) => {
 };
 
 /**
- * People with a live session used in the last few minutes, against every active account.
+ * Accounts with the app open right now (a live connection), against every active account.
  */
-const onlineStatus = async (now, totalUsers) => {
-  const sessions = await prisma.userSession.findMany({
-    where: { revokedAt: null, expiresAt: { gt: now }, lastUsedAt: { gte: new Date(now.getTime() - ONLINE_WINDOW_MS) }, userAccount: { isActive: true } },
-    select: { userAccountId: true },
-    distinct: ['userAccountId'],
-  });
-  const online = sessions.length;
+const onlineStatus = async (totalUsers) => {
+  const connected = getOnlineAccountIds();
+  const online = connected.length === 0 ? 0 : await prisma.userAccount.count({ where: { id: { in: connected }, isActive: true, person: { archivedAt: null } } });
   return { online, offline: Math.max(0, totalUsers - online) };
 };
 
@@ -90,7 +85,7 @@ const recentActivity = () =>
 
 export const getSystemDashboard = async () => {
   const stats = await countStats();
-  const [status, activity] = await Promise.all([onlineStatus(new Date(), stats.users), recentActivity()]);
+  const [status, activity] = await Promise.all([onlineStatus(stats.users), recentActivity()]);
   return { stats, status, activity };
 };
 

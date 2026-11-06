@@ -10,7 +10,7 @@ import { useNotification } from '../../../09-notifications/context/NotificationC
 import { useCreatePerson } from '../../hooks/useUsers';
 
 const MIN_PASSWORD_LENGTH = 8;
-const EMPTY_FORM = { firstName: '', middleName: '', lastName: '', staffNumber: '', email: '', phone: '', createLogin: true, username: '', temporaryPassword: '', mfaEnforced: false };
+const EMPTY_FORM = { firstName: '', middleName: '', lastName: '', email: '', phone: '', createLogin: true, username: '', temporaryPassword: '', mfaEnforced: false };
 
 const Field = ({ label, required, children }) => (
   <label className="block space-y-1.5">
@@ -77,9 +77,6 @@ const AddUser = ({ onDone }) => {
           </Field>
           <Field label="Last Name" required>
             <Input required value={form.lastName} onChange={set('lastName')} />
-          </Field>
-          <Field label="Staff Number">
-            <Input value={form.staffNumber} onChange={set('staffNumber')} />
           </Field>
         </div>
       </section>

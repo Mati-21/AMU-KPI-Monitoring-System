@@ -10,8 +10,9 @@ import { logout } from '../../../features/01-identity/store/authSlice';
 import PersonAvatar from '../../../features/01-identity/components/PersonAvatar';
 import { useCan } from '../../../features/03-access-control/hooks/useCan';
 import { api } from '../../api/axios';
-import { useNotification } from '../../../features/09-notifications/context/NotificationContext';
-import { useSocket } from '../../context/SocketContext';
+import { useMarkAllRead, useMarkRead, useNotificationList, useNotificationRealtime, useUnreadCount } from '../../../features/09-notifications/hooks/useNotifications';
+import { notificationLink } from '../../../features/09-notifications/lib/notificationLink';
+import { useMessagingRealtime, useUnreadMessagesCountQuery } from '../../../features/13-messaging/hooks/useMessaging';
 import { getFileUrl } from '../../lib/utils';
 
 const navLinks = ['About', 'Features', 'Benefits'];
@@ -19,8 +20,6 @@ const navLinks = ['About', 'Features', 'Benefits'];
 const Navbar = () => {
   const { isDark, toggleTheme } = useTheme();
   const can = useCan();
-
-  const { notify } = useNotification();
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -40,229 +39,33 @@ const Navbar = () => {
   const otherOffices = Math.max(0, (user?.placements?.length ?? 0) - 1);
 
   const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notificationLoading, setNotificationLoading] = useState(false);
-  const [recentNotifications, setRecentNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const notificationRef = useRef(null);
-  const notificationOpenRef = useRef(false);
-  const prevUnreadCountRef = useRef(null);
-  const skipSoundOnFirstLoadRef = useRef(true);
-  const audioContextRef = useRef(null);
-  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
-  const audioUnlockedRef = useRef(false);
 
-  const formatDateLabel = formatEthiopianDateTime;
+  useNotificationRealtime();
+  const { data: unreadCount = 0 } = useUnreadCount();
+  const { data: recent, isLoading: notificationLoading } = useNotificationList({ limit: 5, enabled: isAuthenticated && notificationOpen });
+  const recentNotifications = recent?.items ?? [];
+  const markRead = useMarkRead();
+  const markAllRead = useMarkAllRead();
 
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await api.get('/notifications/unread-count');
-      const count = Number(res?.data?.data?.count || 0);
-      setUnreadCount(Number.isFinite(count) ? count : 0);
-    } catch {
-      // Silent: don't spam users for a non-critical badge update.
-    }
+  const openNotification = (item) => {
+    setNotificationOpen(false);
+    if (!item.isRead) markRead.mutate(item.id);
+    navigate(notificationLink(item) ?? '/alert-notification');
   };
 
-  const fetchUnreadMessagesCount = async () => {
-    try {
-      const res = await api.get('/messages/unread-count');
-      setUnreadMessagesCount(res?.data?.data?.unread || 0);
-    } catch {
-      // Silent
-    }
-  };
-
-  const playNotificationSound = async () => {
-    try {
-      if (!audioContextRef.current) {
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextCtor) return;
-        audioContextRef.current = new AudioContextCtor();
-      }
-
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      const now = ctx.currentTime;
-      const master = ctx.createGain();
-      master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-      master.connect(ctx.destination);
-
-      const tones = [523.25, 659.25];
-      tones.forEach((freq, index) => {
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
-
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, now + index * 0.02);
-        gain.gain.exponentialRampToValueAtTime(1.0, now + index * 0.02 + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.02 + 0.12);
-
-        osc.connect(gain);
-        gain.connect(master);
-        osc.start(now + index * 0.02);
-        osc.stop(now + index * 0.02 + 0.14);
-      });
-    } catch {
-      // Browser may block autoplay audio; ignore quietly.
-    }
-  };
+  useMessagingRealtime();
+  const { data: unreadMessagesCount = 0 } = useUnreadMessagesCountQuery();
 
   useEffect(() => {
-    const unlockAudio = async () => {
-      if (audioUnlockedRef.current) return;
-      audioUnlockedRef.current = true;
-      try {
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextCtor) return;
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContextCtor();
-        }
-        if (audioContextRef.current.state === 'suspended') {
-          await audioContextRef.current.resume();
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    window.addEventListener('pointerdown', unlockAudio, { once: true });
-    window.addEventListener('keydown', unlockAudio, { once: true });
-
-    return () => {
-      window.removeEventListener('pointerdown', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
-    };
-  }, []);
-
-  const fetchRecentNotifications = async () => {
-    try {
-      setNotificationLoading(true);
-      const res = await api.get('/notifications/my', { params: { limit: 5, offset: 0 } });
-      const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
-      setRecentNotifications(rows);
-    } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to load notifications.', 'error');
-    } finally {
-      setNotificationLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetchUnreadCount();
-    fetchUnreadMessagesCount();
-    // keep badge reasonably fresh
-    const interval = setInterval(() => {
-      fetchUnreadCount();
-      fetchUnreadMessagesCount();
-    }, 60_000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
-
-  const socket = useSocket();
-
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on('notifications:new', (payload) => {
-      try {
-        if (!notificationOpenRef.current) {
-          playNotificationSound();
-        }
-
-        setUnreadCount((prev) => {
-          const next = Number(prev || 0) + 1;
-          prevUnreadCountRef.current = next;
-          return next;
-        });
-
-        setRecentNotifications((prev) => {
-          const nextItem = payload;
-          const merged = [nextItem, ...(Array.isArray(prev) ? prev : [])]
-            .filter(Boolean)
-            .filter((item, index, arr) => arr.findIndex((x) => String(x?.Id) === String(item?.Id)) === index)
-            .slice(0, 5);
-          return merged;
-        });
-      } catch {
-        // ignore
-      }
-    });
-
-    socket.on('messages:new', () => {
-      if (window.location.pathname !== '/direct-messages') {
-        playNotificationSound();
-        setUnreadMessagesCount(prev => prev + 1);
-      }
-    });
-
-    return () => {
-      socket.off('notifications:new');
-      socket.off('messages:new');
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const previous = prevUnreadCountRef.current;
-    prevUnreadCountRef.current = unreadCount;
-
-    if (skipSoundOnFirstLoadRef.current) {
-      skipSoundOnFirstLoadRef.current = false;
-      return;
-    }
-
-    if (!notificationOpenRef.current && previous !== null && Number(unreadCount) > Number(previous)) {
-      playNotificationSound();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unreadCount, isAuthenticated]);
-
-  const markAllReadFromBell = async () => {
-    if (unreadCount <= 0) return;
-
-    // Optimistic UI: clear badge immediately on click.
-    setUnreadCount(0);
-    setRecentNotifications((prev) => prev.map((n) => ({ ...n, IsRead: true })));
-
-    try {
-      await api.patch('/notifications/my/read-all');
-    } catch (error) {
-      // restore true unread count from server
-      fetchUnreadCount();
-      notify(error?.response?.data?.message || 'Failed to mark notifications as read.', 'error');
-    }
-  };
-
-  useEffect(() => {
-    if (!notificationOpen) return;
-    fetchRecentNotifications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notificationOpen]);
-
-  useEffect(() => {
-    if (!notificationOpen) return;
-
+    if (!notificationOpen) return undefined;
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setNotificationOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [notificationOpen]);
-
-  useEffect(() => {
-    notificationOpenRef.current = notificationOpen;
   }, [notificationOpen]);
 
   const rolePreview = useMemo(() => {
@@ -335,10 +138,7 @@ const Navbar = () => {
           <button
             type="button"
             className="p-2 rounded-lg hover:bg-muted relative"
-            onClick={() => {
-              setUnreadMessagesCount(0);
-              navigate('/direct-messages');
-            }}
+            onClick={() => navigate('/direct-messages')}
             aria-label="Direct Messages"
           >
             <MessageSquare className="w-5 h-5 text-muted-foreground" />
@@ -354,15 +154,7 @@ const Navbar = () => {
           <button
             type="button"
             className="p-2 rounded-lg hover:bg-muted relative"
-            onClick={() => {
-              setNotificationOpen((prev) => {
-                const next = !prev;
-                if (next) {
-                  markAllReadFromBell();
-                }
-                return next;
-              });
-            }}
+            onClick={() => setNotificationOpen((prev) => !prev)}
             aria-label="Notifications"
             aria-haspopup="menu"
             aria-expanded={notificationOpen}
@@ -379,16 +171,23 @@ const Navbar = () => {
             <div className="absolute right-0 mt-2 w-80 rounded-md bg-card shadow-md z-50 border border-border overflow-hidden">
               <div className="px-3 py-2 border-b border-border flex items-center justify-between">
                 <p className="text-sm font-semibold">Notifications</p>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-primary hover:underline"
-                  onClick={() => {
-                    setNotificationOpen(false);
-                    navigate('/alert-notification');
-                  }}
-                >
-                  View all
-                </button>
+                <div className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => markAllRead.mutate()}>
+                      Mark all read
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-primary hover:underline"
+                    onClick={() => {
+                      setNotificationOpen(false);
+                      navigate('/alert-notification');
+                    }}
+                  >
+                    View all
+                  </button>
+                </div>
               </div>
 
               <div className="max-h-96 overflow-auto">
@@ -399,20 +198,17 @@ const Navbar = () => {
                 ) : (
                   <div className="p-2 space-y-1">
                     {recentNotifications.map((item) => {
-                      const title = item?.Title || 'Notification';
-                      const message = item?.Message || '';
-                      const createdAt = formatDateLabel(item?.CreatedAt);
-                      const isUnread = !item?.IsRead;
+                      const title = item.title || 'Notification';
+                      const message = item.message || '';
+                      const createdAt = formatEthiopianDateTime(item.createdAt);
+                      const isUnread = !item.isRead;
 
                       return (
                         <button
                           type="button"
-                          key={item.Id}
+                          key={item.id}
                           className={`w-full text-left px-3 py-2.5 rounded-md border border-border/60 hover:bg-muted ${isUnread ? 'bg-muted/30' : ''}`}
-                          onClick={() => {
-                            setNotificationOpen(false);
-                            navigate('/alert-notification');
-                          }}
+                          onClick={() => openNotification(item)}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">

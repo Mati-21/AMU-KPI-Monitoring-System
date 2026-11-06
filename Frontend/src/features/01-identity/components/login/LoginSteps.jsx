@@ -70,6 +70,7 @@ export const PasswordStep = ({ mutation }) => {
 const CodeField = ({ value, onChange }) => (
   <IconField
     id="code"
+    autoFocus
     label="6-digit Code"
     icon={KeyRound}
     type="text"
@@ -84,10 +85,17 @@ const CodeField = ({ value, onChange }) => (
 
 export const MfaCodeStep = ({ mutation, onBack }) => {
   const [code, setCode] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
+  // A wrong code is cleared, and the field is rebuilt so the cursor is back in it
   const submit = (event) => {
     event.preventDefault();
-    mutation.mutate(code);
+    mutation.mutate(code, {
+      onError: () => {
+        setCode('');
+        setAttempt((count) => count + 1);
+      },
+    });
   };
 
   return (
@@ -96,7 +104,7 @@ export const MfaCodeStep = ({ mutation, onBack }) => {
         <ShieldCheck className="h-8 w-8 text-primary" />
       </div>
       <StepTitle title="Two-Factor Authentication" text="Enter the code from your authenticator app." />
-      <CodeField value={code} onChange={setCode} />
+      <CodeField key={attempt} value={code} onChange={setCode} />
       <ErrorText error={mutation.error} />
       <SubmitButton pending={mutation.isPending} pendingText="Verifying...">
         Verify

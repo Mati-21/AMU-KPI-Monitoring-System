@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/database.js';
 import { SUPER_ADMIN_ROLE } from '../../config/permissions.js';
 import { seedPermissions } from '../seedPermissions.js';
+import { newStaffNumber } from '../../utils/staffNumber.js';
 
 /**
  * The demo university: its offices, a head for each, three staff in each office at the bottom, and the Super Admin.
@@ -59,7 +60,7 @@ const HEAD_PERMISSIONS = [
 const STAFF_PERMISSIONS = ['document:create', 'file:read'];
 
 const createAccount = async ({ firstName, lastName, username, office, position, roleId, scoped = true }) => {
-  const person = await prisma.person.create({ data: { firstName, lastName, email: `${username}@amu.edu.et` } });
+  const person = await prisma.person.create({ data: { staffNumber: await newStaffNumber(), firstName, lastName, email: `${username}@amu.edu.et` } });
   const account = await prisma.userAccount.create({
     data: { personId: person.id, username, passwordHash: await bcrypt.hash(PASSWORD, 10), isActive: true, mustChangePassword: false, mfaEnforced: false, mfaEnabled: false, mfaType: 'totp' },
   });

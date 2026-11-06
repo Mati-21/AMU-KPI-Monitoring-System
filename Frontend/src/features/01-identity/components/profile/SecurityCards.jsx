@@ -38,7 +38,10 @@ export const PasswordCard = ({ mfaEnabled }) => {
         setForm(empty);
         notify(`Password changed. ${otherSessionsSignedOut} other device(s) were signed out.`, 'success');
       },
-      onError: (error) => notify(apiErrorMessage(error, 'Could not change your password.'), 'error'),
+      onError: (error) => {
+        setForm({ ...form, code: '' });
+        notify(apiErrorMessage(error, 'Could not change your password.'), 'error');
+      },
     });
   };
 
@@ -75,6 +78,11 @@ export const MfaCard = ({ user }) => {
   const [code, setCode] = useState('');
   const showError = (fallback) => (error) => notify(apiErrorMessage(error, fallback), 'error');
 
+  const wrongCode = (error) => {
+    setCode('');
+    showError('That code is not valid.')(error);
+  };
+
   const begin = () => start.mutate(undefined, { onSuccess: setSetup, onError: showError('Could not start the setup.') });
 
   const finish = (message) => () => {
@@ -86,8 +94,8 @@ export const MfaCard = ({ user }) => {
 
   const submit = (event) => {
     event.preventDefault();
-    if (setup) verify.mutate(code, { onSuccess: finish('Two-factor authentication is on.'), onError: showError('That code is not valid.') });
-    else disable.mutate(code, { onSuccess: finish('Two-factor authentication is off.'), onError: showError('That code is not valid.') });
+    if (setup) verify.mutate(code, { onSuccess: finish('Two-factor authentication is on.'), onError: wrongCode });
+    else disable.mutate(code, { onSuccess: finish('Two-factor authentication is off.'), onError: wrongCode });
   };
 
   const cancel = () => {

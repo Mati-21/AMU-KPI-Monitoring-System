@@ -66,8 +66,8 @@ const OfficeFormDialog = ({ office, defaultParentId, tree, types, onClose, onSav
           <CustomSelect compact options={officeOptions(tree, { except: office?.id })} value={form.parentOfficeId} onChange={set('parentOfficeId')} placeholder="Choose the parent office" />
         </Field>
       )}
-      <Field label="Office Type" required group hint={typeOptions.length === 0 ? 'No office type fits under this parent. Add one in the Office Types tab.' : !typeStillFits && form.officeTypeId ? 'The current type cannot sit under this parent. Choose another.' : undefined}>
-        <CustomSelect compact options={typeOptions} value={typeStillFits ? form.officeTypeId : ''} onChange={set('officeTypeId')} placeholder="Choose the type" />
+      <Field label="Office Category" required group hint={typeOptions.length === 0 ? 'No office category fits under this parent. Add one in the Office Categories tab.' : !typeStillFits && form.officeTypeId ? 'The current category cannot sit under this parent. Choose another.' : undefined}>
+        <CustomSelect compact options={typeOptions} value={typeStillFits ? form.officeTypeId : ''} onChange={set('officeTypeId')} placeholder="Choose the category" />
       </Field>
       {moved && (
         <Field label="Why is it moving?">

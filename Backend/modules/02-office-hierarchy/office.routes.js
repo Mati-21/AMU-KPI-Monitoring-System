@@ -261,11 +261,11 @@ router.delete('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MA
  *         application/json:
  *           schema:
  *             type: object
- *             required: [personId, positionId, startDate]
+ *             required: [personId, positionId]
  *             properties:
  *               personId: { type: string, format: uuid }
  *               positionId: { type: string, format: uuid }
- *               startDate: { type: string, format: date }
+ *               startDate: { type: string, format: date, description: Defaults to today }
  *               endDate: { type: string, format: date }
  *               isPrimary: { type: boolean, default: false }
  *     responses:

@@ -588,7 +588,8 @@ export const assignMember = async (officeId, { personId, positionId, startDate, 
 
   if (!personId) throw badRequest('personId is required');
   if (!positionId) throw badRequest('positionId is required');
-  const start = parseDate(startDate, 'startDate');
+  // A placement starts today unless a date is given, and runs until it is ended
+  const start = startDate ? parseDate(startDate, 'startDate') : startOfTodayUtc();
   const end = parseDate(endDate, 'endDate', { required: false });
   if (end && end < start) throw badRequest('endDate must be on or after startDate');
   const primaryRequested = parseBoolean(isPrimary, 'isPrimary');

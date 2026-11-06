@@ -10,4 +10,4 @@ export const scopeLabel = (assignment) => (assignment.scopeOffice ? assignment.s
 export const roleNames = (assignments = []) =>
   [...new Set(assignments.map((assignment) => (startsLater(assignment) ? `${assignment.role.name} (from ${formatDate(assignment.validFrom)})` : assignment.role.name)))].join(', ') || 'No role yet';
 
-export const assignmentPeriod = (assignment) => `From ${formatDate(assignment.validFrom)}${assignment.validTo ? ` to ${formatDate(assignment.validTo)}` : ''}`;
+export const assignmentPeriod = (assignment) => `Since ${formatDate(assignment.validFrom)}${assignment.validTo ? ` until ${formatDate(assignment.validTo)}` : ''}`;

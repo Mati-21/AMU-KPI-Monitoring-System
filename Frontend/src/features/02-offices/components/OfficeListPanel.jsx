@@ -39,7 +39,7 @@ const OfficeListPanel = ({ onOpen }) => {
   const lastPage = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const currentPage = Math.min(page, lastPage);
   const pageRows = shown.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const typeOptions = [{ value: 'all', label: 'All types' }, ...types.map((type) => ({ value: type.id, label: type.name }))];
+  const typeOptions = [{ value: 'all', label: 'All categories' }, ...types.map((type) => ({ value: type.id, label: type.name }))];
 
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -63,7 +63,7 @@ const OfficeListPanel = ({ onOpen }) => {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Code</TableHead>
-              <TableHead>Type</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>Reports To</TableHead>
               <TableHead>Sub-offices</TableHead>
               <TableHead>Status</TableHead>

@@ -13,6 +13,7 @@ import { seedPermissions } from './seedPermissions.js';
 import { seedReference } from './seedReference.js';
 import { seedScalesUnits } from './seedScalesUnits.js';
 import { seedSettings } from './seedSettings.js';
+import { newStaffNumber } from '../utils/staffNumber.js';
 
 /**
  * npm run seed:base — everything the system needs before anyone plans a year, without touching what is there:
@@ -106,7 +107,7 @@ const ensureSuperAdmin = async () => {
   const type = (await prisma.officeType.findUnique({ where: { name: 'University' } })) ?? (await prisma.officeType.create({ data: { name: 'University', levelOrder: 1 } }));
   const office = (await prisma.office.findFirst({ where: { parentOfficeId: null } })) ?? (await prisma.office.create({ data: { name: 'Arba Minch University', code: 'AMU', officeTypeId: type.id } }));
   const position = await prisma.position.create({ data: { officeId: office.id, title: 'System Administrator' } });
-  const person = await prisma.person.create({ data: { firstName: 'System', lastName: 'Administrator', email: `${ADMIN_USERNAME}@amu.edu.et` } });
+  const person = await prisma.person.create({ data: { staffNumber: await newStaffNumber(), firstName: 'System', lastName: 'Administrator', email: `${ADMIN_USERNAME}@amu.edu.et` } });
   const account = await prisma.userAccount.create({
     data: { personId: person.id, username: ADMIN_USERNAME, passwordHash: await bcrypt.hash(ADMIN_PASSWORD, 10), isActive: true, mustChangePassword: true, mfaEnforced: false, mfaEnabled: false, mfaType: 'totp' },
   });

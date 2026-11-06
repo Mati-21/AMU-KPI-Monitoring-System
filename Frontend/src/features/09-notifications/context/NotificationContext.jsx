@@ -25,7 +25,7 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   const notify = useCallback(
-    (message, type = 'info', timeout = 3500, options = {}) => {
+    (message, type = 'info', timeout = 3500) => {
       const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       setNotifications((prev) => [...prev, { id, message, type, position: 'center' }]);
 

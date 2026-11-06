@@ -5,6 +5,7 @@ import Button from '../../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../shared/components/ui/Card';
 import { Input } from '../../../../shared/components/ui/Input';
 import { apiErrorMessage } from '../../../../shared/lib/apiError';
+import { formatEthiopianDate } from '../../../../shared/lib/ethiopianDate';
 import { roleNames } from '../../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import { useUpdateMyProfile } from '../../hooks/useProfile';
@@ -106,6 +107,7 @@ export const PlacementsCard = ({ placements = [], action, placementAction }) => 
             <p className="text-sm font-semibold text-foreground">{placement.office.name}</p>
             {placement.position && <p className="text-xs text-muted-foreground">{placement.position.title}</p>}
             <p className="mt-1 text-xs text-primary">{roleNames(placement.roles)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Since {formatEthiopianDate(placement.startDate)}</p>
           </div>
           {placementAction?.(placement)}
         </div>

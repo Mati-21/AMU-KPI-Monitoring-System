@@ -22,7 +22,7 @@ const OfficeTypeDialog = ({ officeType, onClose }) => {
       { id: officeType?.id, values: { ...form, levelOrder: Number(form.levelOrder) } },
       {
         onSuccess: () => {
-          notify('Office type saved.', 'success');
+          notify('Office category saved.', 'success');
           onClose();
         },
       }
@@ -30,7 +30,7 @@ const OfficeTypeDialog = ({ officeType, onClose }) => {
   };
 
   return (
-    <FormDialog open onClose={onClose} title={officeType ? 'Edit Office Type' : 'Add Office Type'} description="A level in the university structure, such as College or Department." onSubmit={submit} error={save.error} pending={save.isPending}>
+    <FormDialog open onClose={onClose} title={officeType ? 'Edit Office Category' : 'Add Office Category'} description="A level in the university structure, such as College or Department." onSubmit={submit} error={save.error} pending={save.isPending}>
       <Field label="Name" required>
         <Input required value={form.name} onChange={set('name')} />
       </Field>
@@ -61,7 +61,7 @@ const OfficeTypesPanel = () => {
   const confirmDelete = () =>
     remove.mutate(deleting.id, {
       onSuccess: () => {
-        notify('Office type deleted.', 'success');
+        notify('Office category deleted.', 'success');
         closeDelete();
       },
     });
@@ -72,11 +72,11 @@ const OfficeTypesPanel = () => {
         <div className="flex justify-end border-b border-border p-4">
           <Button type="button" className="gap-2" onClick={() => setEditing({})}>
             <Plus className="h-4 w-4" />
-            Add Office Type
+            Add Office Category
           </Button>
         </div>
       )}
-      {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load office types.')}</p>}
+      {error && <p className="p-4 text-sm text-red-500">{apiErrorMessage(error, 'Could not load office categories.')}</p>}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -119,7 +119,7 @@ const OfficeTypesPanel = () => {
       </div>
 
       {editing && <OfficeTypeDialog officeType={editing.id ? editing : null} onClose={() => setEditing(null)} />}
-      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete Office Type" description={`Delete "${deleting?.name}"? A type used by any office cannot be deleted.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
+      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete Office Category" description={`Delete "${deleting?.name}"? A category used by any office cannot be deleted.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
     </div>
   );
 };

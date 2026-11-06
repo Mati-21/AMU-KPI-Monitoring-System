@@ -187,22 +187,22 @@ enum AchievementStatus {
 // ===== Identity =====
 
 model Person {
-  id                   String   @id @default(uuid()) @db.Uuid
-  staffNumber          String?  @unique @map("staff_number")
-  firstName            String   @map("first_name")
-  middleName           String?  @map("middle_name")
-  lastName             String   @map("last_name")
-  email                String?  @unique
+  id                   String    @id @default(uuid()) @db.Uuid
+  staffNumber          String?   @unique @map("staff_number")
+  firstName            String    @map("first_name")
+  middleName           String?   @map("middle_name")
+  lastName             String    @map("last_name")
+  email                String?   @unique
   phone                String?
-  profilePictureFileId String?  @unique @map("profile_picture_file_id") @db.Uuid
-  isActive             Boolean  @default(true) @map("is_active")
+  profilePictureFileId String?   @unique @map("profile_picture_file_id") @db.Uuid
+  isActive             Boolean   @default(true) @map("is_active")
   // Archiving hides a person for good but keeps the row, so history still names them. The email and staff number
   // move here, which frees them for a new registration.
   archivedAt           DateTime? @map("archived_at") @db.Timestamptz(6)
   archivedEmail        String?   @map("archived_email")
   archivedStaffNumber  String?   @map("archived_staff_number")
-  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   profilePicture FileUpload?    @relation("PersonProfilePicture", fields: [profilePictureFileId], references: [id])
   userAccount    UserAccount?
@@ -229,6 +229,8 @@ model Person {
   filesUploaded           FileUpload[]               @relation("FileUploader")
   supportRequests         SupportRequest[]           @relation("SupportRequester")
   supportRequestsHandled  SupportRequest[]           @relation("SupportHandler")
+  messagesSent            Message[]                  @relation("MessageSender")
+  messagesReceived        Message[]                  @relation("MessageReceiver")
   documentsCreated        Document[]
   reportsPrepared         PerformanceReport[]        @relation("ReportPreparer")
   reportsSubmitted        PerformanceReport[]        @relation("ReportSubmitter")
@@ -240,7 +242,7 @@ model Person {
   notificationsCreated    Notification[]
   notificationRecipients  NotificationRecipient[]
   auditLogs               AuditLog[]
-  contractRejections ContractRejection[] @relation("ContractRejector")
+  contractRejections      ContractRejection[]        @relation("ContractRejector")
 
   @@map("person")
 }
@@ -321,11 +323,11 @@ model Office {
   positions         Position[]
   officePersons     OfficePerson[]
   roleScopes        OfficePersonRole[]
-  hierarchyHistory  OfficeHierarchyHistory[] @relation("HistoryOffice")
-  hierarchyChildren OfficeHierarchyHistory[] @relation("HistoryParent")
+  hierarchyHistory  OfficeHierarchyHistory[]   @relation("HistoryOffice")
+  hierarchyChildren OfficeHierarchyHistory[]   @relation("HistoryParent")
   coordinatedKpis   Kpi[]
-  contracts         PerformanceContract[]    @relation("ContractOffice")
-  contractsAssigned PerformanceContract[]    @relation("ContractAssigningOffice")
+  contracts         PerformanceContract[]      @relation("ContractOffice")
+  contractsAssigned PerformanceContract[]      @relation("ContractAssigningOffice")
   reviews           PerformanceReview[]
   documents         Document[]
   notifications     Notification[]
@@ -357,10 +359,10 @@ model OfficeHierarchyHistory {
 }
 
 model Position {
-  id       String  @id @default(uuid()) @db.Uuid
-  officeId String  @map("office_id") @db.Uuid
-  title    String
-  isHead   Boolean @default(false) @map("is_head")
+  id         String    @id @default(uuid()) @db.Uuid
+  officeId   String    @map("office_id") @db.Uuid
+  title      String
+  isHead     Boolean   @default(false) @map("is_head")
   // A position someone held is archived instead of deleted: it leaves every list, and past placements keep its title
   archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
 
@@ -918,10 +920,11 @@ model FileUpload {
   uploadedByPersonId String?  @map("uploaded_by_person_id") @db.Uuid
   uploadedAt         DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(6)
 
-  uploadedBy Person?         @relation("FileUploader", fields: [uploadedByPersonId], references: [id])
-  profileOf  Person?         @relation("PersonProfilePicture")
-  documents  Document[]
-  settings   SystemSetting[]
+  uploadedBy         Person?             @relation("FileUploader", fields: [uploadedByPersonId], references: [id])
+  profileOf          Person?             @relation("PersonProfilePicture")
+  documents          Document[]
+  settings           SystemSetting[]
+  messageAttachments MessageAttachment[]
 
   @@map("file_upload")
 }
@@ -995,22 +998,22 @@ model ChangeRequestEvidence {
 // ===== Reporting and evaluation =====
 
 model PerformanceReport {
-  id                  String       @id @default(uuid()) @db.Uuid
-  contractId          String       @map("contract_id") @db.Uuid
-  reportingPeriodId   String       @map("reporting_period_id") @db.Uuid
-  status              ReportStatus @default(NOT_STARTED)
-  preparedByPersonId  String?      @map("prepared_by_person_id") @db.Uuid
-  submittedByPersonId String?      @map("submitted_by_person_id") @db.Uuid
-  submittedAt         DateTime?    @map("submitted_at") @db.Timestamptz(6)
-  isProvisional       Boolean      @default(true) @map("is_provisional")
+  id                    String       @id @default(uuid()) @db.Uuid
+  contractId            String       @map("contract_id") @db.Uuid
+  reportingPeriodId     String       @map("reporting_period_id") @db.Uuid
+  status                ReportStatus @default(NOT_STARTED)
+  preparedByPersonId    String?      @map("prepared_by_person_id") @db.Uuid
+  submittedByPersonId   String?      @map("submitted_by_person_id") @db.Uuid
+  submittedAt           DateTime?    @map("submitted_at") @db.Timestamptz(6)
+  isProvisional         Boolean      @default(true) @map("is_provisional")
   // Submitted after the deadline. Stays set once true, as the record behind any penalty given outside the system
-  isLate              Boolean      @default(false) @map("is_late")
+  isLate                Boolean      @default(false) @map("is_late")
   // The Super Admin can let one office submit after the deadline and grace period, until this day
-  lateAllowedUntil      DateTime? @map("late_allowed_until") @db.Date
-  lateAllowedReason     String?   @map("late_allowed_reason")
-  lateAllowedByPersonId String?   @map("late_allowed_by_person_id") @db.Uuid
-  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lateAllowedUntil      DateTime?    @map("late_allowed_until") @db.Date
+  lateAllowedReason     String?      @map("late_allowed_reason")
+  lateAllowedByPersonId String?      @map("late_allowed_by_person_id") @db.Uuid
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   contract        PerformanceContract @relation(fields: [contractId], references: [id])
   reportingPeriod ReportingPeriod     @relation(fields: [reportingPeriodId], references: [id])
@@ -1245,6 +1248,36 @@ model SupportRequest {
 
   @@index([status, createdAt])
   @@map("support_request")
+}
+
+// A direct message between two people. Deleting one removes it for both.
+model Message {
+  id               String    @id @default(uuid()) @db.Uuid
+  senderPersonId   String    @map("sender_person_id") @db.Uuid
+  receiverPersonId String    @map("receiver_person_id") @db.Uuid
+  content          String?
+  readAt           DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  sender      Person              @relation("MessageSender", fields: [senderPersonId], references: [id], onDelete: Cascade)
+  receiver    Person              @relation("MessageReceiver", fields: [receiverPersonId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
+
+  @@index([senderPersonId, receiverPersonId, createdAt])
+  @@index([receiverPersonId, readAt])
+  @@map("message")
+}
+
+model MessageAttachment {
+  id        String @id @default(uuid()) @db.Uuid
+  messageId String @map("message_id") @db.Uuid
+  fileId    String @unique @map("file_id") @db.Uuid
+
+  message Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  file    FileUpload @relation(fields: [fileId], references: [id])
+
+  @@index([messageId])
+  @@map("message_attachment")
 }
 
 model AuditLog {
