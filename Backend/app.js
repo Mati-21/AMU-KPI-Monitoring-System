@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import { requestMetrics } from './middleware/requestMetrics.js';
 import compression from 'compression';
 import errorHandler from './middleware/errorMiddleware.js';
 import { swaggerSpec, swaggerUi, swaggerUiOptions } from './config/swagger.js';
@@ -78,6 +79,9 @@ app.use(cookieParser());
 if (httpLogMode !== 'off') {
   app.use(morgan(httpLogMode === 'dev' ? 'dev' : 'tiny'));
 }
+
+// Times every request for System Monitoring
+app.use(requestMetrics);
 
 // Swagger Documentation
 app.use(

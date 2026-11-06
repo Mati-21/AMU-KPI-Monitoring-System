@@ -2,6 +2,7 @@ import { PrismaClient  } from '@prisma/client';
 import { Pool  } from 'pg';
 import { PrismaPg  } from '@prisma/adapter-pg';
 import dotenv from 'dotenv';
+import { recordQuery } from '../utils/queryTracker.js';
 dotenv.config();
 
 const sqlLoggingEnabled = String(process.env.DB_LOG_SQL || 'false').toLowerCase() === 'true';
@@ -17,9 +18,15 @@ const pool = new Pool({
 });
 const adapter = new PrismaPg(pool);
 
+// Queries arrive as events so every one can be timed for System Monitoring; DB_LOG_SQL=true also prints them
 const prisma = new PrismaClient({
   adapter,
-  log: sqlLoggingEnabled ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+  log: [{ emit: 'event', level: 'query' }, ...(sqlLoggingEnabled ? [{ emit: 'stdout', level: 'info' }] : []), { emit: 'stdout', level: 'warn' }, { emit: 'stdout', level: 'error' }],
+});
+
+prisma.$on('query', (event) => {
+  recordQuery(event);
+  if (sqlLoggingEnabled) console.log(`prisma:query ${event.duration}ms ${event.query}`);
 });
 
 const connectDB = async () => {
@@ -40,4 +47,4 @@ const connectDB = async () => {
   }
 };
 
-export {  prisma, connectDB  };
+export {  prisma, pool, connectDB  };

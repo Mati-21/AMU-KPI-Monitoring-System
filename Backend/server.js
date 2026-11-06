@@ -7,6 +7,7 @@ import { initSocket } from './realtime/socket.js';
 import { seedPermissions } from './scripts/seedPermissions.js';
 import { seedSettings } from './scripts/seedSettings.js';
 import { startReminderJob } from './modules/09-notifications/reminder.job.js';
+import { startMonitoring } from './modules/14-system-monitoring/monitoring.sampler.js';
 import { ensureUploadFolders } from './modules/08-evidence-documents/file.storage.js';
 
 /**
@@ -52,6 +53,7 @@ const startServer = async () => {
     server.listen(PORT, () => {
       console.log(`🚀 API running on http://localhost:${PORT} (${process.env.NODE_ENV || 'development'})`);
       startReminderJob();
+      startMonitoring().catch((error) => console.warn('[Monitoring] Could not start:', error.message));
     });
   } catch (error) {
     console.error('Failed to start server:', error);

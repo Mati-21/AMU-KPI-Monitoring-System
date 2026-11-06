@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
  * so a stored path never depends on what the uploader called the file.
  */
 
-const UPLOAD_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads');
+export const UPLOAD_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads');
 
 // One folder per kind of file
 export const UPLOAD_FOLDERS = Object.freeze({

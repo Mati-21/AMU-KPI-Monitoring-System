@@ -61,6 +61,10 @@ export const queryKeys = {
   support: {
     all: ['support-requests'],
   },
+  monitoring: {
+    all: ['monitoring'],
+    section: (name, params) => ['monitoring', name, params],
+  },
   system: {
     settings: ['system-settings'],
     audit: ['audit-logs'],

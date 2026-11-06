@@ -63,6 +63,25 @@
       ]
     },
     {
+      "group": "monitoring",
+      "label": "System Monitoring",
+      "description": "When the System Monitoring dashboard raises an alert, and how long its history is kept.",
+      "settings": [
+        { "key": "alerts_enabled", "label": "Raise alerts", "type": "boolean", "default": true, "public": false, "description": "Turn off to stop opening new alerts. The dashboard keeps measuring." },
+        { "key": "cpu_warning_percent", "label": "CPU warning (%)", "type": "number", "default": 85, "min": 10, "max": 100, "integer": true, "public": false, "description": "Raise an alert when the CPU stays at or above this for a minute." },
+        { "key": "memory_warning_percent", "label": "Memory warning (%)", "type": "number", "default": 90, "min": 10, "max": 100, "integer": true, "public": false, "description": "Raise an alert when memory use is at or above this." },
+        { "key": "disk_warning_percent", "label": "Disk warning (%)", "type": "number", "default": 85, "min": 10, "max": 100, "integer": true, "public": false, "description": "Raise a warning when a disk is at or above this full." },
+        { "key": "disk_critical_percent", "label": "Disk critical (%)", "type": "number", "default": 95, "min": 10, "max": 100, "integer": true, "public": false, "description": "Raise a critical alert when a disk is at or above this full." },
+        { "key": "event_loop_lag_warning_ms", "label": "Event loop lag warning (ms)", "type": "number", "default": 200, "min": 10, "max": 5000, "integer": true, "public": false, "description": "Raise an alert when the server is this slow to react, which means it is overloaded or blocked." },
+        { "key": "error_rate_warning_percent", "label": "Server error rate warning (%)", "type": "number", "default": 5, "min": 1, "max": 100, "integer": true, "public": false, "description": "Raise a critical alert when this share of requests in the last five minutes failed with a server error (5xx)." },
+        { "key": "latency_p95_warning_ms", "label": "Slow response warning (ms)", "type": "number", "default": 2000, "min": 100, "max": 60000, "integer": true, "public": false, "description": "Raise an alert when the slowest 5 in 100 requests in the last five minutes took longer than this." },
+        { "key": "failed_logins_warning", "label": "Failed sign-ins warning (per 10 minutes)", "type": "number", "default": 20, "min": 3, "max": 10000, "integer": true, "public": false, "description": "Raise an alert when failed sign-ins in ten minutes reach this." },
+        { "key": "certificate_warning_days", "label": "Certificate warning (days)", "type": "number", "default": 14, "min": 1, "max": 365, "integer": true, "public": false, "description": "Raise an alert when the TLS certificate expires within this many days." },
+        { "key": "slow_query_ms", "label": "Slow query (ms)", "type": "number", "default": 500, "min": 50, "max": 60000, "integer": true, "public": false, "description": "A database query slower than this is listed under Slow queries." },
+        { "key": "retention_days", "label": "Keep history (days)", "type": "number", "default": 14, "min": 1, "max": 90, "integer": true, "public": false, "description": "How long the one-minute history behind the trend charts is kept." }
+      ]
+    },
+    {
       "group": "system",
       "label": "System Status",
       "description": "Availability of the system. In maintenance mode only university-wide settings managers can use the API.",

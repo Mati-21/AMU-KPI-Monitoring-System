@@ -231,6 +231,7 @@ model Person {
   supportRequestsHandled  SupportRequest[]           @relation("SupportHandler")
   messagesSent            Message[]                  @relation("MessageSender")
   messagesReceived        Message[]                  @relation("MessageReceiver")
+  alertsAcknowledged      SystemAlert[]
   documentsCreated        Document[]
   reportsPrepared         PerformanceReport[]        @relation("ReportPreparer")
   reportsSubmitted        PerformanceReport[]        @relation("ReportSubmitter")
@@ -1278,6 +1279,71 @@ model MessageAttachment {
 
   @@index([messageId])
   @@map("message_attachment")
+}
+
+// Every time the server starts: the restart history, and which release was running
+model SystemBoot {
+  id          String   @id @default(uuid()) @db.Uuid
+  startedAt   DateTime @default(now()) @map("started_at") @db.Timestamptz(6)
+  version     String
+  commit      String?
+  nodeVersion String   @map("node_version")
+  hostname    String
+  environment String
+
+  @@index([startedAt])
+  @@map("system_boot")
+}
+
+enum AlertSeverity {
+  P1
+  P2
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+// A problem the monitoring found. It opens when a rule is first broken and resolves itself once the rule holds again.
+model SystemAlert {
+  id                     String        @id @default(uuid()) @db.Uuid
+  ruleKey                String        @map("rule_key")
+  severity               AlertSeverity
+  title                  String
+  message                String
+  value                  Float?
+  status                 AlertStatus   @default(OPEN)
+  openedAt               DateTime      @default(now()) @map("opened_at") @db.Timestamptz(6)
+  acknowledgedAt         DateTime?     @map("acknowledged_at") @db.Timestamptz(6)
+  acknowledgedByPersonId String?       @map("acknowledged_by_person_id") @db.Uuid
+  resolvedAt             DateTime?     @map("resolved_at") @db.Timestamptz(6)
+
+  acknowledgedBy Person? @relation(fields: [acknowledgedByPersonId], references: [id], onDelete: SetNull)
+
+  @@index([status, openedAt])
+  @@index([ruleKey, status])
+  @@map("system_alert")
+}
+
+// One row per minute: how busy and how loaded the server was. Old rows are removed after the retention period.
+model MetricRollup {
+  id              String   @id @default(uuid()) @db.Uuid
+  bucketStart     DateTime @unique @map("bucket_start") @db.Timestamptz(6)
+  requests        Int
+  status4xx       Int      @map("status_4xx")
+  status5xx       Int      @map("status_5xx")
+  p50Ms           Float    @map("p50_ms")
+  p95Ms           Float    @map("p95_ms")
+  p99Ms           Float    @map("p99_ms")
+  cpuPercent      Float    @map("cpu_percent")
+  memoryPercent   Float    @map("memory_percent")
+  diskUsedPercent Float?   @map("disk_used_percent")
+  eventLoopLagMs  Float    @map("event_loop_lag_ms")
+  dbConnections   Int      @map("db_connections")
+
+  @@map("metric_rollup")
 }
 
 model AuditLog {

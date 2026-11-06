@@ -17,6 +17,7 @@ import systemRoutes from './10-system-governance/system.routes.js';
 import dashboardRoutes from './11-dashboards/dashboard.routes.js';
 import supportRoutes from './12-support/support.routes.js';
 import messageRoutes from './13-messaging/message.routes.js';
+import monitoringRoutes from './14-system-monitoring/monitoring.routes.js';
 
 /**
  * API v1 router. Each module router declares its own resource paths exactly as listed in
@@ -48,5 +49,6 @@ router.use(systemRoutes); // 10 /settings, /audit-logs
 router.use(dashboardRoutes); // 11 /dashboards
 router.use(supportRoutes); // 12 /support-requests
 router.use(messageRoutes); // 13 /messages
+router.use(monitoringRoutes); // 14 /monitoring
 
 export default router;

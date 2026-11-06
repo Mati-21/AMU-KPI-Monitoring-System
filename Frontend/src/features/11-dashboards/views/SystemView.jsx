@@ -3,14 +3,32 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { actionLabel, entityLabel, formatDateTime } from '../../10-system/lib/auditFormat';
+import AlertsBanner from '../components/system/monitoring/AlertsBanner';
+import DatabaseSection from '../components/system/monitoring/DatabaseSection';
+import HostSection from '../components/system/monitoring/HostSection';
+import { LazySection } from '../components/system/monitoring/parts';
+import SectionNav from '../components/system/monitoring/SectionNav';
+import SecuritySection from '../components/system/monitoring/SecuritySection';
+import StatusStrip from '../components/system/monitoring/StatusStrip';
+import TrafficSection from '../components/system/monitoring/TrafficSection';
 import StatCard from '../components/system/StatCard';
 import UsageCharts from '../components/system/UsageCharts';
 import { useLivePresence, useSystemDashboard } from '../hooks/useDashboards';
 import { fullName } from '../lib/dashboardRules';
 
+// The parts of this long page, in order, for the links at the top
+const SECTIONS = [
+  { id: 'usage', label: 'Usage' },
+  { id: 'host', label: 'Server' },
+  { id: 'traffic', label: 'Traffic' },
+  { id: 'database', label: 'Database' },
+  { id: 'security', label: 'Security' },
+  { id: 'activity', label: 'Activity' },
+];
+
 /**
- * The Super Admin's view of the system itself: what it holds, how it is used and what happened last. Performance
- * is one choice away, under Whole university.
+ * The Super Admin's view of the system itself: is it healthy, what it holds, how it is used, how the server, traffic
+ * and database are doing, and what happened last. Performance is one choice away, under Whole university.
  */
 const SystemView = ({ onOpenUniversity }) => {
   const navigate = useNavigate();
@@ -31,15 +49,36 @@ const SystemView = ({ onOpenUniversity }) => {
 
   return (
     <div className="space-y-6">
+      <StatusStrip />
+      <AlertsBanner />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((card) => (
           <StatCard key={card.label} {...card} onAdd={card.to ? () => navigate(card.to) : undefined} />
         ))}
       </div>
 
-      <UsageCharts status={status} />
+      <SectionNav sections={SECTIONS} />
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <section id="usage" aria-label="Usage" className="scroll-mt-16 space-y-4">
+        <h2 className="text-lg font-bold text-foreground">Usage</h2>
+        <UsageCharts status={status} />
+      </section>
+
+      <LazySection id="host" title="Server">
+        {(view) => <HostSection {...view} />}
+      </LazySection>
+      <LazySection id="traffic" title="Traffic">
+        {(view) => <TrafficSection {...view} />}
+      </LazySection>
+      <LazySection id="database" title="Database">
+        {(view) => <DatabaseSection {...view} />}
+      </LazySection>
+      <LazySection id="security" title="Security">
+        {(view) => <SecuritySection {...view} />}
+      </LazySection>
+
+      <div id="activity" className="scroll-mt-16 grid gap-6 lg:grid-cols-3">
         <section aria-label="Recent activity" className="rounded-xl border border-border bg-card p-6 shadow-sm lg:col-span-2">
           <div className="flex items-start justify-between gap-3">
             <div>
