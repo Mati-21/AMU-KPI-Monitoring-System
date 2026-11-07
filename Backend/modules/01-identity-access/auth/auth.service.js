@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { generateSecret, generateURI, verify } from 'otplib';
 import QRCode from 'qrcode';
 import { STAGE_TOKEN_TTL, TOKEN_TYPES, signToken, verifyToken } from '../../../config/jwt.js';
-import { getActiveGrants, getPermissionCodes } from '../../03-access-control/access.service.js';
+import { getActiveGrants, getPermissionCodes, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { REVOKE_REASONS, createSession, revokeAllSessions } from './session.service.js';
 import { auditAction, logActivity } from '../../../utils/auditLogger.js';
 import { isActiveToday } from '../../../utils/dates.js';
@@ -109,19 +109,25 @@ const sanitizeAccount = (account) => ({
     : null,
 });
 
+// Development only: the Super Admin signs in without the two-factor step, which is a nuisance while building.
+// Never applies when NODE_ENV is anything but "development".
+const skipsMfaInDevelopment = async (account) => process.env.NODE_ENV === 'development' && isSuperAdmin(await getActiveGrants(account.personId));
+
 /**
  * Decide the next login step for an account whose password has been verified.
  * `context` ({ ipAddress, userAgent }) is recorded on the session once login completes.
  */
 const nextLoginStep = async (account, context) => {
+  const skipMfa = await skipsMfaInDevelopment(account);
   if (account.mustChangePassword) {
     return {
       status: 'REQUIRE_PASSWORD_CHANGE',
       message: 'Temporary password detected. You must change your password before continuing.',
-      mfaSetupRequired: account.mfaEnforced && !account.mfaEnabled,
+      mfaSetupRequired: !skipMfa && account.mfaEnforced && !account.mfaEnabled,
       stageToken: issueStage(account.id, STAGES.PASSWORD_CHANGE),
     };
   }
+  if (skipMfa) return completeLogin(account, context);
   if (account.mfaEnforced && !account.mfaEnabled) {
     return {
       status: 'REQUIRE_MFA_SETUP',

@@ -28,6 +28,7 @@ const router = Router();
 // Development-only helpers (quick Super Admin login). Never mounted outside NODE_ENV=development.
 if (isDevEnvironment()) {
   console.warn('⚠️  Dev routes enabled: POST /api/v1/dev/login (Super Admin without password/MFA)');
+  console.warn('⚠️  Development mode: the Super Admin signs in without two-factor authentication');
   router.use(devRoutes);
 }
 

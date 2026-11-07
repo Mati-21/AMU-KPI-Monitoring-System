@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { FileSpreadsheet } from 'lucide-react';
+
 import Button from '../../../shared/components/ui/Button';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { Input } from '../../../shared/components/ui/Input';
@@ -47,7 +49,7 @@ const SectionTitle = ({ children }) => <h3 className="border-b border-border pb-
 /**
  * Register a KPI, edit one, or (with `replaces`) register its replacement.
  */
-function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
+function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
   const { notify } = useNotification();
   const save = useSaveRecord('kpis');
   const { data: themes = [] } = useThemeTree();
@@ -154,13 +156,21 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
 
   return (
     <form onSubmit={submit} className="space-y-5 rounded-xl border border-border bg-card p-8">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
           {kpi?.isLocked && 'This KPI is in use, so only its reporting frequency can change. To change anything else, replace it.'}
           {replaces && `Saving retires the old one and links the two, so the trend carries on.`}
           {!kpi?.isLocked && !replaces && 'What is measured and how. Weights, baselines and targets are set per year on each contract.'}
-        </p>
+          </p>
+        </div>
+        {onMassRegister && (
+          <Button type="button" variant="outline" className="gap-2" onClick={onMassRegister}>
+            <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+            Mass Register
+          </Button>
+        )}
       </div>
 
       {!isEditing && missingCatalog.length > 0 && <p className="text-sm text-amber-600">Add at least one in each of these tabs first: {missingCatalog.join(', ')}.</p>}
@@ -197,7 +207,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel }) {
         {select('targetType', 'Target Type', toOptions(targetTypesFor(form.direction)), { required: true, placeholder: form.direction ? 'Choose target type' : 'Choose a direction first' })}
         {form.measurementType === 'NUMBER' && select('unitId', 'Unit', units.map((unit) => ({ value: unit.id, label: unit.symbol ? `${unit.name} (${unit.symbol})` : unit.name })), { required: true })}
         {form.measurementType === 'MONEY' && select('currencyId', 'Currency', currencies.map((currency) => ({ value: currency.id, label: `${currency.code} - ${currency.name}` })), { required: true })}
-        {usesScale(form.measurementType) && select('scaleId', 'Scale', scaleChoices.map((scale) => ({ value: scale.id, label: scale.name })), { required: true, hint: scaleChoices.length === 0 ? 'There is no scale of this type yet. Add one in the Scales tab.' : undefined })}
+        {usesScale(form.measurementType) && select('scaleId', 'Scale', scaleChoices.map((scale) => ({ value: scale.id, label: scale.name })), { required: true, hint: scaleChoices.length === 0 ? 'There is no scale of this type yet. Add one under Measurement Setup, in Scales.' : undefined })}
         {usesLabels(form.measurementType) && text('numeratorLabel', 'Numerator Label', { required: true, hint: 'What is counted, such as Graduates.' })}
         {usesLabels(form.measurementType) && text('denominatorLabel', 'Denominator Label', { required: true, hint: 'What it is out of, such as Enrolled students.' })}
         {form.direction === 'MAINTAIN' && text('maintenanceTolerance', 'Allowed Variation', { required: true, type: 'number', min: 0, step: 'any', hint: 'How far from the target still counts as maintained.' })}

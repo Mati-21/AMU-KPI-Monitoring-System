@@ -1,0 +1,796 @@
+// ERD of the AMU KPI Monitoring System, in Eraser diagram-as-code.
+// Generated from Backend/prisma/schema.prisma: 52 tables, 123 relationships.
+// Paste it into https://app.eraser.io (Diagram as code, Entity relationship diagram).
+//   a > b   many-to-one (a holds the foreign key)     a - b   one-to-one
+// Table and column names are the real database names (the @@map and @map names).
+
+// ===== Identity =====
+
+person [icon: user, color: blue] {
+  id uuid pk
+  staff_number text
+  first_name text
+  middle_name text
+  last_name text
+  email text
+  phone text
+  profile_picture_file_id uuid
+  is_active boolean
+  archived_at timestamptz
+  archived_email text
+  archived_staff_number text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+user_account [icon: user, color: blue] {
+  id uuid pk
+  person_id uuid
+  username text
+  password_hash text
+  is_active boolean
+  must_change_password boolean
+  mfa_enabled boolean
+  mfa_enforced boolean
+  mfa_secret text
+  mfa_type text
+  last_login_at timestamptz
+  created_at timestamptz
+}
+
+user_session [icon: user, color: blue] {
+  id uuid pk
+  user_account_id uuid
+  refresh_token_hash text
+  previous_refresh_token_hash text
+  rotated_at timestamptz
+  ip_address text
+  user_agent text
+  created_at timestamptz
+  last_used_at timestamptz
+  expires_at timestamptz
+  revoked_at timestamptz
+  revoked_reason text
+}
+
+// ===== Office hierarchy =====
+
+office_type [icon: map-pin, color: green] {
+  id uuid pk
+  name text
+  description text
+  level_order int
+  is_active boolean
+  created_at timestamptz
+}
+
+office [icon: map-pin, color: green] {
+  id uuid pk
+  parent_office_id uuid
+  office_type_id uuid
+  name text
+  code text
+  can_assign_kpi boolean
+  is_active boolean
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+office_hierarchy_history [icon: map-pin, color: green] {
+  id uuid pk
+  office_id uuid
+  parent_office_id uuid
+  valid_from date
+  valid_to date
+  reason text
+  changed_by_person_id uuid
+  created_at timestamptz
+}
+
+position [icon: map-pin, color: green] {
+  id uuid pk
+  office_id uuid
+  title text
+  is_head boolean
+  archived_at timestamptz
+}
+
+office_person [icon: map-pin, color: green] {
+  id uuid pk
+  person_id uuid
+  office_id uuid
+  position_id uuid
+  start_date date
+  end_date date
+  is_primary boolean
+}
+
+// ===== Dynamic roles =====
+
+role [icon: shield, color: purple] {
+  id uuid pk
+  name text
+  description text
+  is_system boolean
+  created_at timestamptz
+}
+
+permission [icon: shield, color: purple] {
+  id uuid pk
+  code text
+  name text
+  module text
+  description text
+}
+
+role_permission [icon: shield, color: purple] {
+  id uuid pk
+  role_id uuid
+  permission_id uuid
+}
+
+office_person_role [icon: shield, color: purple] {
+  id uuid pk
+  office_person_id uuid
+  role_id uuid
+  scope_office_id uuid
+  valid_from date
+  valid_to date
+}
+
+// ===== KPI definition =====
+
+kpi_theme [icon: target, color: orange] {
+  id uuid pk
+  parent_theme_id uuid
+  code text
+  name text
+  description text
+  sort_order int
+  is_active boolean
+}
+
+measurement_unit [icon: target, color: orange] {
+  id uuid pk
+  name text
+  symbol text
+  description text
+}
+
+kpi_scale [icon: target, color: orange] {
+  id uuid pk
+  name text
+  scale_type ScaleType
+  is_ordered boolean
+  is_binary boolean
+  scoring_approved boolean
+  approved_by_person_id uuid
+  approved_at timestamptz
+}
+
+kpi_scale_level [icon: target, color: orange] {
+  id uuid pk
+  scale_id uuid
+  name text
+  description text
+  sort_order int
+  score numeric(9,4)
+  assessment_criteria text
+}
+
+currency [icon: target, color: orange] {
+  id uuid pk
+  code text
+  name text
+  symbol text
+  is_reporting_currency boolean
+}
+
+exchange_rate [icon: target, color: orange] {
+  id uuid pk
+  from_currency_id uuid
+  to_currency_id uuid
+  rate numeric(18,6)
+  rate_date date
+  source text
+}
+
+kpi [icon: target, color: orange] {
+  id uuid pk
+  name text
+  description text
+  remark text
+  theme_id uuid
+  measurement_type MeasurementType
+  unit_id uuid
+  scale_id uuid
+  currency_id uuid
+  direction KpiDirection
+  target_type TargetType
+  numerator_label text
+  denominator_label text
+  formula text
+  data_source text
+  default_frequency_id uuid
+  evidence_requirement text
+  aggregation_method AggregationMethod
+  period_rollup_method PeriodRollupMethod
+  scoring_method ScoringBasis
+  zero_target_rule ZeroTargetRule
+  is_additive boolean
+  decimal_places int
+  maintenance_tolerance numeric(9,4)
+  coordinating_office_id uuid
+  replaces_kpi_id uuid
+  is_active boolean
+  created_by_person_id uuid
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+// ===== Periods =====
+
+reporting_frequency [icon: calendar, color: yellow] {
+  id uuid pk
+  name text
+  interval_months int
+  is_custom boolean
+}
+
+fiscal_year [icon: calendar, color: yellow] {
+  id uuid pk
+  name text
+  start_date date
+  end_date date
+  status FiscalYearStatus
+}
+
+reporting_period [icon: calendar, color: yellow] {
+  id uuid pk
+  fiscal_year_id uuid
+  frequency_id uuid
+  name text
+  start_date date
+  end_date date
+  submission_deadline date
+  is_year_end boolean
+  is_closed boolean
+}
+
+// ===== Contracts and cascading =====
+
+performance_contract [icon: file-text, color: red] {
+  id uuid pk
+  fiscal_year_id uuid
+  office_id uuid
+  assigning_office_id uuid
+  person_id uuid
+  version_no int
+  required_total_weight numeric(7,4)
+  status ContractStatus
+  signed_by_person_id uuid
+  signed_at timestamptz
+  approved_by_person_id uuid
+  approved_at timestamptz
+  review_comment text
+  created_at timestamptz
+}
+
+contract_rejection [icon: file-text, color: red] {
+  id uuid pk
+  contract_id uuid
+  rejected_by_person_id uuid
+  rejected_at timestamptz
+  note text
+  flagged_kpis jsonb
+}
+
+kpi_assignment [icon: file-text, color: red] {
+  id uuid pk
+  contract_id uuid
+  kpi_id uuid
+  parent_assignment_id uuid
+  source_assignment_id uuid
+  reporting_frequency_id uuid
+  distribution_method DistributionMethod
+  scope_relation ScopeRelation
+  reconciliation_status ReconciliationStatus
+  reconciliation_note text
+  max_over_allocation_percent numeric(6,2)
+  status AssignmentStatus
+  created_by_person_id uuid
+  created_at timestamptz
+  approved_by_person_id uuid
+  approved_at timestamptz
+  acknowledged_by_person_id uuid
+  acknowledged_at timestamptz
+  review_comment text
+}
+
+kpi_weight [icon: file-text, color: red] {
+  id uuid pk
+  assignment_id uuid
+  weight numeric(7,4)
+  version_no int
+  is_current boolean
+  reason text
+  created_by_person_id uuid
+  approved_by_person_id uuid
+  approved_at timestamptz
+  created_at timestamptz
+}
+
+kpi_baseline [icon: file-text, color: red] {
+  id uuid pk
+  assignment_id uuid
+  version_no int
+  baseline_status BaselineStatus
+  value numeric(18,4)
+  numerator numeric(18,4)
+  denominator numeric(18,4)
+  scale_level_id uuid
+  currency_id uuid
+  unknown_justification text
+  effective_from_period_id uuid
+  is_current boolean
+  reason text
+  created_by_person_id uuid
+  verified_by_person_id uuid
+  verified_at timestamptz
+  created_at timestamptz
+}
+
+kpi_target [icon: file-text, color: red] {
+  id uuid pk
+  assignment_id uuid
+  version_no int
+  value numeric(18,4)
+  numerator numeric(18,4)
+  denominator numeric(18,4)
+  scale_level_id uuid
+  currency_id uuid
+  effective_from_period_id uuid
+  is_current boolean
+  reason text
+  created_by_person_id uuid
+  approved_by_person_id uuid
+  approved_at timestamptz
+  created_at timestamptz
+}
+
+responsibility_allocation [icon: file-text, color: red] {
+  id uuid pk
+  parent_assignment_id uuid
+  child_assignment_id uuid
+  child_office_id uuid
+  allocation_type AllocationType
+  allocated_amount numeric(18,4)
+  note text
+  created_by_person_id uuid
+  created_at timestamptz
+}
+
+assignment_change_request [icon: file-text, color: red] {
+  id uuid pk
+  assignment_id uuid
+  request_type ChangeRequestType
+  requested_by_person_id uuid
+  proposed_values jsonb
+  reason text
+  status ChangeRequestStatus
+  reviewed_by_person_id uuid
+  reviewed_at timestamptz
+  review_comment text
+  new_baseline_id uuid
+  new_target_id uuid
+  new_weight_id uuid
+  created_at timestamptz
+}
+
+// ===== Files and documents =====
+
+file_upload [icon: paperclip, color: gray] {
+  id uuid pk
+  original_name text
+  stored_path text
+  mime_type text
+  size_bytes bigint
+  checksum text
+  uploaded_by_person_id uuid
+  uploaded_at timestamptz
+}
+
+document_type [icon: paperclip, color: gray] {
+  id uuid pk
+  name text
+  description text
+  allowed_extensions text
+  max_size_mb int
+  is_active boolean
+}
+
+document [icon: paperclip, color: gray] {
+  id uuid pk
+  document_type_id uuid
+  file_id uuid
+  owner_office_id uuid
+  title text
+  description text
+  created_by_person_id uuid
+  created_at timestamptz
+}
+
+baseline_evidence [icon: paperclip, color: gray] {
+  id uuid pk
+  baseline_id uuid
+  document_id uuid
+  source_description text
+  source_date date
+  created_at timestamptz
+}
+
+change_request_evidence [icon: paperclip, color: gray] {
+  id uuid pk
+  change_request_id uuid
+  document_id uuid
+  comment text
+  created_at timestamptz
+}
+
+// ===== Reporting and evaluation =====
+
+performance_report [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  contract_id uuid
+  reporting_period_id uuid
+  status ReportStatus
+  prepared_by_person_id uuid
+  submitted_by_person_id uuid
+  submitted_at timestamptz
+  is_provisional boolean
+  is_late boolean
+  late_allowed_until date
+  late_allowed_reason text
+  late_allowed_by_person_id uuid
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+performance_value [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  report_id uuid
+  assignment_id uuid
+  contribution_type ContributionType
+  reporting_status ReportingStatus
+  value numeric(18,4)
+  numerator numeric(18,4)
+  denominator numeric(18,4)
+  scale_level_id uuid
+  currency_id uuid
+  converted_value numeric(18,4)
+  exchange_rate_id uuid
+  note text
+  entered_by_person_id uuid
+  created_at timestamptz
+}
+
+performance_evidence [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  performance_value_id uuid
+  document_id uuid
+  verification_status VerificationStatus
+  verified_by_person_id uuid
+  verified_at timestamptz
+  comment text
+  created_at timestamptz
+}
+
+performance_review [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  report_id uuid
+  reviewer_person_id uuid
+  reviewer_office_id uuid
+  decision ReviewDecision
+  comment text
+  reviewed_at timestamptz
+}
+
+performance_status_threshold [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  name text
+  min_percent numeric(9,4)
+  max_percent numeric(9,4)
+  color text
+  sort_order int
+  is_active boolean
+}
+
+kpi_achievement [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  assignment_id uuid
+  reporting_period_id uuid
+  baseline_id uuid
+  target_id uuid
+  weight_id uuid
+  actual_value numeric(18,4)
+  actual_numerator numeric(18,4)
+  actual_denominator numeric(18,4)
+  actual_scale_level_id uuid
+  required_improvement numeric(18,4)
+  actual_improvement numeric(18,4)
+  improvement_calculable boolean
+  not_calculable_reason text
+  improvement_achievement_raw numeric(12,4)
+  improvement_achievement_capped numeric(12,4)
+  target_achievement_raw numeric(12,4)
+  target_achievement_capped numeric(12,4)
+  target_met boolean
+  achievement_status AchievementStatus
+  status_threshold_id uuid
+  weighted_improvement_score numeric(12,4)
+  weighted_target_score numeric(12,4)
+  is_provisional boolean
+  calculated_at timestamptz
+}
+
+contract_score [icon: bar-chart-2, color: teal] {
+  id uuid pk
+  contract_id uuid
+  reporting_period_id uuid
+  total_weight numeric(7,4)
+  reported_weight numeric(7,4)
+  weighted_improvement_score numeric(12,4)
+  weighted_target_score numeric(12,4)
+  official_basis ScoringBasis
+  is_provisional boolean
+  calculated_at timestamptz
+}
+
+// ===== System =====
+
+system_setting [icon: settings, color: pink] {
+  id uuid pk
+  group_name text
+  key text
+  value text
+  value_type text
+  file_id uuid
+  description text
+  is_public boolean
+  updated_by_person_id uuid
+  updated_at timestamptz
+}
+
+notification [icon: settings, color: pink] {
+  id uuid pk
+  created_by_person_id uuid
+  target_office_id uuid
+  include_sub_offices boolean
+  required_permission_id uuid
+  title text
+  message text
+  notification_type text
+  entity_type text
+  entity_id uuid
+  created_at timestamptz
+}
+
+notification_recipient [icon: settings, color: pink] {
+  id uuid pk
+  notification_id uuid
+  person_id uuid
+  channel text
+  is_read boolean
+  read_at timestamptz
+  delivered_at timestamptz
+}
+
+support_request [icon: settings, color: pink] {
+  id uuid pk
+  requester_name text
+  requester_email text
+  message text
+  status SupportRequestStatus
+  person_id uuid
+  handled_by_person_id uuid
+  resolution_note text
+  resolved_at timestamptz
+  ip_address text
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+message [icon: settings, color: pink] {
+  id uuid pk
+  sender_person_id uuid
+  receiver_person_id uuid
+  content text
+  read_at timestamptz
+  created_at timestamptz
+}
+
+message_attachment [icon: settings, color: pink] {
+  id uuid pk
+  message_id uuid
+  file_id uuid
+}
+
+system_boot [icon: settings, color: pink] {
+  id uuid pk
+  started_at timestamptz
+  version text
+  commit text
+  node_version text
+  hostname text
+  environment text
+}
+
+system_alert [icon: settings, color: pink] {
+  id uuid pk
+  rule_key text
+  severity AlertSeverity
+  title text
+  message text
+  value float8
+  status AlertStatus
+  opened_at timestamptz
+  acknowledged_at timestamptz
+  acknowledged_by_person_id uuid
+  resolved_at timestamptz
+}
+
+metric_rollup [icon: settings, color: pink] {
+  id uuid pk
+  bucket_start timestamptz
+  requests int
+  status_4xx int
+  status_5xx int
+  p50_ms float8
+  p95_ms float8
+  p99_ms float8
+  cpu_percent float8
+  memory_percent float8
+  disk_used_percent float8
+  event_loop_lag_ms float8
+  db_connections int
+}
+
+audit_log [icon: settings, color: pink] {
+  id uuid pk
+  actor_person_id uuid
+  action text
+  entity_type text
+  entity_id text
+  old_values jsonb
+  new_values jsonb
+  reason text
+  ip_address text
+  user_agent text
+  created_at timestamptz
+}
+
+// ===== Relationships =====
+
+person.profile_picture_file_id - file_upload.id
+user_account.person_id - person.id
+user_session.user_account_id > user_account.id
+office.parent_office_id > office.id
+office.office_type_id > office_type.id
+office_hierarchy_history.office_id > office.id
+office_hierarchy_history.parent_office_id > office.id
+office_hierarchy_history.changed_by_person_id > person.id
+position.office_id > office.id
+office_person.person_id > person.id
+office_person.office_id > office.id
+office_person.position_id > position.id
+role_permission.role_id > role.id
+role_permission.permission_id > permission.id
+office_person_role.office_person_id > office_person.id
+office_person_role.role_id > role.id
+office_person_role.scope_office_id > office.id
+kpi_theme.parent_theme_id > kpi_theme.id
+kpi_scale.approved_by_person_id > person.id
+kpi_scale_level.scale_id > kpi_scale.id
+exchange_rate.from_currency_id > currency.id
+exchange_rate.to_currency_id > currency.id
+kpi.theme_id > kpi_theme.id
+kpi.unit_id > measurement_unit.id
+kpi.scale_id > kpi_scale.id
+kpi.currency_id > currency.id
+kpi.default_frequency_id > reporting_frequency.id
+kpi.coordinating_office_id > office.id
+kpi.replaces_kpi_id > kpi.id
+kpi.created_by_person_id > person.id
+reporting_period.fiscal_year_id > fiscal_year.id
+reporting_period.frequency_id > reporting_frequency.id
+performance_contract.fiscal_year_id > fiscal_year.id
+performance_contract.office_id > office.id
+performance_contract.assigning_office_id > office.id
+performance_contract.person_id > person.id
+performance_contract.signed_by_person_id > person.id
+performance_contract.approved_by_person_id > person.id
+contract_rejection.contract_id > performance_contract.id
+contract_rejection.rejected_by_person_id > person.id
+kpi_assignment.contract_id > performance_contract.id
+kpi_assignment.kpi_id > kpi.id
+kpi_assignment.parent_assignment_id > kpi_assignment.id
+kpi_assignment.source_assignment_id > kpi_assignment.id
+kpi_assignment.reporting_frequency_id > reporting_frequency.id
+kpi_assignment.created_by_person_id > person.id
+kpi_assignment.approved_by_person_id > person.id
+kpi_assignment.acknowledged_by_person_id > person.id
+kpi_weight.assignment_id > kpi_assignment.id
+kpi_weight.created_by_person_id > person.id
+kpi_weight.approved_by_person_id > person.id
+kpi_baseline.assignment_id > kpi_assignment.id
+kpi_baseline.scale_level_id > kpi_scale_level.id
+kpi_baseline.currency_id > currency.id
+kpi_baseline.effective_from_period_id > reporting_period.id
+kpi_baseline.created_by_person_id > person.id
+kpi_baseline.verified_by_person_id > person.id
+kpi_target.assignment_id > kpi_assignment.id
+kpi_target.scale_level_id > kpi_scale_level.id
+kpi_target.currency_id > currency.id
+kpi_target.effective_from_period_id > reporting_period.id
+kpi_target.created_by_person_id > person.id
+kpi_target.approved_by_person_id > person.id
+responsibility_allocation.parent_assignment_id > kpi_assignment.id
+responsibility_allocation.child_assignment_id > kpi_assignment.id
+responsibility_allocation.child_office_id > office.id
+responsibility_allocation.created_by_person_id > person.id
+assignment_change_request.assignment_id > kpi_assignment.id
+assignment_change_request.requested_by_person_id > person.id
+assignment_change_request.reviewed_by_person_id > person.id
+assignment_change_request.new_baseline_id > kpi_baseline.id
+assignment_change_request.new_target_id > kpi_target.id
+assignment_change_request.new_weight_id > kpi_weight.id
+file_upload.uploaded_by_person_id > person.id
+document.document_type_id > document_type.id
+document.file_id > file_upload.id
+document.owner_office_id > office.id
+document.created_by_person_id > person.id
+baseline_evidence.baseline_id > kpi_baseline.id
+baseline_evidence.document_id > document.id
+change_request_evidence.change_request_id > assignment_change_request.id
+change_request_evidence.document_id > document.id
+performance_report.contract_id > performance_contract.id
+performance_report.reporting_period_id > reporting_period.id
+performance_report.prepared_by_person_id > person.id
+performance_report.submitted_by_person_id > person.id
+performance_report.late_allowed_by_person_id > person.id
+performance_value.report_id > performance_report.id
+performance_value.assignment_id > kpi_assignment.id
+performance_value.scale_level_id > kpi_scale_level.id
+performance_value.currency_id > currency.id
+performance_value.exchange_rate_id > exchange_rate.id
+performance_value.entered_by_person_id > person.id
+performance_evidence.performance_value_id > performance_value.id
+performance_evidence.document_id > document.id
+performance_evidence.verified_by_person_id > person.id
+performance_review.report_id > performance_report.id
+performance_review.reviewer_person_id > person.id
+performance_review.reviewer_office_id > office.id
+kpi_achievement.assignment_id > kpi_assignment.id
+kpi_achievement.reporting_period_id > reporting_period.id
+kpi_achievement.baseline_id > kpi_baseline.id
+kpi_achievement.target_id > kpi_target.id
+kpi_achievement.weight_id > kpi_weight.id
+kpi_achievement.actual_scale_level_id > kpi_scale_level.id
+kpi_achievement.status_threshold_id > performance_status_threshold.id
+contract_score.contract_id > performance_contract.id
+contract_score.reporting_period_id > reporting_period.id
+system_setting.file_id > file_upload.id
+system_setting.updated_by_person_id > person.id
+notification.created_by_person_id > person.id
+notification.target_office_id > office.id
+notification.required_permission_id > permission.id
+notification_recipient.notification_id > notification.id
+notification_recipient.person_id > person.id
+support_request.person_id > person.id
+support_request.handled_by_person_id > person.id
+message.sender_person_id > person.id
+message.receiver_person_id > person.id
+message_attachment.message_id > message.id
+message_attachment.file_id - file_upload.id
+system_alert.acknowledged_by_person_id > person.id
+audit_log.actor_person_id > person.id

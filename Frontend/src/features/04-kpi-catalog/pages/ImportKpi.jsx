@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Download, Upload } from 'lucide-react';
+import { ArrowLeft, Download, Upload } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
@@ -19,7 +19,7 @@ const withProblemsFirst = (rows) => [...rows].sort((a, b) => Number(b.errors.len
  * Register many KPIs from an Excel file. Every row is checked before anything is saved, and only a file without
  * problems can be registered.
  */
-function ImportKpi({ onDone }) {
+function ImportKpi({ onDone, onBack }) {
   const { notify } = useNotification();
   const fileInput = useRef(null);
   const { data: themes = [] } = useThemeTree();
@@ -80,6 +80,12 @@ function ImportKpi({ onDone }) {
           <p className="mt-1 text-xs text-muted-foreground">Download the template, fill in one KPI per row, and upload it. Up to {MAX_ROWS} KPIs per file. Nothing is saved until every row is correct.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onBack && (
+            <Button type="button" variant="outline" className="gap-2" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Register One KPI
+            </Button>
+          )}
           <Button type="button" variant="outline" className="gap-2" onClick={() => downloadTemplate(catalog)}>
             <Download className="h-4 w-4" />
             Download Template
