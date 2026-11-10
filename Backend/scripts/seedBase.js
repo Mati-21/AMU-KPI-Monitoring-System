@@ -141,6 +141,7 @@ const kpiInput = (definition, { subThemes, units, scales, frequencies, currency 
   measurementType: definition.type,
   direction: definition.dir,
   defaultFrequencyId: frequencies.find((frequency) => frequency.name === definition.freq).id,
+  requiresEvidence: false,
   ...(definition.unit && { unitId: units.find((unit) => unit.name === definition.unit).id }),
   ...(definition.type === 'MONEY' && { currencyId: currency.id }),
   ...(definition.scale && { scaleId: scales.find((scale) => scale.name === definition.scale).id }),

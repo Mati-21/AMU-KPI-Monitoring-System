@@ -482,6 +482,7 @@ performance_evidence [icon: bar-chart-2, color: teal] {
   verified_by_person_id uuid
   verified_at timestamptz
   comment text
+  forwarded_from_id uuid
   created_at timestamptz
 }
 
@@ -767,6 +768,7 @@ performance_value.entered_by_person_id > person.id
 performance_evidence.performance_value_id > performance_value.id
 performance_evidence.document_id > document.id
 performance_evidence.verified_by_person_id > person.id
+performance_evidence.forwarded_from_id > performance_evidence.id
 performance_review.report_id > performance_report.id
 performance_review.reviewer_person_id > person.id
 performance_review.reviewer_office_id > office.id

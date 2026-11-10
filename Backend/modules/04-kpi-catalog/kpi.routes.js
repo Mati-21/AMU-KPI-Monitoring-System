@@ -512,7 +512,7 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, description, themeId, measurementType, direction, defaultFrequencyId]
+ *             required: [name, description, themeId, measurementType, direction, defaultFrequencyId, requiresEvidence]
  *             properties:
  *               name: { type: string, example: Number of research publications }
  *               description: { type: string }
@@ -529,7 +529,8 @@ router.post('/exchange-rates', protect, canManage, kpiController.createExchangeR
  *               formula: { type: string }
  *               dataSource: { type: string }
  *               defaultFrequencyId: { type: string, format: uuid }
- *               evidenceRequirement: { type: string }
+ *               requiresEvidence: { type: boolean, description: "Must be chosen. When true, a result cannot be submitted without evidence attached" }
+ *               evidenceRequirement: { type: string, description: What to attach, shown to the office reporting }
  *               aggregationMethod: { type: string, enum: [SUM, RATIO_OF_SUMS, WEIGHTED_SCORE, SHARE_MEETING_TARGET, WEAKEST_LINK, STAGE_DISTRIBUTION, DIRECT] }
  *               periodRollupMethod: { type: string, enum: [SUM, RATIO_OF_SUMS, LATEST, AVERAGE] }
  *               scoringMethod: { type: string, enum: [IMPROVEMENT, TARGET] }
@@ -596,5 +597,19 @@ router.post('/kpis/import', protect, requirePermission(PERMISSIONS.KPI_CREATE), 
  */
 router.get('/kpis/:id', protect, kpiController.getKpiById);
 router.put('/kpis/:id', protect, requirePermission(PERMISSIONS.KPI_UPDATE), kpiController.updateKpi);
+
+/**
+ * @swagger
+ * /api/v1/kpis/{id}:
+ *   delete:
+ *     tags: [KPIs]
+ *     summary: Remove a KPI. One never used is deleted; one used on any contract, or part of a replacement, is archived instead
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted, or archived when it has history (data.deleted or data.archived) }
+ *       409: { description: Already archived }
+ */
+router.delete('/kpis/:id', protect, requirePermission(PERMISSIONS.KPI_UPDATE), kpiController.deleteKpi);
 
 export default router;

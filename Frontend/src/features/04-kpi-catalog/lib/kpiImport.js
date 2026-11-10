@@ -21,6 +21,8 @@ const COLUMNS = [
   { name: 'Numerator Label', needed: 'Percentage and Ratio KPIs', help: 'What is counted, such as Graduates.' },
   { name: 'Denominator Label', needed: 'Percentage and Ratio KPIs', help: 'What it is out of, such as Enrolled students.' },
   { name: 'Allowed Variation', needed: 'Maintain KPIs', help: 'How far from the target still counts as maintained.' },
+  { name: 'Evidence Required', needed: 'Always', help: 'Yes if a result cannot be submitted without a supporting document, otherwise No.' },
+  { name: 'Evidence Note', needed: 'Optional', help: 'What to attach, such as a signed attendance sheet. Only used when Evidence Required is Yes.' },
   { name: 'Remark', needed: 'Optional', help: 'Anything worth noting about the KPI.' },
 ];
 
@@ -44,6 +46,7 @@ const EXAMPLE = {
   Description: 'Papers published in reviewed journals',
   'Measurement Type': 'Number',
   Direction: 'Higher is better',
+  'Evidence Required': 'Yes',
   Baseline: '120',
   Target: '150',
   Weight: '10',
@@ -63,6 +66,7 @@ const allowedValues = ({ themes, frequencies, units, currencies, scales }) => ({
   'Measurement Type': toOptions(MEASUREMENT_TYPES).map((option) => option.label),
   Direction: toOptions(DIRECTIONS).map((option) => option.label),
   'Target Type': toOptions(TARGET_TYPES).map((option) => option.label),
+  'Evidence Required': ['Yes', 'No'],
   Unit: units.map((unit) => unit.name),
   Currency: currencies.map((currency) => currency.code),
   Scale: scales.map((scale) => scale.name),
@@ -161,6 +165,12 @@ export const rowToKpi = (cells, { themes, frequencies, units, currencies, scales
   const type = choice('Measurement Type', 'measurementType', MEASUREMENT_TYPES);
   choice('Direction', 'direction', DIRECTIONS);
   choice('Target Type', 'targetType', TARGET_TYPES);
+
+  required('Evidence Required');
+  const evidenceAnswer = ['yes', 'no'].find((answer) => answer === normalize(cells['Evidence Required']));
+  if (cells['Evidence Required'] && !evidenceAnswer) errors.push(`Evidence Required "${cells['Evidence Required']}" must be Yes or No`);
+  if (evidenceAnswer) values.requiresEvidence = evidenceAnswer === 'yes';
+  if (evidenceAnswer === 'yes') copy('Evidence Note', 'evidenceRequirement');
 
   if (type === 'NUMBER') match('Unit', 'unitId', (text) => findBy(units, text, 'name', 'symbol')?.id);
   match('Currency', 'currencyId', (text) => findBy(currencies, text, 'code')?.id);

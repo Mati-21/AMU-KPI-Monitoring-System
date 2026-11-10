@@ -18,7 +18,8 @@ export const useOfficeTypes =() => useQuery({ queryKey: queryKeys.offices.types,
 export const useOffice = (officeId) => useOfficeQuery('detail', officeId, '');
 export const usePositions = (officeId) => useOfficeQuery('positions', officeId, '/positions');
 export const useMembers = (officeId) => useOfficeQuery('members', officeId, '/members');
-export const useOfficeHistory = (officeId) => useOfficeQuery('history', officeId, '/history');
+export const useOfficeRecords = (officeId) => useOfficeQuery('records', officeId, '/records');
+export const useOfficeHistory =(officeId) => useOfficeQuery('history', officeId, '/history');
 
 /**
  * Offices, positions and placements show up in several places, including user pages, so a change refreshes them all.

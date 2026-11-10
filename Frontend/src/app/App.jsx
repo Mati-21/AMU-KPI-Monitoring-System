@@ -30,6 +30,7 @@ import ApprovalsPage from '../features/07-performance/pages/ApprovalsPage';
 import YearReportPage from '../features/07-performance/pages/YearReportPage';
 import ReportPage from '../features/07-performance/pages/ReportPage';
 import OfficesPage from '../features/02-offices/pages/OfficesPage';
+import DocumentsPage from '../features/08-evidence/pages/DocumentsPage';
 import { AuthBootstrap, GuestOnly, RequireAuth, RequirePermission } from '../features/01-identity/components/RouteGuards';
 import { NotificationProvider } from '../features/09-notifications/context/NotificationContext';
 import AuthenticatedShell from '../shared/components/layout/AuthenticatedShell';
@@ -84,6 +85,10 @@ function App() {
                       <Route path="/assign-kpi" element={<KpiAllocationPage />} />
                       <Route path="/assign-kpi/:contractId" element={<ContractPage />} />
                       <Route path="/assign-kpi/:contractId/register" element={<ContractKpiImportPage />} />
+                    </Route>
+
+                    <Route element={<RequirePermission permissions={['document:read', 'document:create', 'document:manage']} />}>
+                      <Route path="/documents" element={<DocumentsPage />} />
                     </Route>
 
                     <Route path="/offices" element={<OfficesPage />} />

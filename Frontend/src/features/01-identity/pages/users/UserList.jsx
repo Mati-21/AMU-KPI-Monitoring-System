@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Archive, Eye, UserPlus } from 'lucide-react';
+import { Archive, Eye, Pencil, UserPlus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import Button from '../../../../shared/components/ui/Button';
@@ -157,9 +157,14 @@ function UserList({ onAdd }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => navigate(`/users/${person.id}`)} className="rounded p-1 text-primary hover:bg-primary/10" title="Open" aria-label={`Open ${person.fullName}`}>
+                      <button onClick={() => navigate(`/users/${person.id}`)} className="rounded p-1 text-primary hover:bg-primary/10" title="View details" aria-label={`View ${person.fullName}`}>
                         <Eye className="h-4 w-4" />
                       </button>
+                      {can('user:update') && (
+                        <button onClick={() => navigate(`/users/${person.id}?edit=1`)} className="rounded p-1 text-primary hover:bg-primary/10" title="Edit" aria-label={`Edit ${person.fullName}`}>
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
                       {can('user:delete') && (
                         <button onClick={() => setArchiving(person)} className="rounded p-1 text-destructive hover:bg-destructive/10" title="Archive" aria-label={`Archive ${person.fullName}`}>
                           <Archive className="h-4 w-4" />

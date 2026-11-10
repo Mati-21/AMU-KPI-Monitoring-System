@@ -105,9 +105,15 @@ const PerformanceSection = ({ section, contract, onEvidence }) => {
     if (cell?.fromStaff) return <StaffCell kpi={row.kpi} cell={cell} />;
     if (!typesHere(row)) {
       return (
-        <div>
+        <div className="space-y-1">
           <p className="text-sm text-foreground">{resultText(row.kpi, cell?.fromBelow ?? cell?.total)}</p>
           <p className="text-xs text-muted-foreground">From offices below</p>
+          {open.report && open.can.attachEvidence && (
+            <button type="button" onClick={() => onEvidence(row, open)} className="inline-flex items-center gap-0.5 rounded-md border border-border px-1.5 py-1 text-xs text-foreground hover:bg-muted" aria-label={`Evidence for ${row.kpi.name}`}>
+              <Paperclip className="h-3.5 w-3.5" />
+              {cell?.evidence.length ?? 0}
+            </button>
+          )}
         </div>
       );
     }

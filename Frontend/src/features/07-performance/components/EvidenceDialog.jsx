@@ -9,7 +9,9 @@ import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { formatEthiopianDate as formatDate } from '../../../shared/lib/ethiopianDate';
 import { Field } from '../../02-offices/components/FormParts';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { openFile, useAttachEvidence, useDocumentTypes, useRemoveEvidence, useVerifyEvidence } from '../hooks/useReports';
+import { useCan } from '../../03-access-control/hooks/useCan';
+import { openFile, useDocumentTypes } from '../../08-evidence/hooks/useDocuments';
+import { useAttachEvidence, useForwardEvidence, useRemoveEvidence, useVerifyEvidence } from '../hooks/useReports';
 import { EVIDENCE_WORDS } from '../lib/reportRules';
 
 const TONES = {
@@ -18,25 +20,41 @@ const TONES = {
   REJECTED: 'text-red-600 dark:text-red-400',
 };
 
+const Checkbox = ({ checked, disabled, onChange, children }) => (
+  <label className="flex items-center gap-2 text-xs text-foreground">
+    <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="h-3.5 w-3.5" />
+    {children}
+  </label>
+);
+
 /**
  * The reviewer's verdict on one piece of evidence. Rejecting needs a reason, so the office knows what to fix.
+ * With an office above that holds the KPI, verified evidence can also go straight into this office's own report.
  */
-const VerifyControls = ({ item }) => {
+const VerifyControls = ({ item, canForward }) => {
   const verify = useVerifyEvidence();
   const [rejecting, setRejecting] = useState(false);
   const [comment, setComment] = useState('');
-  const send = (status) => verify.mutate({ id: item.id, status, comment: comment.trim() || undefined }, { onSuccess: () => setRejecting(false) });
+  const [passUp, setPassUp] = useState(false);
+  const send = (status) => verify.mutate({ id: item.id, status, comment: comment.trim() || undefined, forward: status === 'VERIFIED' && passUp ? true : undefined }, { onSuccess: () => setRejecting(false) });
 
   return (
     <div className="space-y-2">
       {!rejecting ? (
-        <div className="flex gap-2">
-          <Button type="button" size="sm" disabled={verify.isPending} onClick={() => send('VERIFIED')}>
-            Verify
-          </Button>
-          <Button type="button" size="sm" variant="outline" disabled={verify.isPending} onClick={() => setRejecting(true)}>
-            Reject
-          </Button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button type="button" size="sm" disabled={verify.isPending} onClick={() => send('VERIFIED')}>
+              Verify
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={verify.isPending} onClick={() => setRejecting(true)}>
+              Reject
+            </Button>
+          </div>
+          {canForward && (
+            <Checkbox checked={passUp} onChange={setPassUp}>
+              Also use it as evidence in our report
+            </Checkbox>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
@@ -54,7 +72,7 @@ const VerifyControls = ({ item }) => {
   );
 };
 
-const AttachForm = ({ line, officeId }) => {
+const AttachForm = ({ line, reportId, officeId }) => {
   const { notify } = useNotification();
   const { data: types = [] } = useDocumentTypes();
   const attach = useAttachEvidence();
@@ -69,7 +87,7 @@ const AttachForm = ({ line, officeId }) => {
   const submit = (event) => {
     event.preventDefault();
     attach.mutate(
-      { valueId: line.direct.id, officeId, documentTypeId: chosenType, title: title.trim(), file },
+      { valueId: line.direct?.id, reportId, assignmentId: line.assignmentId, officeId, documentTypeId: chosenType, title: title.trim(), file },
       {
         onSuccess: () => {
           notify('Evidence attached.', 'success');
@@ -111,7 +129,9 @@ const AttachForm = ({ line, officeId }) => {
 const EvidenceDialog = ({ report, line, onClose }) => {
   const { notify } = useNotification();
   const remove = useRemoveEvidence();
+  const forward = useForwardEvidence();
   const { can } = report;
+  const canDownload = useCan()('document:download');
   const open = (fileId) => openFile(fileId).catch((failure) => notify(apiErrorMessage(failure, 'Could not open this file.'), 'error'));
 
   return (
@@ -121,17 +141,24 @@ const EvidenceDialog = ({ report, line, onClose }) => {
           <DialogTitle>Evidence</DialogTitle>
           <DialogDescription>{line.kpi.name}</DialogDescription>
         </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {line.kpi.requiresEvidence ? 'This result cannot be submitted without evidence.' : 'Evidence is optional for this KPI.'}
+          {line.kpi.requiresEvidence && line.kpi.evidenceRequirement && ` Attach: ${line.kpi.evidenceRequirement}`}
+        </p>
 
         <div className="space-y-2">
           {line.evidence.length === 0 && <p className="text-sm text-muted-foreground">No evidence attached yet.</p>}
           {line.evidence.map((item) => (
             <div key={item.id} className="space-y-2 rounded-md border border-border p-3">
               <div className="flex items-start justify-between gap-3">
-                <button type="button" onClick={() => open(item.document.fileId)} className="flex items-start gap-2 text-left">
+                <button type="button" onClick={() => open(item.document.fileId)} disabled={!canDownload} title={canDownload ? undefined : 'You do not have permission to download documents'} className="flex items-start gap-2 text-left disabled:cursor-default">
                   <FileText className="mt-0.5 h-4 w-4 text-primary" />
                   <span>
-                    <span className="block text-sm font-medium text-foreground underline-offset-2 hover:underline">{item.document.title}</span>
-                    <span className="block text-xs text-muted-foreground">Added {formatDate(item.document.createdAt)}</span>
+                    <span className={`block text-sm font-medium text-foreground ${canDownload ? 'underline-offset-2 hover:underline' : ''}`}>{item.document.title}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Added {formatDate(item.document.createdAt)}
+                      {item.forwardedFrom && ` · Passed up from ${item.forwardedFrom.office.name}`}
+                    </span>
                   </span>
                 </button>
                 <div className="flex items-center gap-2">
@@ -144,13 +171,19 @@ const EvidenceDialog = ({ report, line, onClose }) => {
                 </div>
               </div>
               {item.comment && <p className="text-xs text-foreground">Reviewer: {item.comment}</p>}
-              {can.verifyEvidence && <VerifyControls item={item} />}
+              {can.verifyEvidence && <VerifyControls item={item} canForward={line.canForward && item.verificationStatus !== 'VERIFIED'} />}
+              {can.forwardEvidence && line.canForward && item.verificationStatus === 'VERIFIED' && (
+                <Checkbox checked={item.isForwarded} disabled={forward.isPending} onChange={(next) => forward.mutate({ id: item.id, forward: next })}>
+                  Use it as evidence in our report
+                </Checkbox>
+              )}
             </div>
           ))}
           {remove.error && <p className="text-sm text-red-500">{apiErrorMessage(remove.error, 'Could not remove this.')}</p>}
+          {forward.error && <p className="text-sm text-red-500">{apiErrorMessage(forward.error, 'Could not change this.')}</p>}
         </div>
 
-        {can.attachEvidence && (line.direct ? <AttachForm line={line} officeId={report.contract.officeId} /> : <p className="text-sm text-muted-foreground">Save a result for this KPI first, then attach its evidence.</p>)}
+        {can.attachEvidence && (line.direct || report.id ? <AttachForm line={line} reportId={report.id} officeId={report.contract.officeId} /> : <p className="text-sm text-muted-foreground">Save a result for this KPI first, then attach its evidence.</p>)}
       </DialogContent>
     </Dialog>
   );

@@ -57,7 +57,7 @@ const PositionRow = ({ position, canManage, onEdit, onDelete }) => (
         <button type="button" onClick={() => onEdit(position)} aria-label={`Edit ${position.title}`} className="rounded p-1 text-primary hover:bg-primary/10">
           <Edit3 className="h-4 w-4" />
         </button>
-        <button type="button" onClick={() => onDelete(position)} aria-label={`Delete ${position.title}`} className="rounded p-1 text-destructive hover:bg-destructive/10">
+        <button type="button" disabled={position.holderCount > 0} onClick={() => onDelete(position)} aria-label={`Archive ${position.title}`} title={position.holderCount > 0 ? 'Remove the current holder first' : 'Archive position'} className="rounded p-1 text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
@@ -80,8 +80,8 @@ const PositionsCard = ({ office }) => {
 
   const confirmDelete = () =>
     remove.mutate(deleting.id, {
-      onSuccess: ({ data }) => {
-        notify(data.data?.archived ? `"${deleting.title}" was removed. Past placements still show it.` : `"${deleting.title}" was deleted.`, 'success');
+      onSuccess: () => {
+        notify(`"${deleting.title}" was archived. Past placements and the Records tab still show it.`, 'success');
         closeDelete();
       },
     });
@@ -106,7 +106,7 @@ const PositionsCard = ({ office }) => {
       </CardContent>
 
       {editing && <PositionDialog officeId={office.id} position={editing.id ? editing : null} onClose={() => setEditing(null)} />}
-      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete Position" description={`Delete "${deleting?.title}"? It leaves this office for good. If someone held it before, their past placements still show it.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
+      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Archive Position" confirmLabel="Archive" description={`Archive "${deleting?.title}"? It leaves the positions list and cannot be given to anyone, but past placements and the Records tab still show it.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
     </Card>
   );
 };

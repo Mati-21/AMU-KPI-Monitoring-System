@@ -55,6 +55,20 @@ router.post('/contracts', protect, canManage, contractController.createContract)
 
 /**
  * @swagger
+ * /api/v1/contracts/{id}:
+ *   delete:
+ *     tags: [Contracts]
+ *     summary: Delete a draft contract that was never assigned, with its KPI lines
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: It is not a draft, was sent to an office before, or has results or KPIs passed down from it }
+ */
+router.delete('/contracts/:id', protect, canManage, contractController.deleteContract);
+
+/**
+ * @swagger
  * /api/v1/contract-offices:
  *   get:
  *     summary: Offices a new contract can be created for, the ones directly below the caller's own office

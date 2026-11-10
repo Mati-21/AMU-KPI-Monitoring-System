@@ -161,6 +161,7 @@ erDiagram
     PerformanceValue ||--o{ PerformanceEvidence : "performanceValue"
     Document ||--o{ PerformanceEvidence : "document"
     Person |o--o{ PerformanceEvidence : "verifiedBy"
+    PerformanceEvidence |o--o{ PerformanceEvidence : "forwardedFrom"
     PerformanceReport ||--o{ PerformanceReview : "report"
     Person ||--o{ PerformanceReview : "reviewer"
     Office |o--o{ PerformanceReview : "reviewerOffice"
@@ -830,6 +831,7 @@ erDiagram
         String verifiedByPersonId FK "optional"
         DateTime verifiedAt "optional"
         String comment "optional"
+        String forwardedFromId FK "optional"
         DateTime createdAt
     }
     PerformanceReview {
@@ -939,6 +941,7 @@ erDiagram
     PerformanceValue ||--o{ PerformanceEvidence : "performanceValue"
     Document ||--o{ PerformanceEvidence : "document"
     Person |o--o{ PerformanceEvidence : "verifiedBy"
+    PerformanceEvidence |o--o{ PerformanceEvidence : "forwardedFrom"
     PerformanceReport ||--o{ PerformanceReview : "report"
     Person ||--o{ PerformanceReview : "reviewer"
     Office |o--o{ PerformanceReview : "reviewerOffice"

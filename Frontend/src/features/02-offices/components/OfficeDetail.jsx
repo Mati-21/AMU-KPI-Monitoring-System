@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { Building2, Edit3, History, Plus, Power, Trash2 } from 'lucide-react';
+import { Building2, Edit3, Plus, Power, Trash2 } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/components/ui/Card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/Tabs';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { useDeleteOffice, useOffice, useOfficeHistory, useSaveOffice } from '../hooks/useOffices';
-import { formatDate } from '../lib/officeTree';
+import { useDeleteOffice, useOffice, useSaveOffice } from '../hooks/useOffices';
 import { ConfirmDialog } from './FormParts';
 import MembersCard from './MembersCard';
 import PositionsCard from './PositionsCard';
 import PreviewList from './PreviewList';
+import RecordsPanel from './RecordsPanel';
 
 const SUB_OFFICE_STATUS_FILTER = {
   allLabel: 'All statuses',
@@ -48,39 +49,6 @@ const SubOfficesCard = ({ office, onSelect }) => (
     </CardContent>
   </Card>
 );
-
-const HistoryCard = ({ officeId }) => {
-  const { data: history = [], isLoading, error } = useOfficeHistory(officeId);
-
-  return (
-    <Card className="border-border bg-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-4 w-4 text-primary" />
-          Reporting History ({history.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {error && <p className="text-sm text-red-500">{apiErrorMessage(error, 'Could not load the history.')}</p>}
-        <PreviewList
-          title="Reporting History"
-          items={history}
-          renderRow={(row) => (
-            <div className="rounded-lg border border-border p-3 text-sm">
-              <p className="font-medium text-foreground">{row.parent ? `Under ${row.parent.name}` : 'Top of the university'}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatDate(row.validFrom)} to {row.validTo ? formatDate(row.validTo) : 'now'}
-                {row.changedBy && ` · By ${row.changedBy.fullName}`}
-              </p>
-              {row.reason && <p className="mt-1 text-xs text-muted-foreground">{row.reason}</p>}
-            </div>
-          )}
-        />
-      </CardContent>
-    </Card>
-  );
-};
 
 const OfficeDetail = ({ officeId, onSelect, onDeleted, onEdit, onAddSubOffice }) => {
   const can = useCan();
@@ -167,12 +135,22 @@ const OfficeDetail = ({ officeId, onSelect, onDeleted, onEdit, onAddSubOffice })
 
       <ConfirmDialog open={deleting} onClose={closeDelete} title="Delete Office" description={`Delete ${office.name} for good, with its positions and past placements? This cannot be undone. An office that is still in use cannot be deleted.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <MembersCard office={office} />
-        <PositionsCard office={office} />
-        <SubOfficesCard office={office} onSelect={onSelect} />
-        <HistoryCard officeId={office.id} />
-      </div>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="records">Records</TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <MembersCard office={office} />
+            <PositionsCard office={office} />
+            <SubOfficesCard office={office} onSelect={onSelect} />
+          </div>
+        </TabsContent>
+        <TabsContent value="records">
+          <RecordsPanel office={office} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

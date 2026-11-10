@@ -5,10 +5,11 @@ import { startOfTodayUtc } from '../../../utils/dates.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
 import { parseEnum, parseUuid } from '../../../utils/validation.js';
 import { assertFiscalYearOpen } from '../../04-kpi-catalog/fiscalYear.service.js';
-import { APPROVED_STATUSES, PERSON_REF, assertSeparateApprover, assertWorksOnContract, requireComment, worksOnContract } from '../../05-contract-cascading/contract.shared.js';
+import { PERSON_REF, assertSeparateApprover, assertWorksOnContract, requireComment, worksOnContract } from '../../05-contract-cascading/contract.shared.js';
 import { assertPeriodOpen } from '../../06-reporting-periods/period.service.js';
 import { addDays } from '../../06-reporting-periods/period.rules.js';
 import { lowPerformance, reportReopened, reportReviewed, reportSubmitted } from '../../09-notifications/notification.events.js';
+import { EVIDENCE_LINE_SELECT, formatEvidenceLine } from '../../08-evidence-documents/evidence.shape.js';
 import { getSetting } from '../../10-system-governance/system.service.js';
 import { findLowResults, previewLines, recalculateReport } from '../scoring/scoring.service.js';
 import { dueAssignments, isDirectEntry } from '../scoring/result.service.js';
@@ -55,16 +56,6 @@ const isOverdue = (report, today = startOfTodayUtc()) => {
   return EDITABLE_STATUSES.includes(report.status) && Boolean(submissionDeadline) && today > submissionDeadline;
 };
 
-const EVIDENCE_SELECT = {
-  id: true,
-  performanceValueId: true,
-  verificationStatus: true,
-  comment: true,
-  verifiedAt: true,
-  document: { select: { id: true, title: true, fileId: true, createdAt: true } },
-  verifiedBy: { select: { id: true, firstName: true, lastName: true } },
-};
-
 // The office's figure made up from its people, in the shape of a stored result
 const staffFigure = (result) => ({ value: null, numerator: null, denominator: null, scaleLevelId: null, ...result, reportingStatus: result ? 'REPORTED' : 'NOT_REPORTED', note: 'Added up from staff results' });
 
@@ -77,6 +68,7 @@ const formatLine = (line) => ({
     direction: line.assignment.kpi.direction,
     unit: line.assignment.kpi.unit,
     currency: line.assignment.kpi.currency,
+    requiresEvidence: line.assignment.kpi.requiresEvidence,
     evidenceRequirement: line.assignment.kpi.evidenceRequirement,
     levels: line.assignment.kpi.scale?.levels.map(({ id, name }) => ({ id, name })) ?? [],
   },
@@ -144,6 +136,8 @@ const allowedActions = async (report, actor) => {
     attachEvidence: editable && (await worksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, contract)),
     review: underReview && (await reviewsContract(actor, PERMISSIONS.REPORT_REVIEW, contract)),
     verifyEvidence: underReview && (await reviewsContract(actor, PERMISSIONS.EVIDENCE_VERIFY, contract)),
+    // Verified evidence can be passed up into the report of the office above until this report is settled
+    forwardEvidence: yearOpen && !report.reportingPeriod.isClosed && ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'].includes(report.status) && !contract.personId && (await reviewsContract(actor, PERMISSIONS.EVIDENCE_VERIFY, contract)),
     reopen: yearOpen && !report.reportingPeriod.isClosed && report.status === 'APPROVED' && actor.access.isSuperAdmin,
   };
 };
@@ -156,13 +150,14 @@ export const getReportById = async (id, actor) => {
   await assertCanSeeReport(actor, report);
   const lines = await previewLines(report);
   const valueIds = lines.map((line) => line.directRow?.id).filter(Boolean);
-  const evidence = await prisma.performanceEvidence.findMany({ where: { performanceValueId: { in: valueIds } }, select: EVIDENCE_SELECT, orderBy: { createdAt: 'asc' } });
+  const evidence = (await prisma.performanceEvidence.findMany({ where: { performanceValueId: { in: valueIds } }, select: EVIDENCE_LINE_SELECT, orderBy: { createdAt: 'asc' } })).map(formatEvidenceLine);
   return {
     ...report,
     isOverdue: isOverdue(report),
     side: sideOf(actor, report.contract, await ownOfficeIdsOf(actor)),
     can: await allowedActions(report, actor),
-    lines: lines.map((line) => ({ ...formatLine(line), evidence: evidence.filter((item) => item.performanceValueId === line.directRow?.id) })),
+    // canForward: an office above holds this KPI, so the evidence has somewhere to go
+    lines: lines.map((line) => ({ ...formatLine(line), canForward: Boolean(line.assignment.parentAssignmentId), evidence: evidence.filter((item) => item.performanceValueId === line.directRow?.id) })),
   };
 };
 
@@ -220,15 +215,18 @@ const checkDeadline = async (period, report) => {
 };
 
 /**
- * Where the university requires it, every reported result needs evidence.
+ * A result needs evidence when its KPI was registered as requiring it: one the office typed, and one it adds up from
+ * the offices below. Either its own file or a file passed up from an office below does. Results made up from the
+ * office's own people carry their evidence on the staff contracts.
  */
 const assertEvidenceAttached = async (report) => {
-  if (!(await getSetting('reporting', 'require_evidence'))) return;
-  const missing = await prisma.performanceValue.findMany({
-    where: { reportId: report.id, contributionType: 'DIRECT', reportingStatus: 'REPORTED', evidence: { none: {} }, assignment: { staffParts: { none: { status: { in: APPROVED_STATUSES } } } } },
-    select: { assignment: { select: { kpi: { select: { name: true } } } } },
-  });
-  if (missing.length > 0) throw conflict(`Attach evidence for: ${missing.map((row) => row.assignment.kpi.name).join(', ')}`);
+  const lines = await previewLines(report);
+  const valueIds = lines.map((line) => line.directRow?.id).filter(Boolean);
+  const attached = new Set((await prisma.performanceEvidence.findMany({ where: { performanceValueId: { in: valueIds } }, select: { performanceValueId: true } })).map((row) => row.performanceValueId));
+
+  const hasFigure = (line) => line.directRow?.reportingStatus === 'REPORTED' || line.resolved.children.some((child) => child.result);
+  const missing = lines.filter((line) => line.isDirectEntry && line.assignment.kpi.requiresEvidence && !line.resolved.fromStaff && hasFigure(line) && !attached.has(line.directRow?.id));
+  if (missing.length > 0) throw conflict(`Attach evidence for: ${missing.map((line) => line.assignment.kpi.name).join(', ')}. Use your own file, or one passed up from an office below`);
 };
 
 /**

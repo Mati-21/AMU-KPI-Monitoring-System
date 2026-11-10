@@ -181,6 +181,19 @@ router.get('/offices/:id/history', protect, officeController.getOfficeHistory);
 
 /**
  * @swagger
+ * /api/v1/offices/{id}/records:
+ *   get:
+ *     tags: [Offices]
+ *     summary: What the office no longer has - former members, ended roles and archived positions
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: "{ formerMembers, endedRoles, archivedPositions }" }
+ */
+router.get('/offices/:id/records', protect, officeController.getOfficeRecords);
+
+/**
+ * @swagger
  * /api/v1/offices/{id}/positions:
  *   get:
  *     summary: Positions defined under an office
@@ -229,12 +242,12 @@ router.post('/offices/:id/positions', protect, requirePermission(PERMISSIONS.OFF
  *     responses:
  *       200: { description: Updated }
  *   delete:
- *     summary: Remove a position nobody holds today. Never held, it is deleted; held before, it is archived and kept for history
+ *     summary: Take a position nobody holds today out of use. It is archived, never deleted, so history keeps its title
  *     tags: [Offices]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
  *     responses:
- *       200: { description: Deleted, or archived when it was held before (data.archived) }
+ *       200: { description: Archived (data.archived is true) }
  *       409: { description: Someone holds it today }
  */
 router.put('/positions/:id', protect, requirePermission(PERMISSIONS.OFFICE_MANAGE), officeController.updatePosition);
@@ -288,11 +301,10 @@ router.post('/offices/:id/members', protect, requirePermission(PERMISSIONS.OFFIC
  *         application/json:
  *           schema:
  *             type: object
- *             required: [endDate]
  *             properties:
- *               endDate: { type: string, format: date }
+ *               endDate: { type: string, format: date, description: Last day. Leave out to remove the person from the office right now }
  *     responses:
- *       200: { description: Placement updated }
+ *       200: { description: Placement updated, or { removed } when a placement that had not yet started a full day was deleted }
  */
 router.patch('/office-persons/:id/end', protect, requirePermission(PERMISSIONS.OFFICE_ASSIGN), officeController.endPlacement);
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ArrowLeft, Building2, KeyRound, Laptop, Save, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, Building2, KeyRound, Laptop, Pencil, Save, ShieldCheck, User } from 'lucide-react';
 import { useSelector } from 'react-redux';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { Badge } from '../../../../shared/components/ui/Badge';
 import Button from '../../../../shared/components/ui/Button';
@@ -34,7 +34,8 @@ const useActionNotes = () => {
   });
 };
 
-const DetailsCard = ({ person, canEdit }) => {
+// The details are read-only until the pencil is used; canChange is whether this person may edit at all
+const DetailsCard = ({ person, canChange, canEdit, onEdit, onDone }) => {
   const update = useUpdatePerson();
   const notes = useActionNotes();
   const [form, setForm] = useState(() => Object.fromEntries(EDITABLE_FIELDS.map((field) => [field, person[field] ?? ''])));
@@ -42,16 +43,22 @@ const DetailsCard = ({ person, canEdit }) => {
 
   const save = (event) => {
     event.preventDefault();
-    update.mutate({ personId: person.id, values: form }, notes('Details saved.'));
+    update.mutate({ personId: person.id, values: form }, { ...notes('Details saved.'), onSuccess: () => { notes('Details saved.').onSuccess(); onDone(); } });
   };
 
   return (
     <Card className="border-border bg-card">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <User className="h-4 w-4 text-primary" />
           Details
         </CardTitle>
+        {canChange && !canEdit && (
+          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={onEdit}>
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <form onSubmit={save} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -62,10 +69,13 @@ const DetailsCard = ({ person, canEdit }) => {
           <Field label="Email" type="email" disabled={!canEdit} value={form.email} onChange={set('email')} />
           <Field label="Phone" type="tel" disabled={!canEdit} value={form.phone} onChange={set('phone')} />
           {canEdit && (
-            <div className="sm:col-span-2">
+            <div className="flex gap-2 sm:col-span-2">
               <Button type="submit" className="gap-2" disabled={update.isPending}>
                 <Save className="h-4 w-4" />
                 {update.isPending ? 'Saving...' : 'Save'}
+              </Button>
+              <Button type="button" variant="outline" disabled={update.isPending} onClick={onDone}>
+                Cancel
               </Button>
             </div>
           )}
@@ -183,6 +193,8 @@ const LoginCard = ({ person, canManage }) => (
 const UserDetail = () => {
   const { personId } = useParams();
   const can = useCan();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editing = can('user:update') && searchParams.get('edit') === '1';
   const { data: person, isLoading, error } = usePerson(personId);
   const [placing, setPlacing] = useState(false);
   const [managingRolesOf, setManagingRolesOf] = useState(null);
@@ -209,7 +221,7 @@ const UserDetail = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <DetailsCard key={person.id} person={person} canEdit={can('user:update')} />
+              <DetailsCard key={`${person.id}-${editing}`} person={person} canChange={can('user:update')} canEdit={editing} onEdit={() => setSearchParams({ edit: '1' })} onDone={() => setSearchParams({})} />
               <LoginCard person={person} canManage={can('user:manage')} />
               <PlacementsCard
                 placements={person.placements}

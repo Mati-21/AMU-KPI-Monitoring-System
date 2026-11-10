@@ -1,12 +1,14 @@
 import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import Button from '../../../shared/components/ui/Button';
 import { ConfirmDialog } from '../../02-offices/components/FormParts';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import RecordDialog from '../../04-kpi-catalog/components/RecordDialog';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { useContractStep } from '../hooks/useContracts';
-import { canReceive, flaggedCount, holderName, isOpen } from '../lib/contractRules';
+import { useContractStep, useDeleteContract } from '../hooks/useContracts';
+import { canReceive, flaggedCount, holderName, isOpen, isUnassignedDraft } from '../lib/contractRules';
 
 /**
  * The office above assigns the contract. The receiving office then signs it, or rejects it with flags on its KPIs,
@@ -18,6 +20,9 @@ const ContractActions = ({ contract }) => {
   const can = useCan();
   const { notify } = useNotification();
   const step = useContractStep();
+  const remove = useDeleteContract();
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const { status } = contract;
@@ -49,6 +54,19 @@ const ContractActions = ({ contract }) => {
       }
     );
 
+  const closeDelete = () => {
+    remove.reset();
+    setDeleting(false);
+  };
+
+  const confirmDelete = () =>
+    remove.mutate(contract.id, {
+      onSuccess: () => {
+        notify(`The contract for ${holder} was deleted.`, 'success');
+        navigate(`/assign-kpi?year=${contract.fiscalYear.id}`);
+      },
+    });
+
   const closeReject = () => {
     step.reset();
     setRejecting(false);
@@ -67,6 +85,12 @@ const ContractActions = ({ contract }) => {
             Assign to {holder}
           </Button>
         )}
+        {can('contract:manage') && isUnassignedDraft(contract) && (
+          <Button type="button" size="sm" variant="destructive" className="gap-1" onClick={() => setDeleting(true)}>
+            <Trash2 className="h-4 w-4" />
+            Delete Draft
+          </Button>
+        )}
         {canReceive(can, contract) && status === 'SUBMITTED' && (
           <>
             <Button type="button" size="sm" disabled={flagged > 0} title={flagged > 0 ? 'Remove the flags to sign' : undefined} onClick={() => setConfirming('sign')}>
@@ -79,6 +103,7 @@ const ContractActions = ({ contract }) => {
         )}
       </div>
 
+      <ConfirmDialog open={deleting} onClose={closeDelete} title="Delete Contract" description={`Delete the draft contract for ${holder} with all its KPI lines? It was never assigned, so nothing is lost but the draft. This cannot be undone.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
       {confirming && <ConfirmDialog open onClose={closeConfirm} title={confirms[confirming].title} description={confirms[confirming].description} onConfirm={confirm} error={step.error} pending={step.isPending} confirmLabel={confirms[confirming].confirmLabel} confirmVariant="default" />}
       {rejecting && <RecordDialog title="Reject Contract" description={`It goes back to the office above to correct and assign again.${flagged > 0 ? ` ${flagged} flagged KPI(s) go with it.` : ''}`} fields={[{ key: 'comment', label: 'Note for the Whole Contract', type: 'textarea', required: flagged === 0, hint: flagged > 0 ? 'Optional, because your flags already say what to correct.' : 'Say what needs correcting, or cancel and flag the KPIs instead.' }]} mutation={{ ...step, mutate: ({ values }, options) => step.mutate({ id: contract.id, step: 'reject', values }, options) }} submitLabel="Reject" successMessage="Contract rejected." onClose={closeReject} />}
     </>

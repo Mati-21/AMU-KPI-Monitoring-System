@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import PerformanceSheet from '../../07-performance/components/PerformanceSheet';
 import { useStaffSheet } from '../../07-performance/hooks/useReports';
 import { optionLabel } from '../../10-system/lib/settingValues';
@@ -45,7 +46,7 @@ const StaffContract = ({ summary, contracts }) => {
 const MyContractPage = () => {
   const [params, setParams] = useSearchParams();
   const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
-  const year = years.find((item) => item.id === params.get('year')) ?? years.find((item) => item.status === 'ACTIVE') ?? years[0];
+  const year = defaultYear(years, params.get('year'));
   const { data: mine = [], isLoading, error } = useMyContracts(year?.id);
   // The office's own contract, where a staff contract's KPIs come from, for those who may see it
   const { data: contracts = [] } = useContracts(year?.id);
@@ -67,7 +68,7 @@ const MyContractPage = () => {
 
         {!yearsLoading && !year && <Message>There are no fiscal years yet.</Message>}
         {error && <p className="text-sm text-red-500">{apiErrorMessage(error, 'Could not load your contract.')}</p>}
-        {year && !isLoading && mine.length === 0 && <Message>You have no contract for {year.name}. The head of your office gives you one under KPI Assignment.</Message>}
+        {year && !isLoading && mine.length === 0 && <Message>You have no contract for {year.name}. The head of your office gives you one under Office Contract.</Message>}
         {mine.map((summary) => (
           <StaffContract key={summary.id} summary={summary} contracts={contracts} />
         ))}

@@ -4,6 +4,7 @@ import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { useFiscalYears, usePeriods } from '../../06-reporting-periods/hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { usePerformanceOffices } from '../../07-performance/hooks/useReports';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import { useMyDashboard, useUniversityDashboard } from '../hooks/useDashboards';
@@ -18,7 +19,7 @@ const Message = ({ children }) => <p className="rounded-lg border border-border 
  * The year a dashboard opens on: the active one, or else the latest that has started, since a year still being planned
  * has no results yet.
  */
-const pickYear = (years, chosenId) => years.find((item) => item.id === chosenId) ?? years.find((item) => item.status === 'ACTIVE') ?? years.find((item) => item.status !== 'PLANNING') ?? years[0];
+const pickYear = defaultYear;
 
 /**
  * The dashboard fits who is signed in: the system overview for the Super Admin, with the whole university one choice

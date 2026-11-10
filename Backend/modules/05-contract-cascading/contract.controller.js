@@ -12,6 +12,7 @@ export const listContracts = async (req, res) => {
   const { fiscalYearId, officeId, status, mine } = req.query;
   send(res, await contractService.listContracts({ fiscalYearId, officeId, status, mine }, actorOf(req)));
 };
+export const deleteContract = async (req, res) => send(res, await contractService.deleteContract(req.params.id, actorOf(req)));
 export const getContractById = async (req, res) => send(res, await contractService.getContractById(req.params.id, actorOf(req)));
 export const importIntoContract = async (req, res) => send(res, await contractImportService.importIntoContract(req.params.id, req.body || {}, actorOf(req)));
 export const listContractOffices = async (req, res) => send(res, await contractService.listContractOffices(actorOf(req)));

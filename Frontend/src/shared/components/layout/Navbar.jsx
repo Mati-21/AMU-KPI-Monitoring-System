@@ -2,7 +2,7 @@ import { Bell, Building2, Moon, Sun, Layers, User, Settings, LogOut, MessageSqua
 import { formatEthiopianDateTime } from '../../lib/ethiopianDate';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useTheme from '../../hooks/useTheme';
 
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '../ui/DropDown';
@@ -32,10 +32,11 @@ const Navbar = () => {
   const location = useLocation();
   const profilePath = '/profile';
   const displayName = user?.name || user?.fullName || user?.FullName || 'Signed In';
-  const displayRole = String(user?.role || user?.roleName || 'User').trim();
   const [showFullRole, setShowFullRole] = useState(false);
   // The office the person works in: their primary placement, or the first one
   const placement = user?.placements?.find((item) => item.isPrimary) ?? user?.placements?.[0];
+  // Under the name: the position they hold there. Someone with no placement (such as the first admin) shows their role
+  const displayRole = String(placement?.position?.title || user?.role || user?.roleName || 'User').trim();
   const otherOffices = Math.max(0, (user?.placements?.length ?? 0) - 1);
 
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -68,17 +69,8 @@ const Navbar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [notificationOpen]);
 
-  const rolePreview = useMemo(() => {
-    const words = displayRole.split(/\s+/).filter(Boolean);
-    if (words.length <= 3) {
-      return { text: displayRole, hasHiddenPart: false };
-    }
-
-    return {
-      text: `${words.slice(0, 3).join(' ')}`,
-      hasHiddenPart: true,
-    };
-  }, [displayRole]);
+  const words = displayRole.split(/\s+/).filter(Boolean);
+  const rolePreview = words.length <= 3 ? { text: displayRole, hasHiddenPart: false } : { text: words.slice(0, 3).join(' '), hasHiddenPart: true };
 
   const handleLogout = async () => {
     try {
@@ -244,7 +236,7 @@ const Navbar = () => {
                         event.stopPropagation();
                         setShowFullRole((previous) => !previous);
                       }}
-                      aria-label={showFullRole ? 'Show shortened role name' : 'Show full role name'}
+                      aria-label={showFullRole ? 'Show shortened position' : 'Show full position'}
                     >
                       {showFullRole ? 'show less' : '...'}
                     </button>

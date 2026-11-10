@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileSignature,
   FileText,
+  FolderOpen,
   GraduationCap,
   LayoutDashboard,
   Lock,
@@ -55,7 +56,7 @@ export const navigationSections = [
       },
       {
         icon: ClipboardList,
-        label: 'KPI Assignment',
+        label: 'Office Contract',
         path: '/assign-kpi',
         permissions: ['contract:read'],
       },
@@ -76,6 +77,12 @@ export const navigationSections = [
         label: 'Report',
         path: '/report',
         permissions: ['report:read'],
+      },
+      {
+        icon: FolderOpen,
+        label: 'Documents',
+        path: '/documents',
+        permissions: ['document:read', 'document:create', 'document:manage'],
       },
       {
         icon: Target,

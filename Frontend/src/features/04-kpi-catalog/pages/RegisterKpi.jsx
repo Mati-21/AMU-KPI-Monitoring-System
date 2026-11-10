@@ -11,7 +11,11 @@ import { useNotification } from '../../09-notifications/context/NotificationCont
 import { useCurrencies, useFrequencies, useSaveRecord, useScales, useThemeTree, useUnits } from '../hooks/useCatalog';
 import { DIRECTIONS, MEASUREMENT_TYPES, RULES_BY_TYPE, SCORING_METHODS, ZERO_TARGET_RULES, isAdditiveType, kpiErrors, targetTypesFor, themeOptions, themePath, toOptions, usesLabels, usesScale } from '../lib/kpiRules';
 
-const TEXT_KEYS = ['name', 'description', 'remark', 'numeratorLabel', 'denominatorLabel'];
+const TEXT_KEYS = ['name', 'description', 'remark', 'numeratorLabel', 'denominatorLabel', 'evidenceRequirement'];
+const EVIDENCE_OPTIONS = [
+  { value: 'yes', label: 'Yes, a result needs evidence' },
+  { value: 'no', label: 'No, evidence is not needed' },
+];
 const CHOICE_KEYS = ['themeId', 'measurementType', 'direction', 'targetType', 'defaultFrequencyId', 'unitId', 'scaleId', 'currencyId', 'aggregationMethod', 'periodRollupMethod', 'scoringMethod', 'zeroTargetRule'];
 const EDITABLE_WHEN_LOCKED = new Set(['defaultFrequencyId', 'remark']);
 
@@ -21,18 +25,21 @@ const blankForm = () => ({
   maintenanceTolerance: '',
   decimalPlaces: '2',
   zeroTargetRule: 'NOT_CALCULABLE',
+  // Left unchosen on purpose: every KPI states whether it needs evidence
+  requiresEvidence: '',
 });
 
 const formFrom = (kpi) => {
   const form = blankForm();
   if (!kpi) return form;
   for (const key of [...TEXT_KEYS, ...CHOICE_KEYS]) form[key] = kpi[key] ?? '';
-  return { ...form, isAdditive: kpi.isAdditive, maintenanceTolerance: kpi.maintenanceTolerance ?? '', decimalPlaces: String(kpi.decimalPlaces ?? 2) };
+  return { ...form, isAdditive: kpi.isAdditive, requiresEvidence: kpi.requiresEvidence ? 'yes' : 'no', maintenanceTolerance: kpi.maintenanceTolerance ?? '', decimalPlaces: String(kpi.decimalPlaces ?? 2) };
 };
 
 const toSendValues = (form) => ({
   ...Object.fromEntries([...TEXT_KEYS, ...CHOICE_KEYS].map((key) => [key, form[key] === '' ? null : form[key]])),
   isAdditive: form.isAdditive,
+  requiresEvidence: form.requiresEvidence === '' ? null : form.requiresEvidence === 'yes',
   maintenanceTolerance: form.maintenanceTolerance === '' ? null : Number(form.maintenanceTolerance),
   decimalPlaces: Number(form.decimalPlaces),
 });
@@ -60,6 +67,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
   const [form, setForm] = useState(() => (replaces ? formFrom(replaces) : formFrom(kpi)));
   const [chosenThemeId, setChosenThemeId] = useState(null);
   const [subThemeMissing, setSubThemeMissing] = useState(false);
+  const [evidenceMissing, setEvidenceMissing] = useState(false);
   const isEditing = Boolean(kpi);
   const rules = RULES_BY_TYPE[form.measurementType];
   const lockedOut = (key) => Boolean(kpi?.isLocked) && !EDITABLE_WHEN_LOCKED.has(key);
@@ -101,6 +109,12 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
       denominatorLabel: usesLabels(measurementType) ? form.denominatorLabel : '',
     });
 
+  // The note about what to attach only makes sense when evidence is needed
+  const chooseEvidence = (requiresEvidence) => {
+    setEvidenceMissing(false);
+    setForm({ ...form, requiresEvidence, evidenceRequirement: requiresEvidence === 'no' ? '' : form.evidenceRequirement });
+  };
+
   const chooseDirection = (direction) =>
     setForm({ ...form, direction, targetType: targetTypesFor(direction)[0], maintenanceTolerance: direction === 'MAINTAIN' ? form.maintenanceTolerance : '' });
 
@@ -108,6 +122,10 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
     event.preventDefault();
     if (topThemeId && !form.themeId) {
       setSubThemeMissing(true);
+      return;
+    }
+    if (form.requiresEvidence === '') {
+      setEvidenceMissing(true);
       return;
     }
     const values = toSendValues(form);
@@ -120,7 +138,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
       { id: kpi?.id, values: payload },
       {
         onSuccess: (saved) => {
-          notify(replaces ? `${saved.name} now replaces ${replaces.name}, which was retired.` : `${saved.name} saved.`, 'success');
+          notify(replaces ? `${saved.name} now replaces ${replaces.name}, which was archived.` : `${saved.name} saved.`, 'success');
           onDone();
         },
       }
@@ -161,7 +179,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
           <h2 className="text-xl font-semibold text-foreground">{title}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
           {kpi?.isLocked && 'This KPI is in use, so only its reporting frequency can change. To change anything else, replace it.'}
-          {replaces && `Saving retires the old one and links the two, so the trend carries on.`}
+          {replaces && `Saving archives the old one and links the two, so the trend carries on.`}
           {!kpi?.isLocked && !replaces && 'What is measured and how. Weights, baselines and targets are set per year on each contract.'}
           </p>
         </div>
@@ -228,6 +246,13 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
             )}
           </>
         )}
+
+        <SectionTitle>Evidence</SectionTitle>
+        <div>
+          {select('requiresEvidence', 'Evidence Required', EVIDENCE_OPTIONS, { required: true, onChange: chooseEvidence, placeholder: 'Choose yes or no', hint: 'When yes, a result cannot be submitted until a supporting document is attached.' })}
+          {evidenceMissing && <p className="mt-1 text-xs text-red-500">Choose whether this KPI needs evidence.</p>}
+        </div>
+        {form.requiresEvidence === 'yes' && <div className="md:col-span-2">{area('evidenceRequirement', 'What To Attach', { hint: 'Optional. Tells the office what counts, such as a signed attendance sheet.' })}</div>}
       </div>
 
       {save.error && (

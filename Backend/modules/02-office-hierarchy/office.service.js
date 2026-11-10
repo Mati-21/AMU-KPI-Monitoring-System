@@ -518,9 +518,8 @@ export const updatePosition = async (id, { title, isHead } = {}, actor) => {
 };
 
 /**
- * Removes a position nobody holds today. One that was never held is deleted; one held before is archived instead,
- * because past placements point to it: it leaves every list, and history still shows its title.
- * Returns { archived }.
+ * Takes a position nobody holds today out of use. It is always archived, never deleted: it leaves every list and
+ * cannot be given to anyone, and past placements and the Records tab still show its title.
  */
 export const deletePosition = async (id, actor) => {
   const existing = await getPositionOrThrow(id, actor);
@@ -530,16 +529,9 @@ export const deletePosition = async (id, actor) => {
   });
   if (current) throw conflict(`${fullName(current.person)} still holds "${existing.title}". End their placement first.`);
 
-  const held = await prisma.officePerson.count({ where: { positionId: id } });
-  if (held > 0) {
-    await prisma.position.update({ where: { id }, data: { archivedAt: new Date() } });
-    await auditAction(actor, { action: 'POSITION_ARCHIVED', entityType: 'position', entityId: id, oldValues: existing });
-    return { archived: true };
-  }
-
-  await prisma.position.delete({ where: { id } });
-  await auditAction(actor, { action: 'POSITION_DELETED', entityType: 'position', entityId: id, oldValues: existing });
-  return { archived: false };
+  await prisma.position.update({ where: { id }, data: { archivedAt: new Date() } });
+  await auditAction(actor, { action: 'POSITION_ARCHIVED', entityType: 'position', entityId: id, oldValues: existing });
+  return { archived: true };
 };
 
 // ===== Members (OfficePerson placements) =====
@@ -648,8 +640,70 @@ const assertCanEndPlacement = async (placement, actor) => {
   if (others === 0) throw conflict('This is the last active Super Admin, so this placement cannot end');
 };
 
+// ===== Records: everything that left the office's current picture =====
+
+const ROLE_RECORD_SELECT = { id: true, validFrom: true, validTo: true, role: { select: { id: true, name: true } }, scopeOffice: { select: OFFICE_REF_SELECT } };
+const RECORD_PLACEMENT_INCLUDE = { person: { select: { ...PERSON_REF_SELECT, isActive: true } }, position: { select: { id: true, title: true, isHead: true } } };
+
+/**
+ * What the office no longer has, and who and what it once had:
+ * - formerMembers: placements that ended, with every role they held
+ * - endedRoles: roles that ended for people still in the office
+ * - archivedPositions: positions taken out of use, with how many people held them
+ */
+export const getOfficeRecords = async (officeId) => {
+  await getOfficeOrThrow(officeId);
+  const today = startOfTodayUtc();
+
+  const [ended, current, archived] = await Promise.all([
+    prisma.officePerson.findMany({
+      where: { officeId, endDate: { lt: today } },
+      orderBy: [{ endDate: 'desc' }, { startDate: 'desc' }],
+      include: { ...RECORD_PLACEMENT_INCLUDE, roles: { orderBy: { validFrom: 'asc' }, select: ROLE_RECORD_SELECT } },
+    }),
+    prisma.officePerson.findMany({
+      where: { officeId, OR: [{ endDate: null }, { endDate: { gte: today } }], roles: { some: { validTo: { lt: today } } } },
+      include: { ...RECORD_PLACEMENT_INCLUDE, roles: { where: { validTo: { lt: today } }, orderBy: { validTo: 'desc' }, select: ROLE_RECORD_SELECT } },
+    }),
+    prisma.position.findMany({ where: { officeId, archivedAt: { not: null } }, orderBy: { archivedAt: 'desc' }, include: { _count: { select: { officePersons: true } } } }),
+  ]);
+
+  const formatMember = ({ person, ...placement }) => ({ ...placement, person: { ...personRef(person), isActive: person.isActive } });
+  return {
+    formerMembers: ended.map(formatMember),
+    endedRoles: current.map(formatMember),
+    archivedPositions: archived.map(({ _count, ...position }) => ({ ...position, pastHolders: _count.officePersons })),
+  };
+};
+
+/**
+ * Remove a person from the office as of now. The placement ends yesterday, so from today the person holds no position
+ * and no role here, and the position is free. Placement and role rows stay as history.
+ * A placement that never had a full day (it starts today or later) has no history to keep, so it is deleted.
+ */
+const removePlacementNow = async (placement, actor) => {
+  const today = startOfTodayUtc();
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+
+  if (placement.startDate >= today) {
+    await prisma.officePerson.delete({ where: { id: placement.id } });
+    await auditAction(actor, { action: 'MEMBER_PLACEMENT_REMOVED', entityType: 'office_person', entityId: placement.id, oldValues: { officeId: placement.officeId, personId: placement.personId, positionId: placement.positionId, startDate: placement.startDate, endDate: placement.endDate } });
+    return { id: placement.id, removed: true };
+  }
+
+  const [updated] = await prisma.$transaction([
+    prisma.officePerson.update({ where: { id: placement.id }, data: { endDate: yesterday }, include: placementInclude() }),
+    // Roles that would outlive the placement stop with it
+    prisma.officePersonRole.updateMany({ where: { officePersonId: placement.id, OR: [{ validTo: null }, { validTo: { gt: yesterday } }], validFrom: { lte: yesterday } }, data: { validTo: yesterday } }),
+    prisma.officePersonRole.deleteMany({ where: { officePersonId: placement.id, validFrom: { gt: yesterday } } }),
+  ]);
+  await auditAction(actor, { action: 'MEMBER_PLACEMENT_ENDED', entityType: 'office_person', entityId: placement.id, oldValues: { endDate: placement.endDate }, newValues: { endDate: yesterday } });
+  return formatPlacement(updated);
+};
+
 /**
  * Set the last day of a running placement. It stays active through that day, and its roles stop with it.
+ * Without a date the person is removed from the office right away.
  */
 export const endPlacement = async (id, { endDate } = {}, actor) => {
   const placement = await prisma.officePerson.findUnique({ where: { id }, include: { position: true } });
@@ -657,9 +711,13 @@ export const endPlacement = async (id, { endDate } = {}, actor) => {
   await assertScope(actor, PERMISSIONS.OFFICE_ASSIGN, placement.officeId);
   if (placement.endDate && placement.endDate < startOfTodayUtc()) throw badRequest('This placement has already ended');
 
+  await assertCanEndPlacement(placement, actor);
+
+  // No date given: the person is removed from the office right now, so they hold nothing from today on
+  if (!endDate) return removePlacementNow(placement, actor);
+
   const end = parseDate(endDate, 'endDate');
   if (end < placement.startDate) throw badRequest('endDate must be on or after the start date');
-  await assertCanEndPlacement(placement, actor);
 
   // A later date can run into whoever took over the position
   const clash = await prisma.officePerson.findFirst({
@@ -686,6 +744,7 @@ export default {
   createOffice,
   updateOffice,
   getOfficeHistory,
+  getOfficeRecords,
   listPositions,
   createPosition,
   updatePosition,

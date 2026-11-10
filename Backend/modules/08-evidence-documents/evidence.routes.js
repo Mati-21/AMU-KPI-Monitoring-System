@@ -7,7 +7,7 @@ import { PERMISSIONS } from '../../config/permissions.js';
 const router = Router();
 const canManageTypes = requirePermission(PERMISSIONS.DOCUMENT_MANAGE);
 const canCreateDocuments = requirePermission(PERMISSIONS.DOCUMENT_CREATE);
-const canReadFiles = requirePermission(PERMISSIONS.FILE_READ);
+const canReadFiles = requirePermission(PERMISSIONS.DOCUMENT_READ);
 
 /**
  * @swagger
@@ -23,7 +23,7 @@ const canReadFiles = requirePermission(PERMISSIONS.FILE_READ);
  * /api/v1/files/{id}/download:
  *   get:
  *     summary: Download a file you have access to
- *     description: Access needs file:read over an office that owns or uses the file, or having uploaded it. Downloads are audited.
+ *     description: Needs document:download, and access needs document:read over an office that owns or uses the file, or having uploaded it. Downloads are audited.
  *     tags: [Evidence & Documents]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -58,7 +58,7 @@ const canReadFiles = requirePermission(PERMISSIONS.FILE_READ);
  *       201: { description: "{ fileId, originalName, sizeBytes }" }
  *       400: { description: Not an allowed image }
  */
-router.get('/files/:id/download', protect, requirePermission(PERMISSIONS.FILE_READ, PERMISSIONS.DOCUMENT_CREATE), evidenceController.downloadFile);
+router.get('/files/:id/download', protect, requirePermission(PERMISSIONS.DOCUMENT_DOWNLOAD), evidenceController.downloadFile);
 router.get('/files/:id/public', evidenceController.getPublicFile);
 router.post('/files/logo', protect, requirePermission(PERMISSIONS.SETTINGS_MANAGE), uploadOneFile, evidenceController.uploadLogo);
 
@@ -200,6 +200,44 @@ router.delete('/documents/:id', protect, canCreateDocuments, evidenceController.
  *     responses:
  *       201: { description: Attached }
  *       409: { description: Report or period no longer open }
+ * /api/v1/reports/{id}/evidence:
+ *   post:
+ *     summary: Attach a document of the reporting office to a KPI of a report, even when the office typed no figure for it
+ *     description: For a KPI the office only adds up from the offices below. Same rules as attaching to a result.
+ *     tags: [Evidence & Documents]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [assignmentId, documentId]
+ *             properties:
+ *               assignmentId: { type: string, format: uuid }
+ *               documentId: { type: string, format: uuid }
+ *               comment: { type: string }
+ *     responses:
+ *       201: { description: Attached }
+ * /api/v1/performance-evidence/{id}/forward:
+ *   put:
+ *     summary: Pass verified evidence of an office below up into the report of the office above, or take it back out
+ *     tags: [Evidence & Documents]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [forward]
+ *             properties:
+ *               forward: { type: boolean }
+ *     responses:
+ *       200: { description: "{ id, isForwarded }" }
+ *       409: { description: Not verified, or the report above can no longer change }
  * /api/v1/performance-evidence/{id}:
  *   delete:
  *     summary: Remove evidence while the report can still change
@@ -224,6 +262,7 @@ router.delete('/documents/:id', protect, canCreateDocuments, evidenceController.
  *             properties:
  *               status: { type: string, enum: [VERIFIED, REJECTED] }
  *               comment: { type: string }
+ *               forward: { type: boolean, description: Also pass this verified evidence up into the report of the office above }
  *     responses:
  *       200: { description: Reviewed }
  */
@@ -231,6 +270,8 @@ router.delete('/documents/:id', protect, canCreateDocuments, evidenceController.
 // checks who may act on which results
 router.get('/performance-values/:id/evidence', protect, withAccess, evidenceController.listEvidence);
 router.post('/performance-values/:id/evidence', protect, withAccess, evidenceController.attachEvidence);
+router.post('/reports/:id/evidence', protect, withAccess, evidenceController.attachEvidenceToLine);
+router.put('/performance-evidence/:id/forward', protect, requirePermission(PERMISSIONS.EVIDENCE_VERIFY), evidenceController.setEvidenceForward);
 router.delete('/performance-evidence/:id', protect, withAccess, evidenceController.removeEvidence);
 router.patch('/performance-evidence/:id/verify', protect, requirePermission(PERMISSIONS.EVIDENCE_VERIFY), evidenceController.verifyEvidence);
 

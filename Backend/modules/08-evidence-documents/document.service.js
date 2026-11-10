@@ -78,12 +78,17 @@ const DOCUMENT_INCLUDE = {
   ownerOffice: { select: { id: true, name: true, code: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   file: { select: { id: true, originalName: true, mimeType: true, sizeBytes: true, checksum: true, uploadedAt: true } },
+  _count: { select: { baselineEvidence: true, performanceEvidence: true, changeRequestEvidence: true } },
 };
 
-// size_bytes is a BigInt, which JSON cannot represent
-const formatDocument = ({ file, ...document }) => ({ ...document, file: { ...file, sizeBytes: Number(file.sizeBytes) } });
+// size_bytes is a BigInt, which JSON cannot represent. usedAsEvidence tells the list which documents cannot be deleted.
+const formatDocument = ({ file, _count, ...document }) => ({
+  ...document,
+  usedAsEvidence: Object.values(_count).some((count) => count > 0),
+  file: { ...file, sizeBytes: Number(file.sizeBytes) },
+});
 
-const canRead = async (actor, document) => document.createdByPersonId === actor.personId || (document.ownerOfficeId && actor.access.can(PERMISSIONS.FILE_READ, document.ownerOfficeId));
+const canRead = async (actor, document) => document.createdByPersonId === actor.personId || (document.ownerOfficeId && actor.access.can(PERMISSIONS.DOCUMENT_READ, document.ownerOfficeId));
 
 /**
  * Upload a file and describe it in one step, against the rules of its document type.

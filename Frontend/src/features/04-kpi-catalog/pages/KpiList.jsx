@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ClipboardPlus, Edit3, Eye, FileSpreadsheet, Power, Replace } from 'lucide-react';
+import { ClipboardPlus, Edit3, Eye, FileSpreadsheet, Replace, RotateCcw, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import { Badge } from '../../../shared/components/ui/Badge';
@@ -15,17 +15,16 @@ import { useNotification } from '../../09-notifications/context/NotificationCont
 import { optionLabel } from '../../10-system/lib/settingValues';
 import KpiDetailDialog from '../components/KpiDetailDialog';
 import { IconAction } from '../components/RecordTable';
-import { fetchAllKpis, useKpis, useSaveRecord, useThemeTree } from '../hooks/useCatalog';
+import { fetchAllKpis, useDeleteKpi, useKpis, useSaveRecord, useThemeTree } from '../hooks/useCatalog';
 import { MEASUREMENT_TYPES, themeNames, themeOptions, toOptions } from '../lib/kpiRules';
 
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
 const ALL = 'all';
-const NO_FILTERS = { themeId: ALL, measurementType: ALL, isActive: ALL };
+const NO_FILTERS = { themeId: ALL, measurementType: ALL, isActive: 'true' };
 const STATUS_OPTIONS = [
-  { value: ALL, label: 'All statuses' },
   { value: 'true', label: 'Active' },
-  { value: 'false', label: 'Retired' },
+  { value: 'false', label: 'Archived' },
 ];
 
 const Filter = ({ allLabel, options, value, onChange }) => (
@@ -43,7 +42,7 @@ const toSheetRow = (kpi, themes) => ({
   'Measurement Type': optionLabel(kpi.measurementType),
   Direction: optionLabel(kpi.direction),
   'Reporting Frequency': kpi.defaultFrequency?.name ?? '',
-  Status: kpi.isActive ? 'Active' : 'Retired',
+  Status: kpi.isActive ? 'Active' : 'Archived',
   Remark: kpi.remark ?? '',
 });
 
@@ -52,12 +51,13 @@ function KpiList({ onEdit, onReplace }) {
   const { notify } = useNotification();
   const { data: themes = [] } = useThemeTree();
   const save = useSaveRecord('kpis');
+  const remove = useDeleteKpi();
+  const [deleting, setDeleting] = useState(null);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [filters, setFilters] = useState(NO_FILTERS);
   const [page, setPage] = useState(1);
   const [viewing, setViewing] = useState(null);
-  const [retiring, setRetiring] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState({});
   const [addingToContract, setAddingToContract] = useState(false);
@@ -83,7 +83,7 @@ function KpiList({ onEdit, onReplace }) {
     setPage(1);
   };
 
-  // Retired KPIs cannot go on a contract. The selection stays while moving between pages and filters.
+  // Archived KPIs cannot go on a contract. The selection stays while moving between pages and filters.
   const toggleKpi = (kpi) => {
     const { [kpi.id]: wasSelected, ...others } = selected;
     setSelected(wasSelected ? others : { ...selected, [kpi.id]: kpi });
@@ -100,24 +100,22 @@ function KpiList({ onEdit, onReplace }) {
 
   const removeFromSelection = (ids) => setSelected(Object.fromEntries(Object.entries(selected).filter(([id]) => !ids.includes(id))));
 
-  const closeRetire = () => {
-    save.reset();
-    setRetiring(null);
+  const closeDelete = () => {
+    remove.reset();
+    setDeleting(null);
   };
 
-  const setActive = (kpi, isActive) =>
-    save.mutate(
-      { id: kpi.id, values: { isActive } },
-      {
-        onSuccess: () => {
-          notify(isActive ? `${kpi.name} is active again.` : `${kpi.name} was retired.`, 'success');
-          closeRetire();
-        },
-        onError: (failure) => {
-          if (isActive) notify(apiErrorMessage(failure, 'Could not change this KPI.'), 'error');
-        },
-      }
-    );
+  const confirmDelete = () =>
+    remove.mutate(deleting.id, {
+      onSuccess: ({ archived }) => {
+        notify(archived ? `${deleting.name} was archived. Past contracts and results keep it.` : `${deleting.name} was deleted.`, 'success');
+        removeFromSelection([deleting.id]);
+        closeDelete();
+      },
+    });
+
+  const restore = (kpi) =>
+    save.mutate({ id: kpi.id, values: { isActive: true } }, { onSuccess: () => notify(`${kpi.name} is restored.`, 'success'), onError: (failure) => notify(apiErrorMessage(failure, 'Could not restore this KPI.'), 'error') });
 
   const exportExcel = async () => {
     setExporting(true);
@@ -201,7 +199,7 @@ function KpiList({ onEdit, onReplace }) {
                 <TableCell>{kpi.defaultFrequency?.name ?? '-'}</TableCell>
                 <TableCell>
                   <span className="flex flex-wrap gap-1">
-                    <Badge variant="outline">{kpi.isActive ? 'Active' : 'Retired'}</Badge>
+                    <Badge variant="outline">{kpi.isActive ? 'Active' : 'Archived'}</Badge>
                     {kpi.isLocked && <Badge variant="outline">In use</Badge>}
                   </span>
                 </TableCell>
@@ -210,7 +208,8 @@ function KpiList({ onEdit, onReplace }) {
                     <IconAction icon={Eye} label={`View ${kpi.name}`} onClick={() => setViewing(kpi)} />
                     {can('kpi:update') && <IconAction icon={Edit3} label={`Edit ${kpi.name}`} onClick={() => onEdit(kpi)} />}
                     {can('kpi:create') && kpi.replacedBy?.length === 0 && <IconAction icon={Replace} label={`Replace ${kpi.name}`} onClick={() => onReplace(kpi)} />}
-                    {can('kpi:update') && kpi.replacedBy?.length === 0 && <IconAction icon={Power} label={`${kpi.isActive ? 'Retire' : 'Reactivate'} ${kpi.name}`} danger={kpi.isActive} onClick={() => (kpi.isActive ? setRetiring(kpi) : setActive(kpi, true))} />}
+                    {can('kpi:update') && kpi.isActive && <IconAction icon={Trash2} danger label={`Delete ${kpi.name}`} onClick={() => setDeleting(kpi)} />}
+                    {can('kpi:update') && !kpi.isActive && kpi.replacedBy?.length === 0 && <IconAction icon={RotateCcw} label={`Restore ${kpi.name}`} onClick={() => restore(kpi)} />}
                   </div>
                 </TableCell>
               </TableRow>
@@ -223,7 +222,7 @@ function KpiList({ onEdit, onReplace }) {
 
       {addingToContract && <AddToContractDialog kpis={selectedKpis} onAdded={removeFromSelection} onClose={() => setAddingToContract(false)} />}
       {viewing && <KpiDetailDialog kpi={viewing} onClose={() => setViewing(null)} />}
-      <ConfirmDialog open={Boolean(retiring)} onClose={closeRetire} title="Retire KPI" description={`Retire ${retiring?.name}? It stays in the history and can be reactivated, but it can no longer be chosen for new work.`} onConfirm={() => setActive(retiring, false)} error={save.error} pending={save.isPending} confirmLabel="Retire" />
+      <ConfirmDialog open={Boolean(deleting)} onClose={closeDelete} title="Delete KPI" description={`Delete ${deleting?.name}? A KPI that was never used on a contract is deleted for good. One that was used is archived instead: it leaves the active list and cannot be chosen for new work, but past contracts and results keep it.`} onConfirm={confirmDelete} error={remove.error} pending={remove.isPending} />
     </div>
   );
 }

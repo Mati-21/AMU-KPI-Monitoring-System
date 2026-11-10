@@ -17,6 +17,9 @@ const STATUS_WORDS = { SUBMITTED: 'Awaiting signature', ACKNOWLEDGED: 'Accepted'
 export const REJECTED_ROW = 'bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50';
 const OPEN_STATUSES = ['DRAFT', 'REJECTED'];
 
+// A draft was never assigned, so the office that builds it can still change it or delete it
+export const isUnassignedDraft = (contract) => contract.status === 'DRAFT' && ['SENT', 'STAFF', 'SELF'].includes(contract.direction ?? 'SENT');
+
 export const isOpen = (record) => OPEN_STATUSES.includes(record.status);
 
 // A staff contract is given by an office to one person working in it
@@ -77,7 +80,7 @@ export const hasLevels = (kpi, form) => !usesLevels(kpi) || Boolean((targetIsWor
  */
 export const blockedReason = (contract, kpi) => {
   if (onlyLive(contract).some((assignment) => assignment.kpi.id === kpi.id)) return 'Already on this contract.';
-  if (!kpi.isActive) return 'This KPI is retired.';
+  if (!kpi.isActive) return 'This KPI is archived.';
   return contract.assigningOfficeId ? `${contract.assigningOffice.name} has not signed this KPI yet.` : null;
 };
 
@@ -99,19 +102,19 @@ export const measureText = (kpi, row, withUnit = true) => {
 };
 
 /**
- * Who can get a new contract this year, as one list: the offices the server offers (directly below the person's own
- * office, or their own top office), then the people working in the person's own office for a staff contract.
- * Those already holding a contract are left out. Each value says which it is.
+ * Who can get a new contract this year, in two separate lists: the offices the server offers (directly below the
+ * person's own office, or their own top office), and the people working in the person's own office for a staff
+ * contract. Those already holding a contract are left out. Each value says which it is.
  */
 export const contractHolderOptions = (offices, people, contracts) => {
   const officesTaken = new Set(contracts.filter((contract) => !isStaffContract(contract)).map((contract) => contract.officeId));
   const peopleTaken = new Set(contracts.filter(isStaffContract).map((contract) => `${contract.personId}:${contract.officeId}`));
-  return [
-    ...offices.filter((office) => !officesTaken.has(office.id)).map((office) => ({ value: `office:${office.id}`, label: `Office: ${office.name}` })),
-    ...people
+  return {
+    offices: offices.filter((office) => !officesTaken.has(office.id)).map((office) => ({ value: `office:${office.id}`, label: office.name })),
+    people: people
       .filter((person) => !peopleTaken.has(`${person.id}:${person.officeId}`))
-      .map((person) => ({ value: `person:${person.id}:${person.officeId}`, label: `Staff: ${person.name}${person.isYou ? ' (you)' : ''}, ${person.position ?? 'Staff'}, ${person.officeName}` })),
-  ];
+      .map((person) => ({ value: `person:${person.id}:${person.officeId}`, label: `${person.name}${person.isYou ? ' (you)' : ''}, ${person.position ?? 'Staff'}, ${person.officeName}` })),
+  };
 };
 
 // The request body for a holder chosen from contractHolderOptions

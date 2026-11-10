@@ -27,7 +27,7 @@ const KpiDetailDialog = ({ kpi, onClose }) => {
         <DialogDescription>{kpi.description}</DialogDescription>
       </DialogHeader>
       <div className="flex flex-wrap gap-2">
-        <Badge variant="outline">{kpi.isActive ? 'Active' : 'Retired'}</Badge>
+        <Badge variant="outline">{kpi.isActive ? 'Active' : 'Archived'}</Badge>
         {kpi.isLocked && <Badge variant="outline">In use by {kpi.liveAssignmentCount} assignment(s)</Badge>}
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -47,6 +47,8 @@ const KpiDetailDialog = ({ kpi, onClose }) => {
         <Detail label="Combining Offices">{words(kpi.aggregationMethod)}</Detail>
         <Detail label="Combining Periods">{words(kpi.periodRollupMethod)}</Detail>
         <Detail label="Scoring Method">{words(kpi.scoringMethod)}</Detail>
+        <Detail label="Evidence Required">{kpi.requiresEvidence ? 'Yes' : 'No'}</Detail>
+        {kpi.requiresEvidence && kpi.evidenceRequirement && <Detail label="What To Attach" wide>{kpi.evidenceRequirement}</Detail>}
         {kpi.replaces && <Detail label="Replaces">{kpi.replaces.name}</Detail>}
         {kpi.replacedBy?.length > 0 && <Detail label="Replaced By">{kpi.replacedBy[0].name}</Detail>}
       </div>

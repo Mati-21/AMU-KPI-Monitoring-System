@@ -5,6 +5,7 @@ import { notFound } from '../../../utils/httpError.js';
 import { parseUuid } from '../../../utils/validation.js';
 import { APPROVED_STATUSES, PERSON_REF, isOwnStaffContract, worksOnContract } from '../../05-contract-cascading/contract.shared.js';
 import { toNumber } from '../../05-contract-cascading/measurement.js';
+import { EVIDENCE_LINE_SELECT, formatEvidenceLine } from '../../08-evidence-documents/evidence.shape.js';
 import { ownOfficeIdsOf, reviewsContract } from '../reports/report.access.js';
 import { deadlineState } from '../reports/report.service.js';
 import { EDITABLE_STATUSES } from '../reports/reportValue.service.js';
@@ -45,6 +46,8 @@ const kpiOf = (kpi) => ({
   unit: kpi.unit,
   currency: kpi.currency,
   remark: kpi.remark,
+  requiresEvidence: kpi.requiresEvidence,
+  evidenceRequirement: kpi.evidenceRequirement,
   levels: kpi.scale?.levels.map(({ id, name }) => ({ id, name })) ?? [],
 });
 
@@ -190,11 +193,11 @@ export const getPerformanceSheet = async ({ fiscalYearId, officeId, contractId }
       if (report) {
         const lines = await previewLines(report);
         const valueIds = lines.map((line) => line.directRow?.id).filter(Boolean);
-        const evidence = await prisma.performanceEvidence.findMany({
+        const evidence = (await prisma.performanceEvidence.findMany({
           where: { performanceValueId: { in: valueIds } },
-          select: { id: true, performanceValueId: true, verificationStatus: true, comment: true, document: { select: { id: true, title: true, fileId: true, createdAt: true } } },
+          select: EVIDENCE_LINE_SELECT,
           orderBy: { createdAt: 'asc' },
-        });
+        })).map(formatEvidenceLine);
         for (const line of lines) {
           const row = cells.get(line.assignment.id);
           if (row) row[period.id] = cellOf(line.resolved, line.directRow, evidence);

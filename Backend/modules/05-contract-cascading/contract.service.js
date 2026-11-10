@@ -21,7 +21,7 @@ import {
   canSeeAssignment,
   formatAssignment,
 } from './contract.shared.js';
-import { loadSharing } from './allocation.service.js';
+import { loadSharing, refreshReconciliation } from './allocation.service.js';
 import { toNumber } from './measurement.js';
 
 /**
@@ -337,4 +337,44 @@ export const signContract = async (id, actor) => {
   return updated;
 };
 
-export default { listContracts, listContractOffices, listContractPeople, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };
+/**
+ * Delete a contract that was never assigned, with its KPI lines. Once it has been assigned, or anything has been
+ * reported on or passed down from it, it is part of the record and stays.
+ */
+export const deleteContract = async (id, actor) => {
+  const contract = await getContractOrThrow(id);
+  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
+  assertStatus(contract, 'DRAFT');
+  if (await prisma.contractRejection.count({ where: { contractId: contract.id } })) throw conflict('This contract was sent to an office before, so it stays as a record');
+  if ((await prisma.performanceReport.count({ where: { contractId: contract.id } })) > 0) throw conflict('Results were already reported on this contract');
+
+  const assignments = await prisma.kpiAssignment.findMany({ where: { contractId: contract.id }, select: { id: true, parentAssignmentId: true } });
+  const ids = assignments.map((assignment) => assignment.id);
+  const below = await prisma.kpiAssignment.count({ where: { OR: [{ parentAssignmentId: { in: ids } }, { sourceAssignmentId: { in: ids } }] } });
+  if (below > 0) throw conflict('KPIs on this contract were already passed down to other contracts. Cancel those first');
+  if ((await prisma.assignmentChangeRequest.count({ where: { assignmentId: { in: ids } } })) > 0) throw conflict('This contract has change requests, so it stays as a record');
+
+  const onAssignments = { assignmentId: { in: ids } };
+  await prisma.$transaction([
+    prisma.baselineEvidence.deleteMany({ where: { baseline: onAssignments } }),
+    // The share each KPI took from the office above goes back to it
+    prisma.responsibilityAllocation.deleteMany({ where: { OR: [{ childAssignmentId: { in: ids } }, { parentAssignmentId: { in: ids } }, ...assignments.filter((a) => a.parentAssignmentId).map((a) => ({ parentAssignmentId: a.parentAssignmentId, childOfficeId: contract.officeId }))] } }),
+    prisma.kpiWeight.deleteMany({ where: onAssignments }),
+    prisma.kpiTarget.deleteMany({ where: onAssignments }),
+    prisma.kpiBaseline.deleteMany({ where: onAssignments }),
+    prisma.kpiAssignment.deleteMany({ where: { id: { in: ids } } }),
+    prisma.performanceContract.delete({ where: { id: contract.id } }),
+  ]);
+  for (const parentId of new Set(assignments.map((assignment) => assignment.parentAssignmentId).filter(Boolean))) await refreshReconciliation(parentId);
+
+  await auditAction(actor, {
+    action: 'CONTRACT_DELETED',
+    entityType: 'performance_contract',
+    entityId: contract.id,
+    oldValues: { fiscalYearId: contract.fiscalYearId, officeId: contract.officeId, assigningOfficeId: contract.assigningOfficeId, personId: contract.personId, kpiLines: ids.length },
+  });
+  return { id: contract.id, deleted: true };
+};
+
+export default { deleteContract, listContracts, listContractOffices, listContractPeople, listRejections, getContractById, createContract, assignContract, rejectContract, signContract };

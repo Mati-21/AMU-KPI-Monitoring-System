@@ -30,6 +30,8 @@ export const seedKpis = async () => {
     if (await prisma.kpi.findFirst({ where: { name: kpi.name } })) continue;
     await createKpi(
       {
+        // A sample that says what to attach is one that needs it
+        requiresEvidence: Boolean(kpi.evidenceRequirement),
         ...kpi,
         themeId: await idOf(prisma.kpiTheme, { code: theme }, `Theme ${theme}`),
         defaultFrequencyId: await idOf(prisma.reportingFrequency, { name: frequency }, `Frequency ${frequency}`),

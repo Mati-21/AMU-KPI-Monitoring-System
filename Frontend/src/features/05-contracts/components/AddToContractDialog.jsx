@@ -4,6 +4,7 @@ import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { Field, FormDialog } from '../../02-offices/components/FormParts';
 import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useContract, useContracts, useSaveAssignment } from '../hooks/useContracts';
 import { assignableKpis, assignmentPayload, blockedReason, defaultsForKpi, hasLevels, isOpen, sharedTarget } from '../lib/contractRules';
@@ -20,7 +21,7 @@ const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
   const { data: years = [] } = useFiscalYears();
   const openYears = years.filter((year) => year.status !== 'CLOSED');
   const [chosenYearId, setChosenYearId] = useState(null);
-  const yearId = chosenYearId ?? (openYears.find((year) => year.status === 'ACTIVE') ?? openYears[0])?.id;
+  const yearId = chosenYearId ?? defaultYear(openYears)?.id;
   const [contractId, setContractId] = useState('');
   const [forms, setForms] = useState({});
   const [errors, setErrors] = useState({});
@@ -85,7 +86,7 @@ const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
         <Field label="Fiscal Year" required group>
           <CustomSelect compact options={openYears.map((year) => ({ value: year.id, label: year.name }))} value={yearId ?? ''} onChange={changeYear} placeholder="No open fiscal year" />
         </Field>
-        <Field label="Contract" required group hint={yearId && drafts.length === 0 ? 'This year has no contract open for changes. Create one under KPI Assignment.' : undefined}>
+        <Field label="Contract" required group hint={yearId && drafts.length === 0 ? 'This year has no contract open for changes. Create one under Office Contract.' : undefined}>
           <CustomSelect compact options={drafts.map((candidate) => ({ value: candidate.id, label: candidate.office.name }))} value={contractId} onChange={setContractId} placeholder="Choose a contract" />
         </Field>
       </div>

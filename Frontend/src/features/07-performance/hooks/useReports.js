@@ -50,13 +50,15 @@ export const useReport = (id) =>
     queryFn: () => api.get(`/reports/${id}`).then(unwrap),
   });
 
-export const useDocumentTypes = () => useQuery({ queryKey: ['document-types'], queryFn: () => api.get('/document-types').then(unwrap) });
-
 const useReportAction = (send) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: send,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.reports.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all });
+      // Evidence is a document too, so the Documents page changes with it
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.all });
+    },
   });
 };
 
@@ -80,27 +82,21 @@ export const useReportStep = () => useReportAction(({ id, step, values }) => api
 
 /**
  * Evidence is a document of the reporting office linked to one result: the file is uploaded first, then attached.
+ * A KPI the office only adds up from the offices below has no stored figure yet, so it is attached to the report's line.
  */
 export const useAttachEvidence = () =>
-  useReportAction(async ({ valueId, officeId, documentTypeId, title, file }) => {
+  useReportAction(async ({ valueId, reportId, assignmentId, officeId, documentTypeId, title, file }) => {
     const form = new FormData();
     form.append('file', file);
     form.append('documentTypeId', documentTypeId);
     form.append('ownerOfficeId', officeId);
     form.append('title', title);
     const document = await api.post('/documents', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(unwrap);
-    return api.post(`/performance-values/${valueId}/evidence`, { documentId: document.id }).then(unwrap);
+    if (valueId) return api.post(`/performance-values/${valueId}/evidence`, { documentId: document.id }).then(unwrap);
+    return api.post(`/reports/${reportId}/evidence`, { assignmentId, documentId: document.id }).then(unwrap);
   });
 
 export const useRemoveEvidence = () => useReportAction((id) => api.delete(`/performance-evidence/${id}`));
-export const useVerifyEvidence = () => useReportAction(({ id, status, comment }) => api.patch(`/performance-evidence/${id}/verify`, { status, comment }).then(unwrap));
-
-/**
- * Open an evidence file in a new tab. The download needs the session, so it is fetched and shown from memory.
- */
-export const openFile = async (fileId) => {
-  const response = await api.get(`/files/${fileId}/download`, { responseType: 'blob' });
-  const url = URL.createObjectURL(response.data);
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-};
+// forward: also pass the verified evidence up into the report of the office above
+export const useVerifyEvidence = () => useReportAction(({ id, status, comment, forward }) => api.patch(`/performance-evidence/${id}/verify`, { status, comment, forward }).then(unwrap));
+export const useForwardEvidence = () => useReportAction(({ id, forward }) => api.put(`/performance-evidence/${id}/forward`, { forward }).then(unwrap));

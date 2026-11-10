@@ -81,6 +81,7 @@ const parseKpiInput = (input) => {
   set('scoringMethod', oneOf(SCORING_METHODS));
   set('zeroTargetRule', oneOf(ZERO_TARGET_RULES));
   set('isAdditive', parseBoolean);
+  set('requiresEvidence', parseBoolean);
   set('isActive', parseBoolean);
   set('decimalPlaces', (value, key) => parseNumber(value, key, { integer: true }));
   set('maintenanceTolerance', (value, key) => parseNumber(value, key) ?? null);
@@ -93,7 +94,7 @@ const parseKpiInput = (input) => {
  */
 const validateDefinition = async (kpi) => {
   const errors = [];
-  for (const key of ['name', 'description', 'themeId', 'measurementType', 'direction', 'defaultFrequencyId']) {
+  for (const key of ['name', 'description', 'themeId', 'measurementType', 'direction', 'defaultFrequencyId', 'requiresEvidence']) {
     if (kpi[key] === undefined || kpi[key] === null) errors.push(`${key} is required`);
   }
   const rules = RULES_BY_TYPE[kpi.measurementType];
@@ -329,4 +330,31 @@ export const updateKpi = async (id, data = {}, actor) => {
   return formatKpi(kpi);
 };
 
-export default { listKpis, getKpiById, buildDefinition, createKpi, importKpis, updateKpi };
+/**
+ * Remove a KPI. One nothing ever used (never on a contract, not even a cancelled one, and in no replacement) is
+ * deleted. Any other is archived instead, so contracts and results that point to it keep its meaning.
+ * Returns { deleted } or { archived }.
+ */
+export const deleteKpi = async (id, actor) => {
+  assertGlobal(actor, PERMISSIONS.KPI_UPDATE, 'Removing KPIs');
+  const existing = await prisma.kpi.findUnique({
+    where: { id: parseUuid(id, 'id') },
+    include: { replacedBy: { select: { id: true } }, _count: { select: { assignments: true } } },
+  });
+  if (!existing) throw notFound('KPI not found');
+  const { _count, replacedBy, ...before } = existing;
+
+  const hasHistory = _count.assignments > 0 || replacedBy.length > 0 || Boolean(existing.replacesKpiId);
+  if (!hasHistory) {
+    await prisma.kpi.delete({ where: { id: existing.id } });
+    await auditAction(actor, { action: 'KPI_DELETED', entityType: 'kpi', entityId: existing.id, oldValues: before });
+    return { id: existing.id, deleted: true };
+  }
+
+  if (!existing.isActive) throw conflict(`"${existing.name}" is already archived`);
+  await prisma.kpi.update({ where: { id: existing.id }, data: { isActive: false } });
+  await auditAction(actor, { action: 'KPI_ARCHIVED', entityType: 'kpi', entityId: existing.id, oldValues: { isActive: true }, newValues: { isActive: false } });
+  return { id: existing.id, archived: true };
+};
+
+export default { listKpis, getKpiById, buildDefinition, createKpi, importKpis, updateKpi, deleteKpi };

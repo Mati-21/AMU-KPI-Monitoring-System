@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import ContractsTable from '../components/ContractsTable';
 import RejectionHistory from '../components/RejectionHistory';
@@ -13,7 +14,7 @@ const KpiAllocationPage = () => {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [showHistory, setShowHistory] = useState(false);
-  const year = years.find((candidate) => candidate.id === params.get('year')) ?? years.find((candidate) => candidate.status === 'ACTIVE') ?? years[0];
+  const year = defaultYear(years, params.get('year'));
   const { data = [], isLoading, error } = useContracts(year?.id);
   // KPIs start at the self contract, so it comes first
   const contracts = [...data].sort((a, b) => Number(Boolean(a.assigningOfficeId)) - Number(Boolean(b.assigningOfficeId)));
@@ -23,7 +24,7 @@ const KpiAllocationPage = () => {
       <main className="flex min-w-0 flex-1 flex-col space-y-5 p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">KPI Assignment</h1>
+            <h1 className="text-2xl font-bold text-foreground">Office Contract</h1>
             <p className="text-sm text-muted-foreground">Contracts between each office and the office above it, and the KPIs they hold.</p>
           </div>
           {year && (

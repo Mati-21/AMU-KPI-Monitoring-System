@@ -38,6 +38,8 @@ export const deleteDocument = async (req, res) => {
 // ===== Performance evidence =====
 export const listEvidence = async (req, res) => send(res, await evidenceService.listEvidence(req.params.id, actorOf(req)));
 export const attachEvidence = async (req, res) => send(res, await evidenceService.attachEvidence(req.params.id, req.body || {}, actorOf(req)), 201);
+export const attachEvidenceToLine = async (req, res) => send(res, await evidenceService.attachEvidenceToLine(req.params.id, req.body || {}, actorOf(req)), 201);
+export const setEvidenceForward = async (req, res) => send(res, await evidenceService.setForward(req.params.id, req.body || {}, actorOf(req)));
 export const removeEvidence = async (req, res) => {
   await evidenceService.removeEvidence(req.params.id, actorOf(req));
   res.json({ status: 'success', message: 'Evidence removed' });

@@ -1,48 +1,49 @@
 import { useState } from 'react';
-import { CalendarX2, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../shared/components/ui/Card';
-import EthiopianDateInput from '../../../shared/components/ui/EthiopianDateInput';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import RoleAssignmentsDialog from '../../03-access-control/components/RoleAssignmentsDialog';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { roleNames } from '../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useEndPlacement, useMembers } from '../hooks/useOffices';
-import { formatDate, todayIso } from '../lib/officeTree';
-import { Field, FormDialog } from './FormParts';
+import { formatDate } from '../lib/officeTree';
+import { ConfirmDialog } from './FormParts';
 import PlaceMemberDialog from './PlaceMemberDialog';
 import PreviewList from './PreviewList';
 
 const headFirstByName = (a, b) => Number(b.position.isHead) - Number(a.position.isHead) || a.person.fullName.localeCompare(b.person.fullName);
 
-const EndPlacementDialog = ({ member, onClose }) => {
+const RemovePersonDialog = ({ member, officeName, onClose }) => {
   const { notify } = useNotification();
   const end = useEndPlacement();
-  const [endDate, setEndDate] = useState(todayIso());
 
-  const submit = (event) => {
-    event.preventDefault();
+  const confirm = () =>
     end.mutate(
-      { id: member.id, endDate },
+      { id: member.id },
       {
         onSuccess: () => {
-          notify('Placement end date saved.', 'success');
+          notify(`${member.person.fullName} was removed from ${officeName}.`, 'success');
           onClose();
         },
       }
     );
-  };
 
   return (
-    <FormDialog open onClose={onClose} title="End Placement" description={`${member.person.fullName} keeps this position and its roles through the last day, then loses them.`} onSubmit={submit} error={end.error} pending={end.isPending} submitLabel="End Placement">
-      <Field label="Last Day" required group>
-        <EthiopianDateInput label="Last day" required min={member.startDate.slice(0, 10)} value={endDate} onChange={setEndDate} />
-      </Field>
-    </FormDialog>
+    <ConfirmDialog
+      open
+      onClose={onClose}
+      title="Remove From Office"
+      description={`${member.person.fullName} will no longer work in ${officeName}: the position "${member.position.title}" and every role they hold here end now. The record stays in their history.`}
+      onConfirm={confirm}
+      error={end.error}
+      pending={end.isPending}
+      confirmLabel="Remove"
+    />
   );
 };
 
@@ -72,8 +73,8 @@ const MemberRow = ({ member, canAssign, canAssignRoles, canOpenUser, onEnd, onMa
         </button>
       )}
       {canAssign && (
-        <button type="button" onClick={() => onEnd(member)} aria-label={`End placement of ${member.person.fullName}`} title="End placement" className="rounded p-1 text-destructive hover:bg-destructive/10">
-          <CalendarX2 className="h-4 w-4" />
+        <button type="button" onClick={() => onEnd(member)} aria-label={`Remove ${member.person.fullName} from office`} title="Remove from office" className="rounded p-1 text-destructive hover:bg-destructive/10">
+          <Trash2 className="h-4 w-4" />
         </button>
       )}
     </div>
@@ -123,7 +124,7 @@ const MembersCard = ({ office }) => {
       </CardContent>
 
       {placing && <PlaceMemberDialog office={office} onClose={() => setPlacing(false)} />}
-      {ending && <EndPlacementDialog member={ending} onClose={() => setEnding(null)} />}
+      {ending && <RemovePersonDialog member={ending} officeName={office.name} onClose={() => setEnding(null)} />}
       {managedMember && <RoleAssignmentsDialog placement={managedMember} officeName={office.name} personName={managedMember.person.fullName} onClose={() => setManagingRolesOf(null)} />}
     </Card>
   );

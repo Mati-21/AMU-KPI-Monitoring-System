@@ -69,7 +69,7 @@
           "covers": ["FiscalYear", "KpiTheme", "MeasurementUnit", "ReportingFrequency", "KpiScale", "Currency", "ExchangeRate", "Kpi"],
           "permissions": [
             { "action": "create", "description": "Register master KPIs" },
-            { "action": "update", "description": "Edit or retire master KPIs (only a few fields once a KPI is in use)" },
+            { "action": "update", "description": "Edit, archive, restore or delete master KPIs (only a few fields once a KPI is in use; one never used on a contract is deleted, any other is archived)" },
             { "action": "manage", "description": "Manage fiscal years (create, activate, close; reopening is Super Admin only), themes, units, frequencies, scales, currencies and exchange rates" }
           ]
         }
@@ -141,19 +141,13 @@
       "name": "Evidence & Documents",
       "resources": [
         {
-          "resource": "file",
-          "label": "Stored files",
-          "covers": ["FileUpload"],
-          "permissions": [
-            { "action": "read", "description": "List documents and download files of the person's own office" },
-            { "action": "read_all", "description": "Also see the documents and files of every office below, within the role's scope. Without it only the person's own office" }
-          ]
-        },
-        {
           "resource": "document",
           "label": "Documents",
-          "covers": ["Document", "DocumentType"],
+          "covers": ["Document", "DocumentType", "FileUpload"],
           "permissions": [
+            { "action": "read", "description": "List the documents of the person's own office" },
+            { "action": "read_all", "description": "Also see the documents and files of every office below, within the role's scope. Without it only the person's own office" },
+            { "action": "download", "description": "Open and download a document's file, whether it is KPI evidence or an ordinary upload. Reading still decides which documents the person may reach" },
             { "action": "create", "description": "Upload and delete documents for offices in scope" },
             { "action": "manage", "description": "Manage document types: allowed file types and size limits" }
           ]

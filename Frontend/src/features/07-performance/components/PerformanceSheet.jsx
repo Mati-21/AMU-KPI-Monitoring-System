@@ -23,8 +23,8 @@ const PerformanceSheet = ({ sheet }) => {
 
       {evidenceCell && (
         <EvidenceDialog
-          report={{ can: { attachEvidence: evidenceFor.period.can.attachEvidence, verifyEvidence: false }, contract: { officeId: sheet.contract.office.id } }}
-          line={{ kpi: evidenceRow.kpi, direct: { id: evidenceCell.valueId }, evidence: evidenceCell.evidence }}
+          report={{ id: evidenceFor.period.report?.id, can: { attachEvidence: evidenceFor.period.can.attachEvidence, verifyEvidence: false }, contract: { officeId: sheet.contract.office.id } }}
+          line={{ kpi: evidenceRow.kpi, assignmentId: evidenceRow.assignmentId, direct: evidenceCell.valueId ? { id: evidenceCell.valueId } : null, evidence: evidenceCell.evidence }}
           onClose={() => setEvidenceFor(null)}
         />
       )}

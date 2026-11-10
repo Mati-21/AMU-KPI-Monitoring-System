@@ -15,7 +15,7 @@ const Sidebar = () => {
 
   const isSystemAdmin = permissionUtils.isSystemAdminRoleName(authUser?.roleName || authUser?.role);
   // The Super Admin needs Performance and Report too: to allow late submissions, reopen reports and read results
-  const hiddenForAdminLabels = new Set(['Registered KPIs', 'My Contract']);
+  const hiddenForAdminLabels = new Set(['Registered KPIs']);
 
   const canAccessFullUserManagement = permissionUtils.hasPermission(userPermissions, [
     permissionUtils.permissionKey('view', 'User Management'),

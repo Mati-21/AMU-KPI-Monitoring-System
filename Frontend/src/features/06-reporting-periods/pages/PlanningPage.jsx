@@ -3,11 +3,12 @@ import { useState } from 'react';
 import PeriodsTable from '../components/PeriodsTable';
 import YearsTable from '../components/YearsTable';
 import { useFiscalYears } from '../hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 
 const PlanningPage = () => {
   const { data: years = [], isLoading, error } = useFiscalYears();
   const [selectedId, setSelectedId] = useState(null);
-  const year = years.find((candidate) => candidate.id === selectedId) ?? years.find((candidate) => candidate.status === 'ACTIVE') ?? years[0];
+  const year = defaultYear(years, selectedId);
 
   return (
     <div className="flex min-h-full bg-background">

@@ -59,6 +59,12 @@ export const getOfficeHistory = async (req, res) => {
   res.json({ status: 'success', data: history });
 };
 
+export const getOfficeRecords = async (req, res) => {
+  await officeService.assertOfficeVisible(req.params.id, actorOf(req));
+  const records = await officeService.getOfficeRecords(req.params.id);
+  res.json({ status: 'success', data: records });
+};
+
 export const listPositions = async (req, res) => {
   await officeService.assertOfficeVisible(req.params.id, actorOf(req));
   const positions = await officeService.listPositions(req.params.id);
@@ -108,6 +114,7 @@ export default {
   updateOffice,
   deleteOffice,
   getOfficeHistory,
+  getOfficeRecords,
   listPositions,
   createPosition,
   updatePosition,

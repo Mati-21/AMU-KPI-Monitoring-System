@@ -573,6 +573,7 @@ model Kpi {
   dataSource           String?            @map("data_source")
   defaultFrequencyId   String             @map("default_frequency_id") @db.Uuid
   evidenceRequirement  String?            @map("evidence_requirement")
+  requiresEvidence     Boolean            @default(false) @map("requires_evidence")
   aggregationMethod    AggregationMethod  @map("aggregation_method")
   periodRollupMethod   PeriodRollupMethod @map("period_rollup_method")
   scoringMethod        ScoringBasis       @map("scoring_method")
@@ -1069,13 +1070,18 @@ model PerformanceEvidence {
   verifiedByPersonId String?            @map("verified_by_person_id") @db.Uuid
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(6)
   comment            String?
+  // Set when the office above passed this evidence of an office below up into its own report
+  forwardedFromId    String?            @map("forwarded_from_id") @db.Uuid
   createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  performanceValue PerformanceValue @relation(fields: [performanceValueId], references: [id])
-  document         Document         @relation(fields: [documentId], references: [id])
-  verifiedBy       Person?          @relation(fields: [verifiedByPersonId], references: [id])
+  performanceValue PerformanceValue      @relation(fields: [performanceValueId], references: [id])
+  document         Document              @relation(fields: [documentId], references: [id])
+  verifiedBy       Person?               @relation(fields: [verifiedByPersonId], references: [id])
+  forwardedFrom    PerformanceEvidence?  @relation("EvidenceForwarding", fields: [forwardedFromId], references: [id])
+  forwardedCopies  PerformanceEvidence[] @relation("EvidenceForwarding")
 
   @@unique([performanceValueId, documentId])
+  @@index([forwardedFromId])
   @@map("performance_evidence")
 }
 

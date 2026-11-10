@@ -122,6 +122,7 @@ const kpiSummary = (kpi) => ({
   direction: kpi.direction,
   targetType: kpi.targetType,
   isAdditive: kpi.isAdditive,
+  requiresEvidence: kpi.requiresEvidence,
   evidenceRequirement: kpi.evidenceRequirement,
   unit: kpi.unit,
   currency: kpi.currency,

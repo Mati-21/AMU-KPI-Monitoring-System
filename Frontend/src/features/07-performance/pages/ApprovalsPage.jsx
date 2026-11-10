@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import ApprovalList from '../components/ApprovalList';
 import { useReports } from '../hooks/useReports';
@@ -16,7 +17,7 @@ const REVIEWED = ['APPROVED', 'REVISION_REQUIRED', 'REJECTED'];
 const ApprovalsPage = () => {
   const [params, setParams] = useSearchParams();
   const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
-  const year = years.find((item) => item.id === params.get('year')) ?? years.find((item) => item.status === 'ACTIVE') ?? years[0];
+  const year = defaultYear(years, params.get('year'));
   const { data = [], isLoading, error } = useReports({ fiscalYearId: year?.id });
   const fromBelow = data.filter((report) => report.side === 'BELOW');
   const waiting = fromBelow.filter((report) => WAITING.includes(report.status));

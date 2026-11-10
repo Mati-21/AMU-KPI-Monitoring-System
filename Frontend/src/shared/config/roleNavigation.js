@@ -79,7 +79,7 @@ export const roleNavigation = {
         { icon: BadgeCheck, label: 'KPI Approvals', path: 'kpi-approvals' },
         { icon: BarChart3, label: 'Dept. KPIs', path: 'dept-kpis' },
         { icon: Users, label: 'Staff Performance', path: 'staff-performance' },
-        { icon: UserCheck, label: 'KPI Assignment', path: 'kpi-assignment' },
+        { icon: UserCheck, label: 'Office Contract', path: 'kpi-assignment' },
       ],
     },
   ],

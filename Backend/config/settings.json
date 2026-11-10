@@ -48,8 +48,7 @@
         { "key": "reminder_days_before_deadline", "label": "Deadline reminders", "type": "json", "validator": "dayList", "default": [7, 3, 1], "public": false, "description": "Days before the deadline on which offices with unsubmitted reports are reminded" },
         { "key": "allow_late_submission", "label": "Allow late submission", "type": "boolean", "default": true, "public": false, "description": "Whether offices may still submit after the deadline (within the grace period)" },
         { "key": "late_submission_grace_days", "label": "Late submission grace period", "type": "number", "default": 5, "min": 0, "max": 60, "integer": true, "public": false, "description": "Days after the deadline during which late submissions are accepted and flagged as late" },
-        { "key": "auto_lock_after_deadline", "label": "Lock reports after deadline", "type": "boolean", "default": true, "public": false, "description": "Automatically lock unsubmitted reports once the deadline (plus grace period) has passed" },
-        { "key": "require_evidence", "label": "Require evidence", "type": "boolean", "default": false, "public": false, "description": "Require at least one evidence document on each reported result before a report can be submitted" }
+        { "key": "auto_lock_after_deadline", "label": "Lock reports after deadline", "type": "boolean", "default": true, "public": false, "description": "Automatically lock unsubmitted reports once the deadline (plus grace period) has passed" }
       ]
     },
     {

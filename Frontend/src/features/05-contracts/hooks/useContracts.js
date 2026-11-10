@@ -66,6 +66,7 @@ const useContractAction = (send) => {
 };
 
 export const useCreateContract = () => useContractAction((values) => api.post('/contracts', values).then(unwrap));
+export const useDeleteContract = () => useContractAction((id) => api.delete(`/contracts/${id}`).then(unwrap));
 
 // One step of a workflow: submit, approve, reject, sign and so on
 export const useContractStep = () => useContractAction(({ id, step, values }) => api.patch(`/contracts/${id}/${step}`, values ?? {}).then(unwrap));

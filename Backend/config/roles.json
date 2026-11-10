@@ -17,7 +17,8 @@
         "report:read",
         "report:review",
         "evidence:read",
-        "file:read"
+        "document:read",
+        "document:download"
       ]
     },
     {
@@ -36,7 +37,8 @@
         "scorecard:read",
         "dashboard:read",
         "evidence:read",
-        "file:read",
+        "document:read",
+        "document:download",
         "notification:send",
         "document:manage",
         "scorecard:manage"
@@ -80,7 +82,9 @@
         "dashboard:read",
         "scorecard:read",
         "evidence:*",
-        "file:*",
+        "document:read",
+        "document:read_all",
+        "document:download",
         "document:create",
         "notification:send"
       ]
@@ -106,7 +110,9 @@
         "dashboard:read",
         "scorecard:read",
         "evidence:*",
-        "file:*",
+        "document:read",
+        "document:read_all",
+        "document:download",
         "document:create",
         "report:review"
       ]
@@ -124,7 +130,9 @@
         "contract:read",
         "report:read",
         "report:create",
-        "file:*",
+        "document:read",
+        "document:read_all",
+        "document:download",
         "document:create",
         "evidence:read",
         "evidence:link",
@@ -145,7 +153,8 @@
         "scorecard:read",
         "report:read",
         "evidence:read",
-        "file:read"
+        "document:read",
+        "document:download"
       ]
     }
   ]

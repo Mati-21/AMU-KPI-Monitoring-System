@@ -46,6 +46,11 @@ export const queryKeys = {
     list: (params) => ['reports', 'list', params],
     detail: (id) => ['reports', 'detail', id],
   },
+  documents: {
+    all: ['documents'],
+    list: ['documents', 'list'],
+    types: ['documents', 'types'],
+  },
   messaging: {
     all: ['messages'],
     conversations: ['messages', 'conversations'],
