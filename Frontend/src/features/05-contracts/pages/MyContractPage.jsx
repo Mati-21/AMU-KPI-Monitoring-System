@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
-import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { useLiveFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import PerformanceSheet from '../../07-performance/components/PerformanceSheet';
 import { useStaffSheet } from '../../07-performance/hooks/useReports';
@@ -45,7 +45,7 @@ const StaffContract = ({ summary, contracts }) => {
  */
 const MyContractPage = () => {
   const [params, setParams] = useSearchParams();
-  const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
+  const { data: years = [], isLoading: yearsLoading } = useLiveFiscalYears();
   const year = defaultYear(years, params.get('year'));
   const { data: mine = [], isLoading, error } = useMyContracts(year?.id);
   // The office's own contract, where a staff contract's KPIs come from, for those who may see it

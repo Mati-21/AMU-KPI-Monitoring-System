@@ -7,6 +7,7 @@ import { assertWorksOnContract } from '../../05-contract-cascading/contract.shar
 import { parseMeasuredValue } from '../../05-contract-cascading/measurement.js';
 import { assertPeriodOpen } from '../../06-reporting-periods/period.service.js';
 import { dueAssignments, isDirectEntry } from '../scoring/result.service.js';
+import { assertNotLockedByDeadline } from './report.deadline.js';
 
 /**
  * Module 07 — Entering an office's own results (SRS 10.2). Fields follow the KPI's measurement type.
@@ -58,6 +59,7 @@ export const saveValues = async (reportId, { values } = {}, actor) => {
   await assertWorksOnContract(actor, PERMISSIONS.REPORT_CREATE, report.contract);
   await assertPeriodOpen(report.reportingPeriodId);
   if (!EDITABLE_STATUSES.includes(report.status)) throw conflict(`A ${report.status} report cannot be edited`);
+  await assertNotLockedByDeadline(report.reportingPeriod, report);
   if (!Array.isArray(values) || values.length === 0) throw badRequest('values must be a non-empty list');
 
   const due = new Map((await dueAssignments(report.contractId, report.reportingPeriod)).map((assignment) => [assignment.id, assignment]));

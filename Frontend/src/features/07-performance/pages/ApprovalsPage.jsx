@@ -1,7 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
-import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/Tabs';
+import { useLiveFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import ApprovalList from '../components/ApprovalList';
@@ -16,10 +17,13 @@ const REVIEWED = ['APPROVED', 'REVISION_REQUIRED', 'REJECTED'];
  */
 const ApprovalsPage = () => {
   const [params, setParams] = useSearchParams();
-  const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
+  const { data: years = [], isLoading: yearsLoading } = useLiveFiscalYears();
   const year = defaultYear(years, params.get('year'));
+  // The tab is kept in the address, so coming back from a report lands on the same list
+  const tab = params.get('tab') === 'reviewed' ? 'reviewed' : 'pending';
   const { data = [], isLoading, error } = useReports({ fiscalYearId: year?.id });
-  const fromBelow = data.filter((report) => report.side === 'BELOW');
+  // The top office has nobody above it: its own report is approved by someone who reviews within it, so it is listed here too
+  const fromBelow = data.filter((report) => report.side === 'BELOW' || report.canReview);
   const waiting = fromBelow.filter((report) => WAITING.includes(report.status));
   const reviewed = fromBelow.filter((report) => REVIEWED.includes(report.status));
 
@@ -33,17 +37,25 @@ const ApprovalsPage = () => {
           </div>
           {year && (
             <div className="w-56">
-              <CustomSelect compact options={years.map((item) => ({ value: item.id, label: `${item.name} (${optionLabel(item.status)})` }))} value={year.id} onChange={(next) => setParams({ year: next })} />
+              <CustomSelect compact options={years.map((item) => ({ value: item.id, label: `${item.name} (${optionLabel(item.status)})` }))} value={year.id} onChange={(next) => setParams({ year: next, tab })} />
             </div>
           )}
         </div>
 
         {!yearsLoading && !year && <p className="rounded-lg border border-border bg-card p-4 text-sm text-foreground">There are no fiscal years yet.</p>}
         {year && (
-          <>
-            <ApprovalList title={`Waiting for Your Approval (${waiting.length})`} reports={waiting} isLoading={isLoading} error={error} emptyText="Nothing is waiting for your approval." actionLabel="Review" />
-            <ApprovalList title="Already Reviewed" description="Approved results count in the reports. Results sent back wait for the office to correct and submit them again." reports={reviewed} isLoading={isLoading} error={error} emptyText="Nothing reviewed yet this year." actionLabel="Open" />
-          </>
+          <Tabs value={tab} onValueChange={(next) => setParams({ year: year.id, tab: next })}>
+            <TabsList>
+              <TabsTrigger value="pending">Pending Review ({waiting.length})</TabsTrigger>
+              <TabsTrigger value="reviewed">Already Reviewed ({reviewed.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="pending">
+              <ApprovalList title="Pending Review" description="Results waiting for you. Check their evidence, then approve them or send them back." reports={waiting} isLoading={isLoading} error={error} emptyText="Nothing is waiting for your approval." actionLabel="Review" />
+            </TabsContent>
+            <TabsContent value="reviewed">
+              <ApprovalList title="Already Reviewed" description="Approved results count in the reports. Results sent back wait for the office to correct and submit them again." reports={reviewed} isLoading={isLoading} error={error} emptyText="Nothing reviewed yet this year." actionLabel="Open" />
+            </TabsContent>
+          </Tabs>
         )}
       </main>
     </div>

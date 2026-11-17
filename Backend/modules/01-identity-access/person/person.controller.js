@@ -45,6 +45,11 @@ export const toggleActive = async (req, res) => {
   });
 };
 
+export const unlockAccount = async (req, res) => {
+  const result = await personService.unlockAccount(req.params.id, actorOf(req));
+  res.json({ status: 'success', message: 'Account unlocked. The user can sign in again.', data: result });
+};
+
 export const resetPassword = async (req, res) => {
   const account = await personService.resetPassword(req.params.id, req.body?.temporaryPassword, actorOf(req));
   res.json({
@@ -72,6 +77,7 @@ export default {
   archivePerson,
   upsertAccount,
   toggleActive,
+  unlockAccount,
   resetPassword,
   listAccountSessions,
   revokeAccountSessions,

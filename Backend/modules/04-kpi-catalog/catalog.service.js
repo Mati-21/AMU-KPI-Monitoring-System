@@ -148,6 +148,18 @@ export const updateUnit = async (id, data = {}, actor) => {
   return unit;
 };
 
+/**
+ * Delete a unit no KPI uses. A unit a KPI uses is part of that KPI's meaning, so it stays.
+ */
+export const deleteUnit = async (id, actor) => {
+  assertGlobal(actor);
+  const existing = await findOrThrow(prisma.measurementUnit, id, 'Unit');
+  if ((await prisma.kpi.count({ where: { unitId: existing.id } })) > 0) throw conflict(`Unit "${existing.name}" is used by a KPI, so it cannot be deleted`);
+  await prisma.measurementUnit.delete({ where: { id: existing.id } });
+  await auditAction(actor, { action: 'UNIT_DELETED', entityType: 'measurement_unit', entityId: existing.id, oldValues: existing });
+  return { id: existing.id, deleted: true };
+};
+
 // ===== Reporting frequencies =====
 
 const parseFrequency = (intervalMonths, isCustom) => {
@@ -296,6 +308,23 @@ export const updateScale = async (id, data = {}, actor) => {
 };
 
 /**
+ * Delete a scale no KPI uses, with its levels. A scale a KPI uses is locked, because past results are read on it.
+ */
+export const deleteScale = async (id, actor) => {
+  assertGlobal(actor);
+  const existing = await findOrThrow(prisma.kpiScale, id, 'Scale', { include: SCALE_INCLUDE });
+  if (existing._count.kpis > 0) throw conflict(`Scale "${existing.name}" is used by a KPI, so it cannot be deleted`);
+  try {
+    await prisma.kpiScale.delete({ where: { id: existing.id } });
+  } catch (error) {
+    if (error.code !== 'P2003') throw error;
+    throw conflict(`Scale "${existing.name}" has results recorded on its levels, so it cannot be deleted`);
+  }
+  await auditAction(actor, { action: 'SCALE_DELETED', entityType: 'kpi_scale', entityId: existing.id, oldValues: { name: existing.name, scaleType: existing.scaleType, levels: existing.levels } });
+  return { id: existing.id, deleted: true };
+};
+
+/**
  * Approve numerical scoring (SRS 7.4, 7.5). Every level needs a score and the scores must follow the level order,
  * rising or falling. Binary scales cannot be scored: a Yes/No has no fractional progress.
  * Approval is one-way once a KPI uses the scale.
@@ -394,6 +423,28 @@ export const updateCurrency = async (id, data = {}, actor) => {
   return currency;
 };
 
+/**
+ * Delete a currency nothing uses: not a KPI, not a baseline, target or result, and not the reporting currency.
+ * Exchange rates that mention it go with it, unless a reported result was converted with one.
+ */
+export const deleteCurrency = async (id, actor) => {
+  assertGlobal(actor);
+  const existing = await findOrThrow(prisma.currency, id, 'Currency');
+  if (existing.isReportingCurrency) throw conflict(`${existing.code} is the reporting currency. Make another currency the reporting currency first`);
+  if ((await prisma.kpi.count({ where: { currencyId: existing.id } })) > 0) throw conflict(`Currency ${existing.code} is used by a KPI, so it cannot be deleted`);
+  try {
+    await prisma.$transaction([
+      prisma.exchangeRate.deleteMany({ where: { OR: [{ fromCurrencyId: existing.id }, { toCurrencyId: existing.id }] } }),
+      prisma.currency.delete({ where: { id: existing.id } }),
+    ]);
+  } catch (error) {
+    if (error.code !== 'P2003') throw error;
+    throw conflict(`Currency ${existing.code} is used by recorded results, so it cannot be deleted`);
+  }
+  await auditAction(actor, { action: 'CURRENCY_DELETED', entityType: 'currency', entityId: existing.id, oldValues: existing });
+  return { id: existing.id, deleted: true };
+};
+
 const RATE_INCLUDE = {
   fromCurrency: { select: { id: true, code: true } },
   toCurrency: { select: { id: true, code: true } },
@@ -431,7 +482,7 @@ export const createExchangeRate = async ({ fromCurrencyId, toCurrencyId, rate, r
   return exchangeRate;
 };
 
-export default {
+export default { deleteUnit, deleteScale, deleteCurrency,
   getThemeTree,
   createTheme,
   updateTheme,

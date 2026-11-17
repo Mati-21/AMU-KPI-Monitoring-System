@@ -31,8 +31,8 @@ const fromParts = (kpi, numerator, denominator, field) => {
 
 /**
  * Validate one measured value against the KPI and return the columns to store.
- * requireParts: percentages and ratios must give numerator and denominator (baselines and actuals do; a target
- * may give just the percentage or ratio, SRS 7.2).
+ * requireParts: percentages and ratios must give numerator and denominator. Reported results do, so offices can be
+ * combined from their parts. A baseline or target may give just the percentage or ratio, SRS 7.2.
  * kpi must include scale.levels.
  */
 export const parseMeasuredValue = (kpi, input, field, { requireParts = false } = {}) => {
@@ -77,7 +77,7 @@ export const parseBaseline = (kpi, input, field = 'baseline') => {
   if (!BASELINE_STATUSES.includes(baselineStatus)) throw badRequest(`${field}.status must be one of: ${BASELINE_STATUSES.join(', ')}`);
 
   const unknownJustification = optionalString(input.justification, `${field}.justification`) ?? null;
-  if (baselineStatus === 'KNOWN') return { baselineStatus, unknownJustification: null, ...parseMeasuredValue(kpi, input, field, { requireParts: true }) };
+  if (baselineStatus === 'KNOWN') return { baselineStatus, unknownJustification: null, ...parseMeasuredValue(kpi, input, field) };
 
   if (!unknownJustification) throw badRequest(`${field}.justification is required when the baseline is ${baselineStatus}`);
   return { baselineStatus, unknownJustification, ...EMPTY };

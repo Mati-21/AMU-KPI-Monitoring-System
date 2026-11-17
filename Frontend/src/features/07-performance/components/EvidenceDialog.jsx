@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Trash2 } from 'lucide-react';
+import { Download, Eye, FileText, Trash2 } from 'lucide-react';
 
 import Button from '../../../shared/components/ui/Button';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
@@ -10,7 +10,7 @@ import { formatEthiopianDate as formatDate } from '../../../shared/lib/ethiopian
 import { Field } from '../../02-offices/components/FormParts';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useCan } from '../../03-access-control/hooks/useCan';
-import { openFile, useDocumentTypes } from '../../08-evidence/hooks/useDocuments';
+import { downloadFile, openFile, useDocumentTypes } from '../../08-evidence/hooks/useDocuments';
 import { useAttachEvidence, useForwardEvidence, useRemoveEvidence, useVerifyEvidence } from '../hooks/useReports';
 import { EVIDENCE_WORDS } from '../lib/reportRules';
 
@@ -133,6 +133,7 @@ const EvidenceDialog = ({ report, line, onClose }) => {
   const { can } = report;
   const canDownload = useCan()('document:download');
   const open = (fileId) => openFile(fileId).catch((failure) => notify(apiErrorMessage(failure, 'Could not open this file.'), 'error'));
+  const download = (item) => downloadFile(item.document.fileId, item.document.title).catch((failure) => notify(apiErrorMessage(failure, 'Could not download this file.'), 'error'));
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -163,6 +164,12 @@ const EvidenceDialog = ({ report, line, onClose }) => {
                 </button>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-semibold ${TONES[item.verificationStatus]}`}>{EVIDENCE_WORDS[item.verificationStatus] ?? item.verificationStatus}</span>
+                  <button type="button" onClick={() => open(item.document.fileId)} disabled={!canDownload} className="rounded p-1 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent" aria-label={`View ${item.document.title}`} title={canDownload ? 'View file' : 'You do not have permission to download documents'}>
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => download(item)} disabled={!canDownload} className="rounded p-1 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent" aria-label={`Download ${item.document.title}`} title={canDownload ? 'Download file' : 'You do not have permission to download documents'}>
+                    <Download className="h-4 w-4" />
+                  </button>
                   {can.attachEvidence && (
                     <button type="button" onClick={() => remove.mutate(item.id)} disabled={remove.isPending} className="rounded p-1 text-destructive hover:bg-destructive/10" aria-label={`Remove ${item.document.title}`}>
                       <Trash2 className="h-4 w-4" />

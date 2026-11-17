@@ -4,7 +4,7 @@ import { auditAction } from '../../../utils/auditLogger.js';
 import { startOfTodayUtc } from '../../../utils/dates.js';
 import { badRequest, conflict, notFound } from '../../../utils/httpError.js';
 import { parseEnum, parseUuid } from '../../../utils/validation.js';
-import { assertFiscalYearOpen } from '../../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../../04-kpi-catalog/fiscalYear.service.js';
 import { PERSON_REF, assertSeparateApprover, assertWorksOnContract, requireComment, worksOnContract } from '../../05-contract-cascading/contract.shared.js';
 import { assertPeriodOpen } from '../../06-reporting-periods/period.service.js';
 import { addDays } from '../../06-reporting-periods/period.rules.js';
@@ -14,7 +14,10 @@ import { getSetting } from '../../10-system-governance/system.service.js';
 import { findLowResults, previewLines, recalculateReport } from '../scoring/scoring.service.js';
 import { dueAssignments, isDirectEntry } from '../scoring/result.service.js';
 import { assertCanSeeReport, assertReviewsContract, canSeeReport, ownOfficeIdsOf, reviewsContract, sideOf } from './report.access.js';
+import { assertNotLockedByDeadline, deadlineState } from './report.deadline.js';
 import { EDITABLE_STATUSES } from './reportValue.service.js';
+
+export { deadlineState };
 
 /**
  * Module 07 — The reporting workflow (SRS 10.4):
@@ -114,7 +117,11 @@ export const listReports = async ({ contractId, officeId, reportingPeriodId, fis
   const visible = [];
   for (const report of reports) {
     // OWN: the person's office, or the person, reports it; BELOW: it is sent up to them
-    if (await canSeeReport(actor, report)) visible.push({ ...report, isOverdue: isOverdue(report, today), side: sideOf(actor, report.contract, own) });
+    if (!(await canSeeReport(actor, report))) continue;
+    // The top office has no office above it, so its own report is reviewed within it. That is the person's own side,
+    // yet it still waits for their approval, so say whether they can review it
+    const reviewedWithin = !report.contract.assigningOfficeId && !report.contract.personId;
+    visible.push({ ...report, isOverdue: isOverdue(report, today), side: sideOf(actor, report.contract, own), canReview: reviewedWithin ? await reviewsContract(actor, PERMISSIONS.REPORT_REVIEW, report.contract) : false });
   }
   return visible;
 };
@@ -124,16 +131,16 @@ export const listReports = async ({ contractId, officeId, reportingPeriodId, fis
  */
 const allowedActions = async (report, actor) => {
   const { contract } = report;
-  const yearOpen = report.reportingPeriod.fiscalYear.status !== 'CLOSED';
+  const yearOpen = report.reportingPeriod.fiscalYear.status === 'ACTIVE';
   const editable = yearOpen && !report.reportingPeriod.isClosed && EDITABLE_STATUSES.includes(report.status);
   const underReview = yearOpen && ['SUBMITTED', 'UNDER_REVIEW'].includes(report.status);
   const deadline = await deadlineState(report.reportingPeriod, report);
   return {
     deadline,
-    edit: editable && (await worksOnContract(actor, PERMISSIONS.REPORT_CREATE, contract)),
+    edit: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.REPORT_CREATE, contract)),
     submit: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.REPORT_SUBMIT, contract)),
     allowLate: editable && deadline.isLate && actor.access.isSuperAdmin,
-    attachEvidence: editable && (await worksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, contract)),
+    attachEvidence: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, contract)),
     review: underReview && (await reviewsContract(actor, PERMISSIONS.REPORT_REVIEW, contract)),
     verifyEvidence: underReview && (await reviewsContract(actor, PERMISSIONS.EVIDENCE_VERIFY, contract)),
     // Verified evidence can be passed up into the report of the office above until this report is settled
@@ -180,29 +187,11 @@ export const createReport = async ({ contractId, reportingPeriodId } = {}, actor
 
   const existing = await prisma.performanceReport.findUnique({ where: { contractId_reportingPeriodId: { contractId: contract.id, reportingPeriodId: period.id } } });
   if (existing) throw conflict('This office already has a report for this period');
+  await assertNotLockedByDeadline(period, null);
 
   const report = await prisma.performanceReport.create({ data: { contractId: contract.id, reportingPeriodId: period.id, status: 'DRAFT', preparedByPersonId: actor.personId }, include: REPORT_INCLUDE });
   await auditAction(actor, { action: 'REPORT_STARTED', entityType: 'performance_report', entityId: report.id, newValues: { contractId: contract.id, reportingPeriodId: period.id } });
   return report;
-};
-
-/**
- * Where a report stands against its period's deadline today. A submission now is late once the deadline has passed.
- * It is locked once late submissions are not allowed, or the grace period is over, unless the Super Admin allowed
- * this office to submit until a later day.
- */
-export const deadlineState = async (period, report, today = startOfTodayUtc()) => {
-  if (!period.submissionDeadline || today <= period.submissionDeadline) return { isLate: false, isLocked: false, lockedSince: null };
-
-  const [allowLate, graceDays, autoLock] = await Promise.all([
-    getSetting('reporting', 'allow_late_submission'),
-    getSetting('reporting', 'late_submission_grace_days'),
-    getSetting('reporting', 'auto_lock_after_deadline'),
-  ]);
-  const graceEnds = addDays(period.submissionDeadline, graceDays);
-  const pastAllowed = !allowLate || (autoLock && today > graceEnds);
-  const unlocked = Boolean(report?.lateAllowedUntil) && today <= report.lateAllowedUntil;
-  return { isLate: true, isLocked: pastAllowed && !unlocked, lockedSince: pastAllowed ? (allowLate ? graceEnds : period.submissionDeadline) : null };
 };
 
 /**
@@ -276,7 +265,7 @@ export const submitReport = async (id, actor) => {
 
 export const startReview = async (id, actor) => {
   const report = await getReportOrThrow(id);
-  await assertFiscalYearOpen(report.contract.fiscalYearId);
+  await assertFiscalYearActive(report.contract.fiscalYearId);
   await assertReviewsContract(actor, PERMISSIONS.REPORT_REVIEW, report.contract);
   if (report.status !== 'SUBMITTED') throw conflict(`Only a submitted report can go under review; this one is ${report.status}`);
 
@@ -301,7 +290,7 @@ const assertEvidenceSettled = async (reportId) => {
  */
 export const reviewReport = async (id, { decision, comment } = {}, actor) => {
   const report = await getReportOrThrow(id);
-  await assertFiscalYearOpen(report.contract.fiscalYearId);
+  await assertFiscalYearActive(report.contract.fiscalYearId);
   await assertReviewsContract(actor, PERMISSIONS.REPORT_REVIEW, report.contract);
   if (!['SUBMITTED', 'UNDER_REVIEW'].includes(report.status)) throw conflict(`Only a submitted report can be reviewed; this one is ${report.status}`);
   await assertSeparateApprover(actor, report.preparedByPersonId);

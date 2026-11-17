@@ -162,7 +162,7 @@ export const AuthBootstrap = ({ children }) => {
         
         <div className="mt-6 flex flex-col items-center gap-2">
           <h2 className="text-sm font-bold tracking-widest text-foreground uppercase">
-            {systemSettings?.orgName || 'AMU'}
+            {systemSettings?.orgShortName || systemSettings?.orgName || 'AMU'}
           </h2>
           <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest animate-pulse">
             Verifying Secure Session...

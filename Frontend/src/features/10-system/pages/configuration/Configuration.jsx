@@ -43,10 +43,10 @@ const Configuration = () => {
     save.mutate(
       { group: group.group, settings },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
           setDrafts({ ...drafts, [group.group]: {} });
           setConfirming(null);
-          notify(message, 'success');
+          notify(result?.deadlinesMoved ? `${message} ${result.deadlinesMoved} period deadline(s) now follow the new submission window.` : message, 'success');
         },
         onError: () => setConfirming(null),
       }

@@ -78,6 +78,20 @@ router.post('/fiscal-years/:id/reporting-periods/generate', protect, canManage, 
 
 /**
  * @swagger
+ * /api/v1/fiscal-years/{id}/reporting-periods/reset-deadlines:
+ *   post:
+ *     summary: Set every open period's deadline to its end date plus the submission window setting
+ *     tags: [Reporting Periods]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: "{ changed, submissionWindowDays }" }
+ *       409: { description: The year is closed }
+ */
+router.post('/fiscal-years/:id/reporting-periods/reset-deadlines', protect, canManage, periodController.resetDeadlines);
+
+/**
+ * @swagger
  * /api/v1/reporting-periods/{id}:
  *   get:
  *     summary: One reporting period

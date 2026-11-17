@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Building2, KeyRound, Laptop, Pencil, Save, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, Building2, KeyRound, Laptop, LockOpen, Pencil, Save, ShieldCheck, User } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
@@ -14,7 +14,7 @@ import { useCan } from '../../../03-access-control/hooks/useCan';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
 import { PlacementsCard } from '../../components/profile/AboutCards';
-import { useAccountSessions, useEnforceMfa, usePerson, useResetPassword, useRevokeAccountSessions, useSaveAccount, useSetAccountActive, useUpdatePerson } from '../../hooks/useUsers';
+import { useAccountSessions, useEnforceMfa, usePerson, useResetPassword, useRevokeAccountSessions, useSaveAccount, useSetAccountActive, useUnlockAccount, useUpdatePerson } from '../../hooks/useUsers';
 
 const MIN_PASSWORD_LENGTH = 8;
 const EDITABLE_FIELDS = ['firstName', 'middleName', 'lastName', 'email', 'phone'];
@@ -116,6 +116,7 @@ const AccountActions = ({ account }) => {
   const setActive = useSetAccountActive();
   const enforceMfa = useEnforceMfa();
   const reset = useResetPassword();
+  const unlock = useUnlockAccount();
   const revoke = useRevokeAccountSessions();
   const notes = useActionNotes();
   const { notify } = useNotification();
@@ -137,7 +138,19 @@ const AccountActions = ({ account }) => {
         <Badge variant="outline">{account.isActive ? 'Active' : 'Deactivated'}</Badge>
         <Badge variant="outline">{account.mfaEnabled ? 'MFA on' : 'MFA off'}</Badge>
         {account.mfaEnforced && <Badge variant="outline">MFA required</Badge>}
+        {account.lock?.isLocked && <Badge variant="outline">Locked</Badge>}
       </div>
+      {account.lock?.isLocked && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/30">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            Locked out after too many failed sign-in attempts. It lifts by itself at {new Date(account.lock.lockedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+          </p>
+          <Button type="button" size="sm" className="gap-1" disabled={unlock.isPending} onClick={() => unlock.mutate(account.id, notes('Account unlocked. They can sign in again.'))}>
+            <LockOpen className="h-4 w-4" />
+            Unlock Account
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant={account.isActive ? 'destructive' : 'default'} disabled={setActive.isPending} onClick={() => setActive.mutate({ accountId: account.id, isActive: !account.isActive }, notes(account.isActive ? 'Login deactivated.' : 'Login activated.'))}>
           {account.isActive ? 'Deactivate Login' : 'Activate Login'}

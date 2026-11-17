@@ -3,7 +3,7 @@ import { useState } from 'react';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { Field, FormDialog } from '../../02-offices/components/FormParts';
-import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { useLiveFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { useContract, useContracts, useSaveAssignment } from '../hooks/useContracts';
@@ -18,7 +18,7 @@ import ShareMethodField from './ShareMethodField';
 const AddToContractDialog = ({ kpis, onAdded, onClose }) => {
   const { notify } = useNotification();
   const save = useSaveAssignment();
-  const { data: years = [] } = useFiscalYears();
+  const { data: years = [] } = useLiveFiscalYears();
   const openYears = years.filter((year) => year.status !== 'CLOSED');
   const [chosenYearId, setChosenYearId] = useState(null);
   const yearId = chosenYearId ?? defaultYear(openYears)?.id;

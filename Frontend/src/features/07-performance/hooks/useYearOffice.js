@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 
-import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { useLiveFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { usePerformanceOffices } from './useReports';
 
@@ -10,7 +10,7 @@ import { usePerformanceOffices } from './useReports';
  */
 export const useYearOffice = () => {
   const [params, setParams] = useSearchParams();
-  const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
+  const { data: years = [], isLoading: yearsLoading } = useLiveFiscalYears();
   const year = defaultYear(years, params.get('year'));
   const { data: offices = [], isLoading: officesLoading } = usePerformanceOffices(year?.id);
   const office = offices.find((item) => item.id === params.get('office')) ?? offices[0];

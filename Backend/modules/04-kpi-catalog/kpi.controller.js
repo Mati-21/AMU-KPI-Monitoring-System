@@ -22,6 +22,7 @@ export const updateTheme = async (req, res) => send(res, await catalogService.up
 export const listUnits = async (req, res) => send(res, await catalogService.listUnits());
 export const createUnit = async (req, res) => send(res, await catalogService.createUnit(req.body || {}, actorOf(req)), 201);
 export const updateUnit = async (req, res) => send(res, await catalogService.updateUnit(req.params.id, req.body || {}, actorOf(req)));
+export const deleteUnit = async (req, res) => send(res, await catalogService.deleteUnit(req.params.id, actorOf(req)));
 
 // ===== Reporting frequencies =====
 export const listFrequencies = async (req, res) => send(res, await catalogService.listFrequencies());
@@ -33,12 +34,14 @@ export const listScales = async (req, res) => send(res, await catalogService.lis
 export const getScaleById = async (req, res) => send(res, await catalogService.getScaleById(req.params.id));
 export const createScale = async (req, res) => send(res, await catalogService.createScale(req.body || {}, actorOf(req)), 201);
 export const updateScale = async (req, res) => send(res, await catalogService.updateScale(req.params.id, req.body || {}, actorOf(req)));
+export const deleteScale = async (req, res) => send(res, await catalogService.deleteScale(req.params.id, actorOf(req)));
 export const setScaleScoring = async (req, res) => send(res, await catalogService.setScaleScoring(req.params.id, req.body || {}, actorOf(req)));
 
 // ===== Currencies and exchange rates =====
 export const listCurrencies = async (req, res) => send(res, await catalogService.listCurrencies());
 export const createCurrency = async (req, res) => send(res, await catalogService.createCurrency(req.body || {}, actorOf(req)), 201);
 export const updateCurrency = async (req, res) => send(res, await catalogService.updateCurrency(req.params.id, req.body || {}, actorOf(req)));
+export const deleteCurrency = async (req, res) => send(res, await catalogService.deleteCurrency(req.params.id, actorOf(req)));
 export const listExchangeRates = async (req, res) => {
   const { fromCurrencyId, toCurrencyId } = req.query;
   send(res, await catalogService.listExchangeRates({ fromCurrencyId, toCurrencyId }));

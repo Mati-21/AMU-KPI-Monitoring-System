@@ -15,6 +15,8 @@
     "seed:demo": "node scripts/seedDemoUniversity.js",
     "clear:fiscal": "node scripts/clearFiscalData.js",
     "clear:fiscal:confirm": "node scripts/clearFiscalData.js --yes",
+    "clear:contracts": "node scripts/clearContracts.js",
+    "clear:contracts:confirm": "node scripts/clearContracts.js --yes",
     "clear:kpis": "node scripts/clearKpiData.js",
     "clear:kpis:confirm": "node scripts/clearKpiData.js --yes",
     "clear:kpis:all": "node scripts/clearKpiData.js --with-catalog",

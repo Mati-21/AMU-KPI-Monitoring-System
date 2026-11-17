@@ -3,7 +3,7 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, notFound } from '../../utils/httpError.js';
 import { optionalString, parseDate, parseEnum, parseNumber, parseUuid } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import {
   APPROVED_STATUSES,
@@ -36,7 +36,7 @@ import { parseBaseline, parseTarget, parseWeight, requiredImprovement } from './
 
 const SCOPE_RELATIONS = ['EXCLUSIVE_COMPLETE', 'OVERLAPPING', 'INSTITUTION_WIDE'];
 
-const assertEditableYear = (assignment) => assertFiscalYearOpen(assignment.contract.fiscalYearId);
+const assertEditableYear = (assignment) => assertFiscalYearActive(assignment.contract.fiscalYearId);
 
 const audit = (actor, assignment, action, status, reason) =>
   auditAction(actor, {
@@ -142,7 +142,7 @@ export const getAssignmentTree = async ({ fiscalYearId, kpiId } = {}, actor) => 
 export const createAssignment = async (contractId, data = {}, actor) => {
   const contract = await prisma.performanceContract.findUnique({ where: { id: parseUuid(contractId, 'contractId') } });
   if (!contract) throw notFound('Contract not found');
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
   if (!OPEN_CONTRACT_STATUSES.includes(contract.status)) throw conflict(`KPIs can be added only to a draft or rejected contract; this one is ${contract.status}`);
 
@@ -293,7 +293,37 @@ export const flagAssignment = async (id, { note } = {}, actor) => {
 };
 
 /**
- * Cancel an assignment that nothing depends on yet. Approved ones stay part of the record.
+ * Take a KPI off a draft contract for good: its baseline, target and weight go with it, and the share it took from the
+ * office above goes back. Returns null when something already points at it (a cancelled line below, a result, a change
+ * request), so the caller keeps it as a cancelled record instead.
+ */
+const removeFromDraft = async (assignment, actor) => {
+  const id = assignment.id;
+  const [below, values, achievements, requests] = await Promise.all([
+    prisma.kpiAssignment.count({ where: { OR: [{ parentAssignmentId: id }, { sourceAssignmentId: id }] } }),
+    prisma.performanceValue.count({ where: { assignmentId: id } }),
+    prisma.kpiAchievement.count({ where: { assignmentId: id } }),
+    prisma.assignmentChangeRequest.count({ where: { assignmentId: id } }),
+  ]);
+  if (below + values + achievements + requests > 0) return null;
+
+  const onAssignment = { assignmentId: id };
+  await prisma.$transaction([
+    prisma.baselineEvidence.deleteMany({ where: { baseline: onAssignment } }),
+    prisma.responsibilityAllocation.deleteMany({ where: { OR: [{ childAssignmentId: id }, { parentAssignmentId: id }] } }),
+    prisma.kpiWeight.deleteMany({ where: onAssignment }),
+    prisma.kpiTarget.deleteMany({ where: onAssignment }),
+    prisma.kpiBaseline.deleteMany({ where: onAssignment }),
+    prisma.kpiAssignment.delete({ where: { id } }),
+  ]);
+  await releaseChildShare(assignment.parentAssignmentId, assignment.contract.officeId);
+  await auditAction(actor, { action: 'ASSIGNMENT_REMOVED', entityType: 'kpi_assignment', entityId: id, oldValues: { kpiId: assignment.kpiId, contractId: assignment.contractId, status: assignment.status } });
+  return { id, removed: true };
+};
+
+/**
+ * Take a KPI off a contract. On a draft contract it is simply removed, with no reason needed, and can be added again
+ * any time. Otherwise, an assignment nothing depends on yet is cancelled with a reason and kept as a record.
  */
 export const cancelAssignment = async (id, { comment } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
@@ -302,7 +332,12 @@ export const cancelAssignment = async (id, { comment } = {}, actor) => {
   if (!['DRAFT', 'REJECTED'].includes(assignment.status)) throw conflict(`A ${assignment.status} assignment cannot be cancelled`);
   const children = await prisma.kpiAssignment.count({ where: { parentAssignmentId: assignment.id, status: { in: LIVE_STATUSES } } });
   if (children > 0) throw conflict('This assignment has cascaded assignments below it');
-  const reason = requireComment(comment);
+  const isDraft = assignment.contract.status === 'DRAFT';
+  if (isDraft) {
+    const removed = await removeFromDraft(assignment, actor);
+    if (removed) return removed;
+  }
+  const reason = isDraft ? (optionalString(comment, 'comment') ?? 'Removed from the draft contract') : requireComment(comment);
   const cancelled = await setStatus(assignment, 'CANCELLED', { reviewComment: reason }, actor, 'ASSIGNMENT_CANCELLED', reason);
   await releaseChildShare(assignment.parentAssignmentId, assignment.contract.officeId);
   return cancelled;

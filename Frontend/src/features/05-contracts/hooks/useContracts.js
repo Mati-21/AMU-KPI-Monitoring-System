@@ -73,7 +73,7 @@ export const useContractStep = () => useContractAction(({ id, step, values }) =>
 export const useAssignmentStep = () => useContractAction(({ id, step, values }) => api.patch(`/assignments/${id}/${step}`, values ?? {}).then(unwrap));
 
 // How much of a received KPI the office does itself
-export const useKeepPart = () => useContractAction(({ id, amount }) => api.put(`/assignments/${id}/kept`, { amount }).then(unwrap));
+export const useKeepPart = () => useContractAction(({ id, amount, personId }) => api.put(`/assignments/${id}/kept`, { amount, ...(personId && { personId }) }).then(unwrap));
 
 // Checking a file changes nothing, so it refreshes nothing
 export const useCheckContractImport = () => useMutation({ mutationFn: ({ id, rows }) => api.post(`/contracts/${id}/kpi-import`, { rows, dryRun: true }).then(unwrap) });

@@ -20,7 +20,7 @@ const REPORT_INCLUDE = {
 
 const STATUSES_THAT_COUNT = ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'];
 
-const loadScoringSettings = async () => {
+export const loadScoringSettings = async () => {
   const [capOverachievement, maxScorePercent, officialBasis, thresholds] = await Promise.all([
     getSetting('kpi', 'cap_overachievement'),
     getSetting('kpi', 'max_score_percent'),
@@ -217,10 +217,10 @@ export const findLowResults = async (reportId) => {
   if (!alertPercent) return [];
   const rows = await prisma.kpiAchievement.findMany({
     where: { reportingPeriod: { reports: { some: { id: reportId } } }, assignment: { contract: { reports: { some: { id: reportId } } } } },
-    include: { assignment: { select: { kpi: { select: { name: true, scoringMethod: true, periodRollupMethod: true } } } }, reportingPeriod: { select: { isYearEnd: true } } },
+    include: { assignment: { select: { kpi: { select: { name: true, scoringMethod: true, periodRollupMethod: true } } } }, reportingPeriod: { select: { isYearEnd: true, endDate: true, fiscalYear: { select: { endDate: true } } } } },
   });
   return rows
-    .filter(({ assignment, reportingPeriod }) => reportingPeriod.isYearEnd || assignment.kpi.periodRollupMethod !== 'SUM')
+    .filter(({ assignment, reportingPeriod }) => isFullYear(reportingPeriod, reportingPeriod.fiscalYear) || assignment.kpi.periodRollupMethod !== 'SUM')
     .map((row) => ({
       kpiName: row.assignment.kpi.name,
       percent: toNumber(row.assignment.kpi.scoringMethod === 'IMPROVEMENT' ? (row.improvementAchievementCapped ?? row.targetAchievementCapped) : row.targetAchievementCapped),

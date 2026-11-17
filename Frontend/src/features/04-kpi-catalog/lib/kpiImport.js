@@ -18,8 +18,8 @@ const COLUMNS = [
   { name: 'Unit', needed: 'Number KPIs', help: 'Its name or symbol.' },
   { name: 'Currency', needed: 'Money KPIs', help: 'Its code, such as ETB.' },
   { name: 'Scale', needed: 'Stage and Category KPIs', help: 'A scale of the same type as the KPI.' },
-  { name: 'Numerator Label', needed: 'Percentage and Ratio KPIs', help: 'What is counted, such as Graduates.' },
-  { name: 'Denominator Label', needed: 'Percentage and Ratio KPIs', help: 'What it is out of, such as Enrolled students.' },
+  { name: 'Numerator Label', needed: 'Optional', help: 'Names what is counted, such as Graduates. Left empty, contracts say Numerator.' },
+  { name: 'Denominator Label', needed: 'Optional', help: 'Names what it is out of, such as Enrolled students. Left empty, contracts say Denominator.' },
   { name: 'Allowed Variation', needed: 'Maintain KPIs', help: 'How far from the target still counts as maintained.' },
   { name: 'Evidence Required', needed: 'Always', help: 'Yes if a result cannot be submitted without a supporting document, otherwise No.' },
   { name: 'Evidence Note', needed: 'Optional', help: 'What to attach, such as a signed attendance sheet. Only used when Evidence Required is Yes.' },
@@ -31,9 +31,9 @@ const REQUIRED_HEADERS = ['Name', 'Theme', 'Measurement Type', 'Direction'];
 // Extra columns when the KPIs go straight into the self contract
 const CONTRACT_COLUMNS = [
   { name: 'Baseline Status', needed: 'Optional', help: 'Known, Unknown or Pending verification. Left empty, it is Known.' },
-  { name: 'Baseline', needed: 'Known Number, Money, Stage and Category baselines', help: 'The starting value, or the level name for Stage and Category KPIs.' },
-  { name: 'Baseline Numerator', needed: 'Known Percentage and Ratio baselines', help: 'What was counted, such as 450 graduates.' },
-  { name: 'Baseline Denominator', needed: 'Known Percentage and Ratio baselines', help: 'What it was out of, such as 600 enrolled students.' },
+  { name: 'Baseline', needed: 'Known baselines, except Ratio', help: 'The starting value, such as 12 for 12%, or the level name for Stage and Category KPIs.' },
+  { name: 'Baseline Numerator', needed: 'Known Ratio baselines', help: 'What was counted, such as 450 graduates.' },
+  { name: 'Baseline Denominator', needed: 'Known Ratio baselines', help: 'What it was out of, such as 600 enrolled students.' },
   { name: 'Baseline Note', needed: 'Unknown or pending baselines', help: 'Why there is no value yet.' },
   { name: 'Target', needed: 'Always', help: 'The value to reach, such as 80 for 80%. The level name for Stage and Category KPIs.' },
   { name: 'Weight', needed: 'Always', help: "The KPI's share of the contract. The weights of a contract add up to 100." },

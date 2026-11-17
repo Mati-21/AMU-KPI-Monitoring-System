@@ -13,7 +13,7 @@ import RecordTable, { IconAction } from '../../04-kpi-catalog/components/RecordT
 import { useFrequencies } from '../../04-kpi-catalog/hooks/useCatalog';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
 import { optionLabel } from '../../10-system/lib/settingValues';
-import { useDeletePeriod, useGeneratePeriods, usePeriodStatus, usePeriods, useSavePeriod } from '../hooks/usePlanning';
+import { useDeletePeriod, useGeneratePeriods, usePeriodStatus, usePeriods, useResetDeadlines, useSavePeriod } from '../hooks/usePlanning';
 
 const periodFields = (frequencies, isNew) => [
   ...(isNew ? [{ key: 'frequencyId', label: 'Frequency', type: 'select', required: true, options: frequencies.map((frequency) => ({ value: frequency.id, label: frequency.name })) }] : []),
@@ -33,6 +33,7 @@ const PeriodsTable = ({ year }) => {
   const { data: frequencies = [] } = useFrequencies();
   const save = useSavePeriod();
   const generate = useGeneratePeriods();
+  const resetDeadlines = useResetDeadlines();
   const close = usePeriodStatus('close');
   const reopen = usePeriodStatus('reopen');
   const remove = useDeletePeriod();
@@ -60,6 +61,12 @@ const PeriodsTable = ({ year }) => {
         onError: (failure) => notify(apiErrorMessage(failure, 'Could not create the periods.'), 'error'),
       }
     );
+
+  const runResetDeadlines = () =>
+    resetDeadlines.mutate(year.id, {
+      onSuccess: ({ changed, submissionWindowDays }) => notify(changed > 0 ? `${changed} deadline(s) set to ${submissionWindowDays} day(s) after the period end.` : 'Every deadline already follows the submission window.', 'success'),
+      onError: (failure) => notify(apiErrorMessage(failure, 'Could not reset the deadlines.'), 'error'),
+    });
 
   const closePeriod = (period) =>
     close.mutate(
@@ -126,7 +133,10 @@ const PeriodsTable = ({ year }) => {
           <Button type="button" size="sm" disabled={!frequencyId || generate.isPending} onClick={runGenerate}>
             {generate.isPending ? 'Creating...' : 'Create Periods'}
           </Button>
-          <Button type="button" size="sm" variant="outline" className="ml-auto gap-1" onClick={() => setDialog({ type: 'edit' })}>
+          <Button type="button" size="sm" variant="outline" className="ml-auto" disabled={resetDeadlines.isPending || periods.length === 0} onClick={runResetDeadlines} title="Set every open period's deadline to its end date plus the Submission window in Configuration">
+            Reset Deadlines
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => setDialog({ type: 'edit' })}>
             <Plus className="h-4 w-4" />
             Add One Period
           </Button>

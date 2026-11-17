@@ -1,3 +1,4 @@
+import { ratioText } from '../../../shared/lib/ratio';
 import { optionLabel } from '../../10-system/lib/settingValues';
 
 const BASELINE_WORDS = { UNKNOWN: 'Unknown', PENDING_VERIFICATION: 'Pending verification' };
@@ -50,7 +51,6 @@ export const flaggedCount = (contract) => contract.assignments.filter(isFlagged)
 export const statusLabel = (status) => STATUS_WORDS[status] ?? optionLabel(status);
 export const usesLevels = (kpi) => kpi.measurementType === 'STAGE' || kpi.measurementType === 'CATEGORY';
 
-const isFraction = (kpi) => kpi.measurementType === 'PERCENTAGE' || kpi.measurementType === 'RATIO';
 const onlyLive = (contract) => contract.assignments.filter((assignment) => assignment.status !== 'CANCELLED');
 
 /**
@@ -93,6 +93,8 @@ export const measureText = (kpi, row, withUnit = true) => {
   if (BASELINE_WORDS[row.baselineStatus]) return BASELINE_WORDS[row.baselineStatus];
   if (row.scaleLevel) return row.scaleLevel.name;
   if (row.value === null || row.value === undefined) return '-';
+  // A ratio entered as two numbers reads with 1 on the left: 1:45
+  if (kpi.measurementType === 'RATIO' && row.numerator !== null && row.numerator !== undefined && row.denominator !== null && row.denominator !== undefined) return ratioText(row.numerator, row.denominator);
 
   const value = Number(row.value);
   if (!withUnit) return String(value);
@@ -187,11 +189,7 @@ export const equalAmountFor = (sharing, officeId) => {
 
 const baselineNumber = (kpi, form) => {
   if (form.baselineStatus !== 'KNOWN') return null;
-  if (isFraction(kpi)) {
-    if (form.baseline.numerator === '' || !Number(form.baseline.denominator)) return null;
-    const ratio = Number(form.baseline.numerator) / Number(form.baseline.denominator);
-    return kpi.measurementType === 'PERCENTAGE' ? ratio * 100 : ratio;
-  }
+  if (usesParts(kpi, form.baseline, true)) return Number(form.baseline.denominator) ? Number(form.baseline.numerator) / Number(form.baseline.denominator) : null;
   return form.baseline.value === '' ? null : Number(form.baseline.value);
 };
 
@@ -251,10 +249,15 @@ export const formFromAssignment = (assignment, parent) => ({
   weight: text(assignment.weight),
 });
 
-// Baselines of percentages and ratios need both parts, while a target may be just the percentage or ratio
-const measurePayload = (kpi, measure, useParts) => {
+/**
+ * A percentage is one box (12 for 12%). A ratio's baseline and target are two, so its direction cannot be entered
+ * backwards: what is counted over what it is out of. One saved earlier as a single value stays one box.
+ */
+export const usesParts = (kpi, measure, withParts) => withParts && kpi.measurementType === 'RATIO' && (measure.numerator !== '' || measure.denominator !== '' || measure.value === '');
+
+const measurePayload = (kpi, measure, withParts = false) => {
   if (usesLevels(kpi)) return { scaleLevelId: measure.scaleLevelId };
-  if (isFraction(kpi) && useParts) return { numerator: Number(measure.numerator), denominator: Number(measure.denominator) };
+  if (usesParts(kpi, measure, withParts)) return { numerator: Number(measure.numerator), denominator: Number(measure.denominator) };
   return { value: Number(measure.value) };
 };
 
@@ -265,7 +268,7 @@ export const assignmentPayload = (kpi, form) => ({
   reportingFrequencyId: form.reportingFrequencyId,
   ...(form.shareMethod !== undefined && { shareMethod: form.shareMethod }),
   baseline: baselinePayload(kpi, form),
-  ...(!targetIsWorkedOut(form) && { target: measurePayload(kpi, form.target, false) }),
+  ...(!targetIsWorkedOut(form) && { target: measurePayload(kpi, form.target, true) }),
   weight: Number(form.weight),
 });
 
@@ -278,10 +281,6 @@ export const changedPayload = (kpi, form, start) => {
 };
 
 /**
- * The percentage or ratio a baseline's two parts come to, or null until they can be worked out.
+ * The ratio a baseline's two parts come to, or null until they can be worked out.
  */
-export const fractionPreview = (kpi, { numerator, denominator }) => {
-  if (!isFraction(kpi) || numerator === '' || !Number(denominator)) return null;
-  const ratio = Number(numerator) / Number(denominator);
-  return kpi.measurementType === 'PERCENTAGE' ? `${Math.round(ratio * 10000) / 100}%` : String(Math.round(ratio * 10000) / 10000);
-};
+export const ratioPreview = ({ numerator, denominator }) => (numerator === '' || !Number(denominator) ? null : String(Math.round((Number(numerator) / Number(denominator)) * 10000) / 10000));

@@ -9,6 +9,10 @@ const PERIODS_KEY = queryKeys.catalog.part('reporting-periods');
 
 export const useFiscalYears = () => useQuery({ queryKey: YEARS_KEY, queryFn: () => api.get('/fiscal-years').then(unwrap) });
 
+// Contracts, reports and dashboards work on the live and finished years. A year still in planning is only prepared on the Fiscal Years page.
+const isLive = (year) => year.status !== 'PLANNING';
+export const useLiveFiscalYears = () => useQuery({ queryKey: YEARS_KEY, queryFn: () => api.get('/fiscal-years').then(unwrap), select: (years) => years.filter(isLive) });
+
 export const usePeriods = (fiscalYearId) =>
   useQuery({
     queryKey: [...PERIODS_KEY, fiscalYearId],
@@ -27,5 +31,6 @@ export const useYearStatus = (action) => usePlanningAction(({ id, values }) => a
 
 export const useSavePeriod = () => usePlanningAction(({ id, values }) => (id ? api.put(`/reporting-periods/${id}`, values) : api.post('/reporting-periods', values)).then(unwrap));
 export const useGeneratePeriods = () => usePlanningAction(({ fiscalYearId, frequencyId }) => api.post(`/fiscal-years/${fiscalYearId}/reporting-periods/generate`, { frequencyId }).then(unwrap));
+export const useResetDeadlines = () => usePlanningAction((fiscalYearId) => api.post(`/fiscal-years/${fiscalYearId}/reporting-periods/reset-deadlines`).then(unwrap));
 export const usePeriodStatus = (action) => usePlanningAction(({ id, values }) => api.patch(`/reporting-periods/${id}/${action}`, values ?? {}).then(unwrap));
 export const useDeletePeriod = () => usePlanningAction((id) => api.delete(`/reporting-periods/${id}`));

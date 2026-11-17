@@ -9,6 +9,7 @@ export const listPeriods = async (req, res) => {
 };
 export const getPeriodById = async (req, res) => send(res, await periodService.getPeriodById(req.params.id));
 export const createPeriod = async (req, res) => send(res, await periodService.createPeriod(req.body || {}, actorOf(req)), 201);
+export const resetDeadlines = async (req, res) => send(res, await periodService.resetDeadlines(req.params.id, actorOf(req)));
 export const generatePeriods = async (req, res) => send(res, await periodService.generatePeriods(req.params.id, req.body || {}, actorOf(req)), 201);
 export const updatePeriod = async (req, res) => send(res, await periodService.updatePeriod(req.params.id, req.body || {}, actorOf(req)));
 export const closePeriod = async (req, res) => send(res, await periodService.closePeriod(req.params.id, req.body || {}, actorOf(req)));

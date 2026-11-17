@@ -38,3 +38,21 @@ export const unitText = (kpi) => {
   if (kpi.measurementType === 'STAGE' || kpi.measurementType === 'CATEGORY') return 'Level';
   return kpi.unit?.symbol ?? kpi.unit?.name ?? '';
 };
+
+// ===== Colour of a performance cell =====
+
+const hueOf = (score) => Math.round(Math.min(100, Math.max(0, score)) * 1.2);
+
+/**
+ * A light background for a cell, red through yellow to green, covering the whole cell. The colour of the performance
+ * sits in the middle, with the shades either side of it fading out towards red on one side and green on the other.
+ * Part way through the year a count that adds up is judged against how far it should be by now (`pace`, the share of
+ * the year it covers), so a strong first quarter already shows green. A finished year is judged as it stands.
+ * Null when there is no percentage to colour.
+ */
+export const performanceShade = (percent, pace = 1) => {
+  if (percent === null || percent === undefined) return null;
+  const score = pace > 0 && pace < 1 ? percent / pace : percent;
+  const shade = (offset) => `hsla(${hueOf(score + offset)}, 85%, 48%, 0.6)`;
+  return { background: `linear-gradient(90deg, ${shade(-30)}, ${shade(0)}, ${shade(30)})` };
+};

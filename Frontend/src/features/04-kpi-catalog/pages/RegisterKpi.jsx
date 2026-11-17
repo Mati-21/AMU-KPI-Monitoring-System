@@ -115,6 +115,7 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
     setForm({ ...form, requiresEvidence, evidenceRequirement: requiresEvidence === 'no' ? '' : form.evidenceRequirement });
   };
 
+  // The target type follows the direction (higher is better: minimum, lower is better: maximum, maintain: exact), so it is not asked
   const chooseDirection = (direction) =>
     setForm({ ...form, direction, targetType: targetTypesFor(direction)[0], maintenanceTolerance: direction === 'MAINTAIN' ? form.maintenanceTolerance : '' });
 
@@ -222,12 +223,11 @@ function RegisterKpi({ kpi, replaces, onDone, onCancel, onMassRegister }) {
         <SectionTitle>How It Is Measured</SectionTitle>
         {select('measurementType', 'Measurement Type', toOptions(MEASUREMENT_TYPES), { required: true, onChange: chooseType, hint: 'Use Percentage, Ratio or Money for those results, not Number with a unit, so they add up correctly.' })}
         {select('direction', 'Direction', toOptions(DIRECTIONS), { required: true, onChange: chooseDirection })}
-        {select('targetType', 'Target Type', toOptions(targetTypesFor(form.direction)), { required: true, placeholder: form.direction ? 'Choose target type' : 'Choose a direction first' })}
         {form.measurementType === 'NUMBER' && select('unitId', 'Unit', units.map((unit) => ({ value: unit.id, label: unit.symbol ? `${unit.name} (${unit.symbol})` : unit.name })), { required: true })}
         {form.measurementType === 'MONEY' && select('currencyId', 'Currency', currencies.map((currency) => ({ value: currency.id, label: `${currency.code} - ${currency.name}` })), { required: true })}
         {usesScale(form.measurementType) && select('scaleId', 'Scale', scaleChoices.map((scale) => ({ value: scale.id, label: scale.name })), { required: true, hint: scaleChoices.length === 0 ? 'There is no scale of this type yet. Add one under Measurement Setup, in Scales.' : undefined })}
-        {usesLabels(form.measurementType) && text('numeratorLabel', 'Numerator Label', { required: true, hint: 'What is counted, such as Graduates.' })}
-        {usesLabels(form.measurementType) && text('denominatorLabel', 'Denominator Label', { required: true, hint: 'What it is out of, such as Enrolled students.' })}
+        {usesLabels(form.measurementType) && text('numeratorLabel', 'Numerator Label', { hint: 'Optional. Names what is counted, such as Graduates. Left empty, contracts say Numerator.' })}
+        {usesLabels(form.measurementType) && text('denominatorLabel', 'Denominator Label', { hint: 'Optional. Names what it is out of, such as Enrolled students. Left empty, contracts say Denominator.' })}
         {form.direction === 'MAINTAIN' && text('maintenanceTolerance', 'Allowed Variation', { required: true, type: 'number', min: 0, step: 'any', hint: 'How far from the target still counts as maintained.' })}
 
         {rules && (

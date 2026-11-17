@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database.js';
 import { PERMISSIONS } from '../../config/permissions.js';
 import { startOfTodayUtc } from '../../utils/dates.js';
+import { APPROVED_STATUSES } from '../05-contract-cascading/contract.shared.js';
 import { requiredImprovement } from '../05-contract-cascading/measurement.js';
 import { holdsOnThisOffice } from '../07-performance-scoring/reports/report.access.js';
 import { assertCanView, findOffice, formatMeasured, loadBands, loadContracts, loadStaffContracts, loadYearHistory, publicLine, publicView, resolveView, toSnapshot } from './dashboard.data.js';
@@ -83,7 +84,7 @@ export const getOfficeDashboard = async (officeId, query, actor) => {
 
   const view = await resolveView(query);
   const [[contract], history, bands, staff] = await Promise.all([loadContracts(view.fiscalYear.id, [office.id]), loadYearHistory(office.id), loadBands(), loadStaffRows(office, view, actor)]);
-  const empty = { ...publicView(view), bands, office, contractStatus: null, score: null, summary: summarize([]), kpis: [], trend: [], deadlines: [], evidence: [], feedback: [], history, staff };
+  const empty = { ...publicView(view), bands, office, contractStatus: null, score: null, summary: { ...summarize([]), sharedBelow: 0 }, kpis: [], trend: [], deadlines: [], evidence: [], feedback: [], history, staff };
   if (!contract) return empty;
 
   const snapshot = toSnapshot(contract, view.fiscalYear, view.period);
@@ -92,6 +93,13 @@ export const getOfficeDashboard = async (officeId, query, actor) => {
     loadReports(contract.id, view.period),
   ]);
 
+  // KPIs of this contract that were passed on, whole or in part, to an office below
+  const passedOn = await prisma.kpiAssignment.findMany({
+    where: { parentAssignmentId: { in: contract.assignments.map((assignment) => assignment.id) }, status: { in: APPROVED_STATUSES } },
+    select: { parentAssignmentId: true },
+    distinct: ['parentAssignmentId'],
+  });
+
   const seesDrafts = actor.access.canGlobally(PERMISSIONS.DASHBOARD_READ) || holdsOnThisOffice(actor, PERMISSIONS.DASHBOARD_READ, office.id);
   const evidenceReports = seesDrafts ? reports : reports.filter((report) => !DRAFT_STATUSES.includes(report.status));
 
@@ -99,7 +107,7 @@ export const getOfficeDashboard = async (officeId, query, actor) => {
     ...empty,
     contractStatus: contract.status,
     score: snapshot.score,
-    summary: snapshot.summary,
+    summary: { ...snapshot.summary, sharedBelow: passedOn.length },
     kpis: snapshot.lines.map(withPlan),
     trend: snapshot.trend,
     deadlines: buildDeadlines(contract, periods, startOfTodayUtc()),

@@ -1,3 +1,4 @@
+import { ratioText } from '../../../shared/lib/ratio';
 import { optionLabel } from '../../10-system/lib/settingValues';
 
 const STATUS_WORDS = {
@@ -65,6 +66,8 @@ export const resultText = (kpi, row, withUnit = true) => {
   if (row.baselineStatus && row.baselineStatus !== 'KNOWN') return optionLabel(row.baselineStatus);
   if (row.scaleLevelId) return kpi.levels.find((level) => level.id === row.scaleLevelId)?.name ?? '-';
   if (isFraction(kpi) && filled(row.numerator) && Number(row.denominator)) {
+    // A ratio reads with 1 on the left: 1:25, and 10:326 is 1:32.6
+    if (kpi.measurementType === 'RATIO') return ratioText(row.numerator, row.denominator);
     const ratio = Number(row.numerator) / Number(row.denominator);
     return `${amountText(kpi, kpi.measurementType === 'PERCENTAGE' ? ratio * 100 : ratio, withUnit)} (${round(Number(row.numerator))} of ${round(Number(row.denominator))})`;
   }

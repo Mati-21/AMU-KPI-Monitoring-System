@@ -3,7 +3,7 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseEnum, parseUuid, requireString } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
 import { changeRequested, changeReviewed } from '../09-notifications/notification.events.js';
 import { refreshReconciliation } from './allocation.service.js';
 import { APPROVED_STATUSES, addVersion, assertAuthorityFromAbove, assertSeparateApprover, canSeeAssignment, getAssignmentOrThrow, requireComment } from './contract.shared.js';
@@ -58,7 +58,7 @@ const parseProposal = (kpi, proposed = {}) => {
 
 export const createChangeRequest = async (assignmentId, { requestType, reason, proposedValues, evidenceDocumentIds } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(assignmentId);
-  await assertFiscalYearOpen(assignment.contract.fiscalYearId);
+  await assertFiscalYearActive(assignment.contract.fiscalYearId);
   await assertMayRequest(actor, assignment.contract);
   if (!APPROVED_STATUSES.includes(assignment.status)) throw conflict(`Only an approved assignment takes change requests; this one is ${assignment.status}`);
 
@@ -127,7 +127,7 @@ export const getChangeRequestById = async (id, actor) => {
 export const reviewChangeRequest = async (id, { decision, comment, effectiveFromPeriodId } = {}, actor) => {
   const request = await getRequestOrThrow(id);
   const { contract } = request.assignment;
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_APPROVE, contract);
   if (request.status !== 'PENDING') throw conflict(`This request was already ${request.status}`);
   await assertSeparateApprover(actor, request.requestedByPersonId);

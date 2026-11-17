@@ -64,7 +64,7 @@ app.use(
     },
     credentials: true,
     // Lets the frontend say how long to wait after a 429
-    exposedHeaders: ['Retry-After'],
+    exposedHeaders: ['Retry-After', 'Content-Disposition'],
   })
 );
 

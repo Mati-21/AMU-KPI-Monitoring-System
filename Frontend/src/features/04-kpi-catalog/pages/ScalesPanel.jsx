@@ -9,12 +9,13 @@ import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { Field, FormDialog } from '../../02-offices/components/FormParts';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
+import DeleteRecordDialog from '../components/DeleteRecordDialog';
 import RecordTable, { IconAction } from '../components/RecordTable';
 import { useSaveRecord, useScales, useSetScaleScoring } from '../hooks/useCatalog';
 
 const SCALE_TYPES = [
-  { value: 'STAGE', label: 'Stage - steps in order, each with criteria' },
-  { value: 'CATEGORY', label: 'Category - named results' },
+  { value: 'STAGE', label: 'Stage' },
+  { value: 'CATEGORY', label: 'Category' },
 ];
 
 const emptyLevel = () => ({ name: '', score: '', assessmentCriteria: '' });
@@ -107,6 +108,7 @@ const ScalesPanel = () => {
   const { data: scales = [], isLoading, error } = useScales();
   const setScoring = useSetScaleScoring();
   const [dialog, setDialog] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const canManage = can('kpi:manage');
 
   const changeScoring = (scale, approved) =>
@@ -131,6 +133,7 @@ const ScalesPanel = () => {
             render: (row) => (
               <div className="flex gap-2">
                 {!row.isLocked && <IconAction icon={Edit3} label={`Edit ${row.name}`} onClick={() => setDialog({ scale: row })} />}
+                {!row.isLocked && <IconAction icon={Trash2} danger label={`Delete ${row.name}`} onClick={() => setDeleting(row)} />}
                 {!row.scoringApproved && !row.isBinary && row.isOrdered && <IconAction icon={BadgeCheck} label={`Approve scoring of ${row.name}`} onClick={() => changeScoring(row, true)} />}
                 {row.scoringApproved && !row.isLocked && <IconAction icon={Undo2} label={`Withdraw scoring of ${row.name}`} danger onClick={() => changeScoring(row, false)} />}
               </div>
@@ -143,6 +146,7 @@ const ScalesPanel = () => {
   return (
     <>
       <RecordTable title="Stage and Category Scales" description="What stage and category KPIs report on. A scale locks once a KPI uses it." addLabel="Add Scale" onAdd={canManage ? () => setDialog({}) : null} columns={columns} rows={scales} isLoading={isLoading} error={error} />
+      {deleting && <DeleteRecordDialog path="kpi-scales" id={deleting.id} title="Delete Scale" name={deleting.name} details="Its levels go with it. A scale that a KPI uses cannot be deleted." onClose={() => setDeleting(null)} />}
       {dialog && <ScaleDialog scale={dialog.scale} onClose={() => setDialog(null)} />}
     </>
   );

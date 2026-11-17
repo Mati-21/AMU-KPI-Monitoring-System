@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, Trash2, Upload } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
@@ -12,7 +12,7 @@ import { ConfirmDialog } from '../../02-offices/components/FormParts';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { IconAction } from '../../04-kpi-catalog/components/RecordTable';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
-import { openFile, useDeleteDocument, useDocumentTypes, useDocuments } from '../hooks/useDocuments';
+import { downloadFile, openFile, useDeleteDocument, useDocumentTypes, useDocuments } from '../hooks/useDocuments';
 import { formatSize, personName } from '../lib/documentRules';
 import UploadDocumentDialog from './UploadDocumentDialog';
 
@@ -59,6 +59,7 @@ const DocumentsPanel = () => {
   };
 
   const open = (document) => openFile(document.file.id).catch((failure) => notify(apiErrorMessage(failure, 'Could not open this file.'), 'error'));
+  const download = (document) => downloadFile(document.file.id, document.file.originalName).catch((failure) => notify(apiErrorMessage(failure, 'Could not download this file.'), 'error'));
 
   const confirmDelete = () =>
     remove.mutate(toDelete.id, {
@@ -136,7 +137,8 @@ const DocumentsPanel = () => {
                 <TableCell>{document.usedAsEvidence ? <Badge variant="outline">Used as evidence</Badge> : <span className="text-muted-foreground">-</span>}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
-                    {canDownload && <IconAction icon={Download} label={`Open ${document.title}`} onClick={() => open(document)} />}
+                    {canDownload && <IconAction icon={Eye} label={`View ${document.title}`} onClick={() => open(document)} />}
+                    {canDownload && <IconAction icon={Download} label={`Download ${document.title}`} onClick={() => download(document)} />}
                     {canUpload && !document.usedAsEvidence && <IconAction icon={Trash2} label={`Delete ${document.title}`} danger onClick={() => setToDelete(document)} />}
                   </div>
                 </TableCell>

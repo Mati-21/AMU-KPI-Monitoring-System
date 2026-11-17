@@ -107,9 +107,7 @@ const validateDefinition = async (kpi) => {
   if (kpi.isAdditive && !ADDITIVE_TYPES.includes(type)) errors.push(`A ${type} KPI cannot be additive`);
   if (kpi.aggregationMethod === 'SUM' && !kpi.isAdditive) errors.push('aggregationMethod SUM needs isAdditive true');
 
-  if (type === 'PERCENTAGE' || type === 'RATIO') {
-    if (!kpi.numeratorLabel || !kpi.denominatorLabel) errors.push(`A ${type} KPI needs numeratorLabel and denominatorLabel`);
-  }
+  // The numerator and denominator labels only name the two parts of a percentage or ratio. Empty, contracts say Numerator and Denominator
   if (type === 'MONEY' && !kpi.currencyId) errors.push('A MONEY KPI needs currencyId');
   if (type !== 'MONEY' && kpi.currencyId) errors.push(`A ${type} KPI cannot have a currency`);
   if (SCALE_TYPES[type] && !kpi.scaleId) errors.push(`A ${type} KPI needs scaleId`);

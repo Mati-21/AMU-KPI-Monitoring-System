@@ -92,6 +92,7 @@ const ContractDetail = ({ contractId, contracts }) => {
               Given {distributed}
               {retained > 0 && ` · Kept ${retained}`} of {parentAmount}
             </p>
+            {retained > 0 && <p className="text-xs text-muted-foreground">{row.sharing.heldBy?.length ? `Kept part: ${row.sharing.heldBy.map((part) => part.person.name).join(', ')}` : 'Kept part: nobody holds it yet'}</p>}
             <p className={`text-xs font-medium ${left > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-green-700 dark:text-green-400'}`}>{left > 0 ? `${left} left to give` : 'All shared'}</p>
             {canKeep && (
               <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setKeeping(row)}>

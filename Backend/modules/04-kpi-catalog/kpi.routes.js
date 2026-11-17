@@ -239,6 +239,20 @@ router.post('/measurement-units', protect, canManage, kpiController.createUnit);
  */
 router.put('/measurement-units/:id', protect, canManage, kpiController.updateUnit);
 
+/**
+ * @swagger
+ * /api/v1/measurement-units/{id}:
+ *   delete:
+ *     tags: [KPI Catalog]
+ *     summary: Delete a unit no KPI uses
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: A KPI uses it }
+ */
+router.delete('/measurement-units/:id', protect, canManage, kpiController.deleteUnit);
+
 // ===== Reporting frequencies =====
 
 /**
@@ -371,6 +385,20 @@ router.put('/kpi-scales/:id', protect, canManage, kpiController.updateScale);
 
 /**
  * @swagger
+ * /api/v1/kpi-scales/{id}:
+ *   delete:
+ *     tags: [KPI Catalog]
+ *     summary: Delete a scale no KPI uses, with its levels
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: A KPI uses it, or results are recorded on its levels }
+ */
+router.delete('/kpi-scales/:id', protect, canManage, kpiController.deleteScale);
+
+/**
+ * @swagger
  * /api/v1/kpi-scales/{id}/scoring:
  *   patch:
  *     summary: Approve or withdraw numerical scoring for a scale
@@ -447,6 +475,20 @@ router.post('/currencies', protect, canManage, kpiController.createCurrency);
  *       200: { description: Updated }
  */
 router.put('/currencies/:id', protect, canManage, kpiController.updateCurrency);
+
+/**
+ * @swagger
+ * /api/v1/currencies/{id}:
+ *   delete:
+ *     tags: [KPI Catalog]
+ *     summary: Delete a currency nothing uses, with its exchange rates. Not the reporting currency
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *       409: { description: It is the reporting currency, a KPI uses it, or results were converted with it }
+ */
+router.delete('/currencies/:id', protect, canManage, kpiController.deleteCurrency);
 
 /**
  * @swagger

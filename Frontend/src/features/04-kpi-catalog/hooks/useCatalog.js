@@ -34,6 +34,9 @@ const useCatalogAction = (send) => {
  */
 export const useSaveRecord = (path) => useCatalogAction(({ id, values }) => (id ? api.put(`/${path}/${id}`, values) : api.post(`/${path}`, values)).then(unwrap));
 
+// Delete at /path/id: a unit, scale or currency that nothing uses
+export const useDeleteRecord = (path) => useCatalogAction((id) => api.delete(`/${path}/${id}`).then(unwrap));
+
 export const useDeleteKpi = () => useCatalogAction((id) => api.delete(`/kpis/${id}`).then(unwrap));
 
 export const useCheckKpiImport = () => useMutation({ mutationFn: (rows) => api.post('/kpis/import', { rows, dryRun: true }).then(unwrap) });

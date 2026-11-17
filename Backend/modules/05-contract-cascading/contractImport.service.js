@@ -3,7 +3,7 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { parseUuid } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
 import { buildDefinition } from '../04-kpi-catalog/kpi.service.js';
 import { nameKey, similarNamesIn } from '../04-kpi-catalog/kpiNames.js';
 import { getSetting } from '../10-system-governance/system.service.js';
@@ -23,7 +23,7 @@ const loadContract = async (id, actor) => {
   const contract = await prisma.performanceContract.findUnique({ where: { id: parseUuid(id, 'id') } });
   if (!contract) throw notFound('Contract not found');
   if (contract.assigningOfficeId) throw conflict('New KPIs can be registered only into the top office\'s self contract');
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
   if (contract.status !== 'DRAFT') throw conflict(`KPIs can be added only while the self contract is a draft; this one is ${contract.status}`);
   return contract;

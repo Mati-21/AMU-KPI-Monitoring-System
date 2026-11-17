@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
-import { useFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
+import { useLiveFiscalYears } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { optionLabel } from '../../10-system/lib/settingValues';
 import ContractsTable from '../components/ContractsTable';
@@ -10,7 +10,7 @@ import RejectionHistory from '../components/RejectionHistory';
 import { useContracts } from '../hooks/useContracts';
 
 const KpiAllocationPage = () => {
-  const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
+  const { data: years = [], isLoading: yearsLoading } = useLiveFiscalYears();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [showHistory, setShowHistory] = useState(false);

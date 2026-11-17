@@ -168,6 +168,20 @@ router.patch('/users/:id/toggle-active', protect, requirePermission(PERMISSIONS.
  *     responses:
  *       200: { description: Password reset }
  */
+/**
+ * @swagger
+ * /api/v1/users/{id}/unlock:
+ *   post:
+ *     summary: Unlock an account locked out by too many failed sign-in attempts
+ *     description: Clears the failed-attempt counters so the person can sign in at once. The password and sessions are not changed. A locked account shows account.lock on GET /persons/{id}.
+ *     tags: [Persons]
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string }, description: UserAccount id, Person id or username }
+ *     responses:
+ *       200: { description: Unlocked }
+ */
+router.post('/users/:id/unlock', protect, requirePermission(PERMISSIONS.USER_MANAGE), personController.unlockAccount);
+
 router.post('/users/:id/reset-password', protect, requirePermission(PERMISSIONS.USER_MANAGE), personController.resetPassword);
 
 /**

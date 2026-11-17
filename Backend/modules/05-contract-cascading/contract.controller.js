@@ -1,6 +1,7 @@
 import * as contractService from './contract.service.js';
 import * as assignmentService from './assignment.service.js';
 import * as allocationService from './allocation.service.js';
+import * as keptPartService from './keptPart.service.js';
 import * as changeRequestService from './changeRequest.service.js';
 import * as contractImportService from './contractImport.service.js';
 import { actorOf } from '../../utils/requestContext.js';
@@ -38,7 +39,7 @@ export const addBaselineEvidence = async (req, res) => send(res, await assignmen
 
 // ===== Responsibility =====
 export const getAllocations = async (req, res) => send(res, await allocationService.getAllocations(req.params.id, actorOf(req)));
-export const saveKept = async (req, res) => send(res, await allocationService.saveKept(req.params.id, req.body || {}, actorOf(req)));
+export const saveKept = async (req, res) => send(res, await keptPartService.keepPart(req.params.id, req.body || {}, actorOf(req)));
 export const justifyReconciliation = async (req, res) => send(res, await allocationService.justifyReconciliation(req.params.id, req.body || {}, actorOf(req)));
 
 // ===== Change requests =====

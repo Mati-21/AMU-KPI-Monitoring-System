@@ -7,10 +7,11 @@ import { addEthiopianMonths } from '../../utils/ethiopianDate.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * True when a period measures the whole fiscal year.
+ * True when the results of a period are the whole year's: the year-end period, or any period that reaches the year's
+ * last day (the last quarter, the last month). Results add up from the start of the year, so at that point nothing
+ * is left to come and a running total is final.
  */
-export const isFullYear = (period, fiscalYear) =>
-  period.isYearEnd || (period.startDate.getTime() === fiscalYear.startDate.getTime() && period.endDate.getTime() === fiscalYear.endDate.getTime());
+export const isFullYear = (period, fiscalYear) => period.isYearEnd || period.endDate.getTime() >= fiscalYear.endDate.getTime();
 
 export const addDays = (date, days) => new Date(date.getTime() + days * DAY_MS);
 

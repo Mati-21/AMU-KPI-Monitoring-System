@@ -7,9 +7,9 @@ import BandLabel from '../components/BandLabel';
 import CompareBars from '../components/CompareBars';
 import FeedbackList from '../components/FeedbackList';
 import KpiBars from '../components/KpiBars';
+import OfficeBars from '../components/OfficeBars';
 import Panel from '../components/Panel';
-import ScoreSummary from '../components/ScoreSummary';
-import ScoreTrend from '../components/ScoreTrend';
+import OfficeCards from '../components/OfficeCards';
 import TodoPanel from '../components/TodoPanel';
 import { useOfficeDashboard, useOfficesBelowDashboard } from '../hooks/useDashboards';
 import { bandFor, fullName, percentText, todoFromDeadlines } from '../lib/dashboardRules';
@@ -66,7 +66,11 @@ const OfficeView = ({ officeId, year, periodId, mine, onSelectOffice, onOpenMine
     latestState: row.latestReport?.state,
   }));
   const belowRows = (below?.subordinates ?? []).map((row) => ({ key: row.office.id, id: row.office.id, name: row.office.name, detail: row.office.officeType?.name, score: row.score, latestState: row.latestReport?.state }));
-  const hasSide = (mine && mine.contractId && mine.office?.id === officeId) || staffRows.length > 0;
+  // The chart compares the offices directly below plus the office's own KPIs; an office with none below shows its staff
+  const ownRow = mine?.contractId && mine.office?.id === officeId ? { key: 'own', isOwn: true, name: `${dashboard.office.name}, own KPIs`, detail: 'Kept by this office', score: mine.score, summary: mine.summary, latestState: null } : null;
+  const staffBars = (dashboard.staff ?? []).map((row) => ({ key: row.contractId, name: fullName(row.person), detail: row.person.id === mine?.person?.id ? 'You' : null, score: row.score, summary: row.summary, latestState: row.latestReport?.state }));
+  const chartRows = belowRows.length > 0 ? [...(ownRow ? [ownRow] : []), ...belowRows] : staffBars;
+  const hasSide = (mine && mine.contractId && mine.office?.id === officeId) || (staffRows.length > 0 && belowRows.length > 0);
 
   return (
     <div className="space-y-5">
@@ -77,11 +81,17 @@ const OfficeView = ({ officeId, year, periodId, mine, onSelectOffice, onOpenMine
         </p>
       </div>
 
-      <ScoreSummary score={dashboard.score} summary={dashboard.summary} bands={dashboard.bands} scoreLabel="Office score" />
+      <OfficeCards score={dashboard.score} summary={dashboard.summary} bands={dashboard.bands} kpis={dashboard.kpis} />
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <ScoreTrend trend={dashboard.trend} bands={dashboard.bands} />
+          <OfficeBars
+            rows={chartRows}
+            title={belowRows.length > 0 ? 'Performance by office' : 'Performance by staff'}
+            description={belowRows.length > 0 ? "This office's own KPIs and the offices directly below it. Scores are compared, never averaged. Open an office to see its dashboard." : "Each person's own contract. Their approved results also add up into the office's figures."}
+            emptyText="No offices or staff contracts to compare yet."
+            onSelect={(row) => (row.isOwn ? onOpenMine() : belowRows.length > 0 ? onSelectOffice(row.id) : undefined)}
+          />
         </div>
         <TodoPanel items={todo} />
       </div>
@@ -93,23 +103,12 @@ const OfficeView = ({ officeId, year, periodId, mine, onSelectOffice, onOpenMine
         {hasSide && (
           <div className="space-y-5">
             {mine?.contractId && mine.office?.id === officeId && <OwnContractCard mine={mine} onOpen={onOpenMine} />}
-            {staffRows.length > 0 && (
+            {staffRows.length > 0 && belowRows.length > 0 && (
               <CompareBars compact title="My staff" description="Each person's own contract, best score first. Their approved results also add up into the office's figures." rows={staffRows} bands={dashboard.bands} emptyText="No staff contracts this year." />
             )}
           </div>
         )}
       </div>
-
-      {belowRows.length > 0 && (
-        <CompareBars
-          title="Offices below"
-          description="Best score first. Scores are compared, never averaged, because each contract has its own weights. Open one to see its dashboard."
-          rows={belowRows}
-          bands={dashboard.bands}
-          emptyText="No offices below."
-          onSelect={(row) => onSelectOffice(row.id)}
-        />
-      )}
 
       <FeedbackList feedback={dashboard.feedback} title="Feedback from the office above" />
       <p className="text-xs text-muted-foreground">

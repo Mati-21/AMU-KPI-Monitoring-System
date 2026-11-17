@@ -4,7 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { activeOn } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseEnum, parseUuid } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
 import { contractAssigned, contractRejected, contractSigned } from '../09-notifications/notification.events.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import {
@@ -191,7 +191,7 @@ export const listContractPeople = async (actor) => {
  * A staff contract, given by an office to one person working in it today. The office's own contract for the year
  * must exist, because its KPIs come from there.
  */
-const createStaffContract = async (yearId, personId, requestedOfficeId, actor) => {
+const createStaffContract = async (yearId, personId, requestedOfficeId, actor, { reuse = false } = {}) => {
   const home = contractHomeOffices(actor);
   const placements = await prisma.officePerson.findMany({
     where: { personId, ...activeOn('startDate', 'endDate'), person: { archivedAt: null } },
@@ -206,6 +206,8 @@ const createStaffContract = async (yearId, personId, requestedOfficeId, actor) =
   const officeContract = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id, personId: null } });
   if (!officeContract) throw conflict(`${office.name} has no contract for this fiscal year yet. Its KPIs come from there`);
   const existing = await prisma.performanceContract.findFirst({ where: { fiscalYearId: yearId, officeId: office.id, personId } });
+  // Reusing hands back the person's contract when there is one, instead of refusing a second
+  if (existing && reuse) return { contract: await prisma.performanceContract.findUnique({ where: { id: existing.id }, include: CONTRACT_INCLUDE }), created: false };
   if (existing) throw conflict(`${fullName(person)} already has a contract in ${office.name} for this fiscal year`);
 
   const contract = await prisma.performanceContract.create({
@@ -213,16 +215,21 @@ const createStaffContract = async (yearId, personId, requestedOfficeId, actor) =
     include: CONTRACT_INCLUDE,
   });
   await auditAction(actor, { action: 'CONTRACT_CREATED', entityType: 'performance_contract', entityId: contract.id, newValues: { fiscalYearId: yearId, officeId: office.id, personId } });
-  return contract;
+  return { contract, created: true };
 };
+
+/**
+ * A person's staff contract in the office they work in: the one they already have this year, or a new draft.
+ */
+export const ensureStaffContract = (yearId, personId, officeId, actor) => createStaffContract(yearId, personId, officeId, actor, { reuse: true });
 
 /**
  * An office's contract, or with personId a staff contract for one person in the actor's office.
  */
 export const createContract = async ({ fiscalYearId, officeId, personId } = {}, actor) => {
   const yearId = parseUuid(fiscalYearId, 'fiscalYearId');
-  await assertFiscalYearOpen(yearId);
-  if (personId) return createStaffContract(yearId, parseUuid(personId, 'personId'), parseUuid(officeId, 'officeId', { required: false }), actor);
+  await assertFiscalYearActive(yearId);
+  if (personId) return (await createStaffContract(yearId, parseUuid(personId, 'personId'), parseUuid(officeId, 'officeId', { required: false }), actor)).contract;
 
   const office = await prisma.office.findUnique({ where: { id: parseUuid(officeId, 'officeId') }, include: { parent: true } });
   if (!office) throw badRequest('Office not found');
@@ -263,13 +270,16 @@ const assertComplete = async (contract) => {
   if (assignments.length === 0) throw badRequest('A contract needs at least one KPI');
   const pending = assignments.filter((a) => a.baselines[0]?.baselineStatus === 'PENDING_VERIFICATION').map((a) => a.kpi.name);
   if (pending.length > 0) throw conflict(`These KPIs still have a pending baseline: ${pending.join(', ')}`);
+  // A KPI added to a staff contract for a part its office kept starts without a weight; it must get one before the contract goes out
+  const unweighted = assignments.filter((a) => !(toNumber(a.weights[0]?.weight) > 0)).map((a) => a.kpi.name);
+  if (unweighted.length > 0) throw conflict(`These KPIs still need a weight above 0: ${unweighted.join(', ')}`);
   const { totalWeight, requiredTotalWeight, isWeightBalanced } = weightSummary(contract, assignments);
   if (!isWeightBalanced) throw conflict(`KPI weights total ${totalWeight}, but this contract requires ${requiredTotalWeight}`);
 };
 
 export const assignContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   if (!contract.assigningOfficeId) throw conflict('A self contract has no office to assign it to. Sign it when it is ready');
   // The office gives a staff contract once its own contract is signed, so the KPIs are settled
   if (isStaffContract(contract) && !(await prisma.performanceContract.findFirst({ where: { fiscalYearId: contract.fiscalYearId, officeId: contract.officeId, personId: null, status: { in: ['SIGNED', 'APPROVED'] } } }))) {
@@ -293,7 +303,7 @@ export const assignContract = async (id, actor) => {
  */
 export const rejectContract = async (id, { comment } = {}, actor) => {
   const contract = await getContractOrThrow(id);
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertWorksOnContract(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract);
   assertStatus(contract, 'SUBMITTED');
   const note = optionalString(comment, 'comment') ?? null;
@@ -317,7 +327,7 @@ export const rejectContract = async (id, { comment } = {}, actor) => {
  */
 export const signContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertWorksOnContract(actor, PERMISSIONS.CONTRACT_ACKNOWLEDGE, contract);
   const isSelf = !contract.assigningOfficeId;
   assertStatus(contract, isSelf ? 'DRAFT' : 'SUBMITTED');
@@ -343,7 +353,7 @@ export const signContract = async (id, actor) => {
  */
 export const deleteContract = async (id, actor) => {
   const contract = await getContractOrThrow(id);
-  await assertFiscalYearOpen(contract.fiscalYearId);
+  await assertFiscalYearActive(contract.fiscalYearId);
   await assertAuthorityFromAbove(actor, PERMISSIONS.CONTRACT_MANAGE, contract);
   assertStatus(contract, 'DRAFT');
   if (await prisma.contractRejection.count({ where: { contractId: contract.id } })) throw conflict('This contract was sent to an office before, so it stays as a record');

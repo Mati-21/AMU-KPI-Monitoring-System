@@ -1,3 +1,8 @@
+import { useState } from 'react';
+
+import CustomSelect from '../../../shared/components/ui/CustomSelect';
+import SearchInput from '../../../shared/components/ui/SearchInput';
+import { Switch } from '../../../shared/components/ui/Switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/Table';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import ThemeRows from '../components/ThemeRows';
@@ -8,7 +13,7 @@ import { resultText as withUnitText } from '../lib/reportRules';
 
 // The Unit column says the unit, so the numbers leave it out
 const resultText = (kpi, row) => withUnitText(kpi, row, false);
-import { unitText } from '../lib/sheetRules';
+import { performanceShade, unitText } from '../lib/sheetRules';
 
 const FIXED_COLUMNS = ['KPI Name', 'Unit', 'Weight', 'Baseline', 'Target'];
 const Message = ({ children }) => <p className="rounded-lg border border-border bg-card p-4 text-sm text-foreground">{children}</p>;
@@ -20,11 +25,30 @@ const Message = ({ children }) => <p className="rounded-lg border border-border 
 const YearReportPage = () => {
   const { years, year, offices, office, choose, isLoading } = useYearOffice();
   const { data: report, isLoading: reportLoading, error } = useYearReport(year?.id, office?.id);
+  const [search, setSearch] = useState('');
+  const [frequencyId, setFrequencyId] = useState('ALL');
+  // Off by default: the cells show the results. On, each shows how far it reaches out of 100
+  const [asPercent, setAsPercent] = useState(false);
+  const [showColours, setShowColours] = useState(false);
+  const allRows = report?.rows ?? [];
+  const frequencyOptions = [...new Map(allRows.filter((row) => row.frequencyName).map((row) => [row.frequencyId, { value: row.frequencyId, label: row.frequencyName }])).values()];
+  const rows = allRows.filter((row) => {
+    if (search.trim() && !row.kpi.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    if (frequencyId !== 'ALL' && row.frequencyId !== frequencyId) return false;
+    return true;
+  });
+  const filtered = search.trim() !== '' || frequencyId !== 'ALL';
   const columns = report?.columns ?? [];
   const showTotal = Boolean(report?.showTotal);
   const columnCount = FIXED_COLUMNS.length + columns.length + (showTotal ? 1 : 0) + 1;
 
-  const cell = (row, result, hasKpi) => (hasKpi ? <span className="text-foreground">{result ? resultText(row.kpi, result) : '-'}</span> : <span className="text-muted-foreground">-</span>);
+  const percentText = (percent) => (percent === null || percent === undefined ? '-' : `${Math.round(percent * 10) / 10}%`);
+  const shadeOf = (result, percent, pace) => (showColours && result ? performanceShade(percent, pace) ?? undefined : undefined);
+  const cell = (row, result, hasKpi, percent) => {
+    if (!hasKpi) return <span className="text-muted-foreground">-</span>;
+    if (asPercent) return <span className="text-foreground">{result ? percentText(percent) : '-'}</span>;
+    return <span className="text-foreground">{result ? resultText(row.kpi, result) : '-'}</span>;
+  };
 
   const renderRow = (row) => (
     <TableRow key={row.assignmentId}>
@@ -34,9 +58,15 @@ const YearReportPage = () => {
       <TableCell>{resultText(row.kpi, row.baseline)}</TableCell>
       <TableCell>{resultText(row.kpi, row.target)}</TableCell>
       {columns.map((column) => (
-        <TableCell key={column.key}>{cell(row, row.cells[column.key], column.key in row.cells)}</TableCell>
+        <TableCell key={column.key} className="bg-muted" style={shadeOf(row.cells[column.key], row.percents?.[column.key], row.paces?.[column.key])}>
+          {cell(row, row.cells[column.key], column.key in row.cells, row.percents?.[column.key])}
+        </TableCell>
       ))}
-      {showTotal && <TableCell className="font-semibold">{cell(row, row.total, true)}</TableCell>}
+      {showTotal && (
+        <TableCell className="font-semibold" style={shadeOf(row.total, row.totalPercent, row.totalPace)}>
+          {cell(row, row.total, true, row.totalPercent)}
+        </TableCell>
+      )}
       <TableCell className="text-xs text-foreground">{row.remark ?? '-'}</TableCell>
     </TableRow>
   );
@@ -59,12 +89,30 @@ const YearReportPage = () => {
 
         {report?.contract && (
           <div className="rounded-lg border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="text-base font-semibold text-foreground">{report.contract.office.name}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {report.contract.fiscalYear.name}
-                {report.contract.assigningOffice ? `, reporting to ${report.contract.assigningOffice.name}` : ''}. Results count once the office above approves them.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">{report.contract.office.name}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {report.contract.fiscalYear.name}
+                  {report.contract.assigningOffice ? `, reporting to ${report.contract.assigningOffice.name}` : ''}. Results count once the office above approves them.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="w-56">
+                  <SearchInput value={search} onChange={setSearch} placeholder="Search KPI by name..." />
+                </div>
+                <div className="w-44">
+                  <CustomSelect compact options={[{ value: 'ALL', label: 'All frequencies' }, ...frequencyOptions]} value={frequencyId} onChange={setFrequencyId} />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-foreground" title="Show each result as how far it reaches out of 100, against its own target">
+                  <Switch aria-label="Show as percentage out of 100" checked={asPercent} onCheckedChange={setAsPercent} />
+                  Show as %
+                </label>
+                <label className="flex items-center gap-2 text-sm text-foreground" title="Colour each cell red, yellow or green by how well it is doing">
+                  <Switch aria-label="Colour the cells by performance" checked={showColours} onCheckedChange={setShowColours} />
+                  Colours
+                </label>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -74,7 +122,7 @@ const YearReportPage = () => {
                       <TableHead key={label}>{label}</TableHead>
                     ))}
                     {columns.map((column) => (
-                      <TableHead key={column.key} className="min-w-[7rem]">
+                      <TableHead key={column.key} className="min-w-[7rem] bg-primary/25">
                         {column.label}
                       </TableHead>
                     ))}
@@ -83,12 +131,12 @@ const YearReportPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {report.rows.length === 0 && (
+                  {rows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={columnCount}>This contract has no accepted KPIs yet.</TableCell>
+                      <TableCell colSpan={columnCount}>{report.rows.length === 0 ? 'This contract has no accepted KPIs yet.' : 'No KPI matches this filter.'}</TableCell>
                     </TableRow>
                   )}
-                  <ThemeRows rows={report.rows} columns={columnCount} weightColumn={2} renderRow={renderRow} />
+                  <ThemeRows rows={rows} columns={columnCount} weightColumn={2} renderRow={renderRow} showTotals={!filtered} shaded={{ from: FIXED_COLUMNS.length, count: columns.length }} />
                 </TableBody>
               </Table>
             </div>

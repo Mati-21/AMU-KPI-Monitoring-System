@@ -32,6 +32,7 @@ export const useUpdatePerson = () => useAccountAction(({ personId, values }) => 
 export const useArchivePerson = () => useAccountAction((personId) => api.delete(`/persons/${personId}`));
 export const useSaveAccount = () => useAccountAction(({ personId, values }) => api.post(`/persons/${personId}/account`, values));
 export const useSetAccountActive = () => useAccountAction(({ accountId, isActive }) => api.patch(`/users/${accountId}/toggle-active`, { isActive }));
+export const useUnlockAccount = () => useAccountAction((accountId) => api.post(`/users/${accountId}/unlock`));
 export const useResetPassword = () => useAccountAction(({ accountId, temporaryPassword }) => api.post(`/users/${accountId}/reset-password`, { temporaryPassword }));
 export const useEnforceMfa = () => useAccountAction(({ accountId, enforced }) => api.patch(`/auth/users/${accountId}/enforce-mfa`, { enforced }));
 

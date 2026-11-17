@@ -9,6 +9,7 @@ export const applyPublicSettings = (dispatch, { system, branding, general }) => 
     setSystemSettings({
       displayName: branding?.system_name,
       orgName: branding?.university_name,
+      orgShortName: branding?.university_short_name,
       systemLogo: branding?.logo ? `/api/v1/files/${branding.logo}/public` : null,
       supportEmail: general?.contact_email ?? null,
     })

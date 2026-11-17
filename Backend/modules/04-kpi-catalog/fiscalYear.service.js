@@ -156,4 +156,14 @@ export const reopenFiscalYear = async (id, { reason } = {}, actor) => {
   return fiscalYear;
 };
 
-export default { assertFiscalYearOpen, listFiscalYears, createFiscalYear, updateFiscalYear, activateFiscalYear, closeFiscalYear, reopenFiscalYear };
+/**
+ * Contracts and reports belong to the live year: a year still in planning is only being prepared (its dates and
+ * periods), and a closed year is read-only.
+ */
+export const assertFiscalYearActive = async (fiscalYearId) => {
+  const fiscalYear = await assertFiscalYearOpen(fiscalYearId);
+  if (fiscalYear.status !== 'ACTIVE') throw conflict(`Fiscal year "${fiscalYear.name}" is still in planning. Activate it before working on contracts or reports`);
+  return fiscalYear;
+};
+
+export default { assertFiscalYearOpen, assertFiscalYearActive, listFiscalYears, createFiscalYear, updateFiscalYear, activateFiscalYear, closeFiscalYear, reopenFiscalYear };

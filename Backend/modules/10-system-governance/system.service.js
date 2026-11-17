@@ -8,8 +8,10 @@ import {
   serializeSettingValue,
 } from '../../config/settings.js';
 import { auditAction } from '../../utils/auditLogger.js';
+import { setTimeZone } from '../../utils/dates.js';
 import { badRequest, forbidden, notFound } from '../../utils/httpError.js';
 import { parseDate } from '../../utils/validation.js';
+import { addDays } from '../06-reporting-periods/period.rules.js';
 
 /**
  * Module 10 — System settings (registry in config/settings.json) and the audit trail.
@@ -34,6 +36,9 @@ const loadRows = async () => {
     include: { updatedBy: { select: PERSON_NAME_SELECT } },
   });
   cache = { loadedAt: Date.now(), rows: new Map(rows.map((row) => [`${row.groupName}.${row.key}`, row])) };
+  // "Today" in deadlines, placements and reminders follows the time zone setting
+  const zoneRow = cache.rows.get('general.timezone');
+  if (zoneRow) setTimeZone(deserializeSettingValue(getSettingDefinition('general', 'timezone'), zoneRow));
   return cache.rows;
 };
 
@@ -98,6 +103,20 @@ const describeGroup = (groupDefinition, rows) => ({
     describeSetting(definition, rows.get(`${groupDefinition.group}.${definition.key}`))
   ),
 });
+
+/**
+ * A new submission window applies to every open period at once: its deadline becomes its end date plus the window.
+ * Closed periods and closed years keep their dates. A deadline set by hand can be set again on the period afterwards.
+ */
+const moveDeadlinesToWindow = async (newDays) => {
+  const periods = await prisma.reportingPeriod.findMany({
+    where: { isClosed: false, fiscalYear: { status: { not: 'CLOSED' } } },
+    select: { id: true, endDate: true, submissionDeadline: true },
+  });
+  const changed = periods.filter((period) => period.submissionDeadline?.getTime() !== addDays(period.endDate, newDays).getTime());
+  await prisma.$transaction(changed.map((period) => prisma.reportingPeriod.update({ where: { id: period.id }, data: { submissionDeadline: addDays(period.endDate, newDays) } })));
+  return changed.length;
+};
 
 // ===== Settings endpoints =====
 
@@ -197,7 +216,13 @@ export const updateSettingsGroup = async (groupName, { settings } = {}, actor) =
     await auditAction(actor, { action: 'SETTINGS_UPDATED', entityType: 'system_setting', entityId: groupName, oldValues, newValues });
   }
 
-  return { ...describeGroup(groupDefinition, await loadRows()), changedKeys: Object.keys(newValues) };
+  let deadlinesMoved = 0;
+  if (groupName === 'reporting' && 'submission_window_days' in newValues) {
+    deadlinesMoved = await moveDeadlinesToWindow(newValues.submission_window_days);
+    if (deadlinesMoved > 0) await auditAction(actor, { action: 'DEADLINES_MOVED', entityType: 'system_setting', entityId: groupName, newValues: { periods: deadlinesMoved, submissionWindowDays: newValues.submission_window_days } });
+  }
+
+  return { ...describeGroup(groupDefinition, await loadRows()), changedKeys: Object.keys(newValues), deadlinesMoved };
 };
 
 // ===== Audit trail =====

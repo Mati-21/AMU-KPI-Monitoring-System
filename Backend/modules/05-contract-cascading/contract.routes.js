@@ -193,8 +193,8 @@ router.patch('/contracts/:id/sign', protect, withAccess, contractController.sign
  *   post:
  *     summary: Assign a KPI on a draft contract, with its official baseline, target and weight
  *     description: |
- *       Fields follow the KPI's measurement type. NUMBER and MONEY use value; PERCENTAGE and RATIO use numerator and
- *       denominator (a target may give just value); STAGE and CATEGORY use scaleLevelId. An unknown baseline sends
+ *       Fields follow the KPI's measurement type. NUMBER, MONEY and PERCENTAGE use value, such as 12 for 12%. A RATIO baseline
+ *       gives numerator and denominator (value is accepted too); STAGE and CATEGORY use scaleLevelId. An unknown baseline sends
  *       status UNKNOWN with a justification and no value. Every office but the top one needs parentAssignmentId.
  *     tags: [Contracts & Cascading]
  *     parameters:
@@ -287,7 +287,7 @@ router.put('/assignments/:id', protect, canManage, contractController.updateAssi
  *       200: { description: Flag saved or cleared }
  * /api/v1/assignments/{id}/cancel:
  *   patch:
- *     summary: Cancel a draft assignment that has nothing cascaded from it
+ *     summary: Take a KPI off a contract. On a draft contract it is removed with no reason needed, unless something already points at it, then it is cancelled and kept. Otherwise an assignment with nothing cascaded from it is cancelled with a reason
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -295,9 +295,9 @@ router.put('/assignments/:id', protect, canManage, contractController.updateAssi
  *       required: true
  *       content:
  *         application/json:
- *           schema: { type: object, required: [comment], properties: { comment: { type: string } } }
+ *           schema: { type: object, properties: { comment: { type: string, description: Required unless the contract is a draft } } }
  *     responses:
- *       200: { description: Cancelled }
+ *       200: { description: Removed ({ removed: true }) or cancelled }
  */
 router.patch('/assignments/:id/flag', protect, withAccess, contractController.flagAssignment);
 router.patch('/assignments/:id/cancel', protect, canManage, contractController.cancelAssignment);
@@ -367,7 +367,7 @@ router.get('/assignments/:id/allocations', protect, canRead, contractController.
  * @swagger
  * /api/v1/assignments/{id}/kept:
  *   put:
- *     summary: Keep part of a received KPI for the office's own work, beside what it gives to the offices below
+ *     summary: Keep part of a received KPI for the office's own work, beside what it gives to the offices below. The kept part goes on the staff contract of the person who does it (the office head unless personId says otherwise), which is made if they have none
  *     tags: [Contracts & Cascading]
  *     parameters:
  *       - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
@@ -375,7 +375,7 @@ router.get('/assignments/:id/allocations', protect, canRead, contractController.
  *       required: true
  *       content:
  *         application/json:
- *           schema: { type: object, required: [amount], properties: { amount: { type: number, example: 6, description: 0 keeps nothing } } }
+ *           schema: { type: object, required: [amount], properties: { amount: { type: number, example: 6, description: 0 keeps nothing }, personId: { type: string, format: uuid, description: Who does the kept part; the office head when left out } } }
  *     responses:
  *       200: { description: The sharing with the kept part }
  *       400: { description: More than the offices below left }

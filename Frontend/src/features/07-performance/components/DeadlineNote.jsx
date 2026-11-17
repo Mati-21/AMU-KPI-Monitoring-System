@@ -1,7 +1,8 @@
 import { formatEthiopianDate as formatDate } from '../../../shared/lib/ethiopianDate';
 
 /**
- * What the deadline means for this period now: late but still accepted, locked (only the Super Admin can allow it),
+ * What the deadline means for this period now: late but still accepted, locked (nothing can be saved or submitted, and
+ * only the Super Admin can allow it),
  * or allowed late until a given day. Nothing is shown before the deadline.
  */
 const DeadlineNote = ({ period, deadline, report }) => {
@@ -10,7 +11,7 @@ const DeadlineNote = ({ period, deadline, report }) => {
   if (deadline.isLocked) {
     return (
       <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
-        The deadline{deadline.lockedSince ? ` and grace period ended on ${formatDate(deadline.lockedSince)}` : ` passed on ${formatDate(period.submissionDeadline)}`}. Results can still be saved, but only the Super Admin can allow {period.name} to be submitted late.
+        The deadline{deadline.lockedSince ? ` and grace period ended on ${formatDate(deadline.lockedSince)}` : ` passed on ${formatDate(period.submissionDeadline)}`}. {period.name} can no longer be changed or submitted. Only the Super Admin can allow a late submission.
       </p>
     );
   }

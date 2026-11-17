@@ -4,7 +4,7 @@ import { auditAction } from '../../utils/auditLogger.js';
 import { startOfTodayUtc } from '../../utils/dates.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseBoolean, parseBooleanQuery, parseDate, parseUuid, requireString } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive, assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
 import { getSetting } from '../10-system-governance/system.service.js';
 import { buildPeriods, defaultDeadline, periodPhase } from './period.rules.js';
 
@@ -76,13 +76,13 @@ const usageOf = (periodId) =>
   ]).then((counts) => counts.reduce((sum, count) => sum + count, 0));
 
 /**
- * Guard for writes to period data, such as report submissions (Module 07).
+ * Guard for writes to period data, such as report submissions (Module 07). Reports belong to the active year.
  */
 export const assertPeriodOpen = async (periodId) => {
   const period = await prisma.reportingPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw notFound('Reporting period not found');
   if (period.isClosed) throw conflict(`Reporting period "${period.name}" is closed`);
-  await assertFiscalYearOpen(period.fiscalYearId);
+  await assertFiscalYearActive(period.fiscalYearId);
   return period;
 };
 
@@ -159,6 +159,20 @@ export const generatePeriods = async (fiscalYearId, { frequencyId } = {}, actor)
     newValues: { frequency: frequency.name, periods: periods.map((period) => period.name) },
   });
   return listPeriods({ fiscalYearId: year.id, frequencyId: frequency.id });
+};
+
+/**
+ * Put every open period's deadline back to its end date plus the submission window setting. Closed periods keep theirs.
+ */
+export const resetDeadlines = async (fiscalYearId, actor) => {
+  assertCanManage(actor);
+  const year = await assertFiscalYearOpen(parseUuid(fiscalYearId, 'id'));
+  const window = await getSetting('reporting', 'submission_window_days');
+  const periods = await prisma.reportingPeriod.findMany({ where: { fiscalYearId: year.id, isClosed: false } });
+  const changed = periods.filter((period) => period.submissionDeadline?.getTime() !== defaultDeadline(period.endDate, window).getTime());
+  await prisma.$transaction(changed.map((period) => prisma.reportingPeriod.update({ where: { id: period.id }, data: { submissionDeadline: defaultDeadline(period.endDate, window) } })));
+  await auditAction(actor, { action: 'DEADLINES_RESET', entityType: 'fiscal_year', entityId: year.id, newValues: { periods: changed.length, submissionWindowDays: window } });
+  return { changed: changed.length, submissionWindowDays: window };
 };
 
 // ===== Change =====

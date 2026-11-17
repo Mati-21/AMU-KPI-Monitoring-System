@@ -2,7 +2,7 @@ import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { Input } from '../../../shared/components/ui/Input';
 import { Field } from '../../02-offices/components/FormParts';
 import { useScales } from '../../04-kpi-catalog/hooks/useCatalog';
-import { BASELINE_OPTIONS, usesLevels } from '../lib/contractRules';
+import { BASELINE_OPTIONS, usesLevels, usesParts } from '../lib/contractRules';
 import MeasureFields from './MeasureFields';
 
 /**
@@ -34,7 +34,10 @@ const AssignmentValueFields = ({ kpi, form, onChange, weightHint, targetNote }) 
             <p className={`rounded-md border border-border bg-muted/40 px-3 py-2 text-sm ${targetNote.problem ? 'text-red-600 dark:text-red-400' : 'font-medium text-foreground'}`}>{targetNote.problem ?? targetNote.text}</p>
           </Field>
         ) : (
-          <MeasureFields kpi={kpi} levels={levels} title="Target" measure={form.target} onChange={set('target')} />
+          // A ratio's target has two boxes, like its baseline, so it takes the whole row
+          <div className={usesParts(kpi, form.target, true) ? 'sm:col-span-2' : undefined}>
+            <MeasureFields kpi={kpi} levels={levels} title="Target" withParts measure={form.target} onChange={set('target')} />
+          </div>
         )}
         <Field label="Weight" required hint={weightHint}>
           <Input type="number" required min="0.01" max="100" step="any" value={form.weight} onChange={(event) => set('weight')(event.target.value)} />

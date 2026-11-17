@@ -19,7 +19,7 @@ const ApprovalList = ({ title, description, reports, isLoading, error, emptyText
     {
       label: 'Action',
       render: (row) => (
-        <Button type="button" size="sm" variant={actionLabel === 'Review' ? 'default' : 'outline'} onClick={() => navigate(`/reports/${row.id}`)}>
+        <Button type="button" size="sm" variant={actionLabel === 'Review' ? 'default' : 'outline'} onClick={() => navigate(`/reports/${row.id}?from=approvals&tab=${actionLabel === 'Review' ? 'pending' : 'reviewed'}`)}>
           {actionLabel}
         </Button>
       ),

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Ban, Edit3, Flag, FlagOff } from 'lucide-react';
+import { Ban, Edit3, Flag, FlagOff, Trash2 } from 'lucide-react';
 
 import { apiErrorMessage } from '../../../shared/lib/apiError';
+import { ConfirmDialog } from '../../02-offices/components/FormParts';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import RecordDialog from '../../04-kpi-catalog/components/RecordDialog';
 import { IconAction } from '../../04-kpi-catalog/components/RecordTable';
@@ -23,6 +24,8 @@ const AssignmentActions = ({ assignment, contract, isClosed, onEdit }) => {
   const [cancelling, setCancelling] = useState(false);
   const [flagging, setFlagging] = useState(false);
   const { kpi } = assignment;
+  // On a draft contract a KPI is simply removed; once the contract has been with another office it is cancelled with a reason
+  const isDraft = contract.status === 'DRAFT';
   const { change: canChange, flag: canFlag } = assignmentActions(can, assignment, contract, isClosed);
 
   if (!canChange && !canFlag) return null;
@@ -50,14 +53,15 @@ const AssignmentActions = ({ assignment, contract, isClosed, onEdit }) => {
     <>
       <div className="flex gap-2">
         {canChange && <IconAction icon={Edit3} label={`Edit ${kpi.name}`} onClick={onEdit} />}
-        {canChange && <IconAction icon={Ban} label={`Cancel ${kpi.name}`} danger onClick={() => setCancelling(true)} />}
+        {canChange && <IconAction icon={isDraft ? Trash2 : Ban} label={`${isDraft ? 'Remove' : 'Cancel'} ${kpi.name}`} danger onClick={() => setCancelling(true)} />}
         {canFlag && <IconAction icon={Flag} label={`${isFlagged(assignment) ? 'Edit flag on' : 'Flag'} ${kpi.name}`} danger={isFlagged(assignment)} onClick={() => setFlagging(true)} />}
         {canFlag && isFlagged(assignment) && <IconAction icon={FlagOff} label={`Remove flag from ${kpi.name}`} onClick={removeFlag} />}
       </div>
 
       {flagging && <RecordDialog title={`Flag ${kpi.name}`} description="Say what the office above should correct." fields={FLAG_FIELDS} defaults={{ note: assignment.reviewComment }} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'flag', values }, options) }} submitLabel="Save Flag" successMessage={`${kpi.name} flagged.`} onClose={closeFlag} />}
 
-      {cancelling && <RecordDialog title={`Cancel ${kpi.name}`} description="It stops counting on this contract. You can add it again later." fields={COMMENT_FIELDS} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'cancel', values }, options) }} submitLabel="Cancel KPI" successMessage={`${kpi.name} cancelled.`} onClose={closeCancel} />}
+      {cancelling && isDraft && <ConfirmDialog open onClose={closeCancel} title={`Remove ${kpi.name}`} description={`Remove ${kpi.name} from this draft contract? Its baseline, target and weight go with it. You can add it again any time.`} onConfirm={() => run.mutate({ id: assignment.id, step: 'cancel' }, { onSuccess: () => { notify(`${kpi.name} was removed.`, 'success'); closeCancel(); } })} error={run.error} pending={run.isPending} confirmLabel="Remove" />}
+      {cancelling && !isDraft && <RecordDialog title={`Cancel ${kpi.name}`} description="It stops counting on this contract. You can add it again later." fields={COMMENT_FIELDS} mutation={{ ...run, mutate: ({ values }, options) => run.mutate({ id: assignment.id, step: 'cancel', values }, options) }} submitLabel="Cancel KPI" successMessage={`${kpi.name} cancelled.`} onClose={closeCancel} />}
     </>
   );
 };

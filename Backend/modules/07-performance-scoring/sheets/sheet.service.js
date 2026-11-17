@@ -10,7 +10,8 @@ import { ownOfficeIdsOf, reviewsContract } from '../reports/report.access.js';
 import { deadlineState } from '../reports/report.service.js';
 import { EDITABLE_STATUSES } from '../reports/reportValue.service.js';
 import { rollUpPeriods } from '../rules/aggregation.rules.js';
-import { previewLines } from '../scoring/scoring.service.js';
+import { calculateAchievement } from '../rules/achievement.rules.js';
+import { loadScoringSettings, previewLines } from '../scoring/scoring.service.js';
 import { LINE_INCLUDE, resolveResult, toResult } from '../scoring/result.service.js';
 
 /**
@@ -59,6 +60,7 @@ const rowOf = (assignment) => ({
   baseline: assignment.baselines[0] ?? null,
   target: assignment.targets[0] ?? null,
   frequencyId: assignment.reportingFrequencyId,
+  frequencyName: assignment.reportingFrequency?.name ?? null,
   hasOfficesBelow: assignment.children.length > 0,
   heldByStaff: assignment.staffParts.length > 0,
   kept: assignment.allocationsGiven.reduce((sum, row) => sum + (toNumber(row.allocatedAmount) ?? 0), 0),
@@ -154,15 +156,15 @@ const cellOf = (resolved, directRow, evidence) => ({
 const periodActions = async (actor, contract, period, report) => {
   const today = startOfTodayUtc();
   const hasStarted = period.startDate <= today;
-  const editable = contract.fiscalYear.status !== 'CLOSED' && !period.isClosed && hasStarted && (!report || EDITABLE_STATUSES.includes(report.status));
+  const editable = contract.fiscalYear.status === 'ACTIVE' && !period.isClosed && hasStarted && (!report || EDITABLE_STATUSES.includes(report.status));
   const deadline = await deadlineState(period, report, today);
   return {
     hasStarted,
     deadline,
-    edit: editable && (await worksOnContract(actor, PERMISSIONS.REPORT_CREATE, contract)),
+    edit: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.REPORT_CREATE, contract)),
     submit: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.REPORT_SUBMIT, contract)),
     allowLate: editable && deadline.isLate && actor.access.isSuperAdmin,
-    attachEvidence: editable && (await worksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, contract)),
+    attachEvidence: editable && !deadline.isLocked && (await worksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, contract)),
   };
 };
 
@@ -247,9 +249,35 @@ const approvedRows = (assignmentId, contributionType, year) =>
  * Approved results added up over the year, each KPI the way it rolls up. Only the assignment's own frequency counts,
  * so a quarter is never added to the months inside it.
  */
-const yearToDate = async (assignmentId, frequencyId, kpi, contributionType, year) => {
-  const rows = (await approvedRows(assignmentId, contributionType, year)).filter((row) => row.report.reportingPeriod.frequencyId === frequencyId);
-  return rollUpPeriods(kpi, rows.sort((a, b) => a.report.reportingPeriod.endDate - b.report.reportingPeriod.endDate).map(toResult));
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The year-to-date result, and how much of the year it covers. A count that adds up (a Sum) is only part way to its
+ * annual target part way through the year, so the share of the year it covers says how far it should be by now.
+ * Levels and rates are judged as they stand, so they count as fully paced.
+ */
+const yearFigures = async (assignmentId, frequencyId, kpi, contributionType, year) => {
+  const rows = (await approvedRows(assignmentId, contributionType, year))
+    .filter((row) => row.report.reportingPeriod.frequencyId === frequencyId)
+    .sort((a, b) => a.report.reportingPeriod.endDate - b.report.reportingPeriod.endDate);
+  const result = rollUpPeriods(kpi, rows.map(toResult));
+  const through = rows.at(-1)?.report.reportingPeriod.endDate;
+  const yearDays = (year.endDate - year.startDate) / DAY_MS + 1;
+  const pace = kpi.periodRollupMethod === 'SUM' && through ? Math.min(1, ((through - year.startDate) / DAY_MS + 1) / yearDays) : 1;
+  return { result, pace: Math.round(pace * 10000) / 10000 };
+};
+
+
+/**
+ * How far a year-to-date result reaches, out of 100, judged the way the KPI is scored. Null when it cannot be worked
+ * out, such as a stage without approved scoring.
+ */
+const percentOf = (kpi, baseline, target, result, settings) => {
+  if (!result || !target) return null;
+  const achievement = calculateAchievement({ kpi, baseline: baseline ?? null, target, weight: 0, actual: result, isInterimSum: kpi.periodRollupMethod === 'SUM', settings });
+  const first = kpi.scoringMethod === 'IMPROVEMENT' ? achievement.improvementAchievementCapped : achievement.targetAchievementCapped;
+  const second = kpi.scoringMethod === 'IMPROVEMENT' ? achievement.targetAchievementCapped : achievement.improvementAchievementCapped;
+  return toNumber(first ?? second);
 };
 
 /**
@@ -265,24 +293,52 @@ export const getYearReport = async ({ fiscalYearId, officeId, contractId } = {},
   for (const assignment of assignments) for (const child of assignment.children) below.set(child.contract.office.id, child.contract.office);
   const ownKey = 'OWN';
 
+  const settings = await loadScoringSettings();
+  // Each office below is judged on its own baseline and target
+  const childIds = assignments.flatMap((assignment) => assignment.children.map((child) => child.id));
+  const childLines = await prisma.kpiAssignment.findMany({
+    where: { id: { in: childIds } },
+    select: { id: true, baselines: { orderBy: { versionNo: 'desc' }, take: 1 }, targets: { orderBy: { versionNo: 'desc' }, take: 1 } },
+  });
+  const childLine = new Map(childLines.map((line) => [line.id, line]));
+
   const rows = [];
   let hasOwnWork = false;
   for (const assignment of assignments) {
     const { kpi } = assignment;
     const cells = {};
-    for (const child of assignment.children) cells[child.contract.office.id] = await yearToDate(child.id, child.reportingFrequencyId, kpi, 'TOTAL', year);
+    const percents = {};
+    const paces = {};
+    for (const child of assignment.children) {
+      const key = child.contract.office.id;
+      const figures = await yearFigures(child.id, child.reportingFrequencyId, kpi, 'TOTAL', year);
+      cells[key] = figures.result;
+      paces[key] = figures.pace;
+      percents[key] = percentOf(kpi, childLine.get(child.id)?.baselines[0], childLine.get(child.id)?.targets[0], cells[key], settings);
+    }
 
     const kept = assignment.allocationsGiven.some((row) => toNumber(row.allocatedAmount) > 0);
     const doesOwnWork = assignment.children.length === 0 || kept;
     if (doesOwnWork) {
       hasOwnWork = true;
-      cells[ownKey] = await yearToDate(assignment.id, assignment.reportingFrequencyId, kpi, 'DIRECT', year);
+      const own = await yearFigures(assignment.id, assignment.reportingFrequencyId, kpi, 'DIRECT', year);
+      cells[ownKey] = own.result;
+      paces[ownKey] = own.pace;
+      // An office that passed part of the target down is judged on the part it kept, and only where that is a plain amount
+      const keptTarget = assignment.children.length === 0 ? assignment.targets[0] : kpi.isAdditive && kept ? { value: assignment.allocationsGiven.reduce((sum, row) => sum + (toNumber(row.allocatedAmount) ?? 0), 0) } : null;
+      percents[ownKey] = percentOf(kpi, assignment.children.length === 0 ? assignment.baselines[0] : null, keptTarget, cells[ownKey], settings);
     }
     const notes = (await approvedRows(assignment.id, 'DIRECT', year)).filter((row) => row.note).sort((a, b) => b.report.reportingPeriod.endDate - a.report.reportingPeriod.endDate);
+    const totalFigures = await yearFigures(assignment.id, assignment.reportingFrequencyId, kpi, 'TOTAL', year);
+    const total = totalFigures.result;
     rows.push({
       ...rowOf(assignment),
       cells,
-      total: await yearToDate(assignment.id, assignment.reportingFrequencyId, kpi, 'TOTAL', year),
+      percents,
+      paces,
+      totalPace: totalFigures.pace,
+      total,
+      totalPercent: percentOf(kpi, assignment.baselines[0], assignment.targets[0], total, settings),
       remark: notes[0]?.note ?? null,
     });
   }

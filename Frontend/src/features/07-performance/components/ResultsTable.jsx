@@ -1,10 +1,23 @@
+import { useState } from 'react';
 import { Paperclip } from 'lucide-react';
 
+import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { Input } from '../../../shared/components/ui/Input';
+import SearchInput from '../../../shared/components/ui/SearchInput';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/Table';
 import { personName } from '../../05-contracts/lib/contractRules';
 import { achievementOf, resultText } from '../lib/reportRules';
 import ResultInput from './ResultInput';
+
+const SHOW_OPTIONS = [
+  { value: 'ALL', label: 'All KPIs' },
+  { value: 'NO_RESULT', label: 'No result yet' },
+  { value: 'REPORTED', label: 'Reported' },
+  { value: 'NOT_REPORTED', label: 'Marked no result' },
+  { value: 'FROM_BELOW', label: 'Has offices below' },
+  { value: 'NO_EVIDENCE', label: 'Without evidence' },
+  { value: 'REJECTED', label: 'Evidence rejected' },
+];
 
 const Achievement = ({ line }) => {
   const { percent, threshold, reason } = achievementOf(line);
@@ -62,7 +75,36 @@ const ResultCell = ({ line, entry, editable, onChange }) => {
 /**
  * Every KPI of the report with its target, the result and how far it reaches.
  */
-const ResultsTable = ({ report, entries, editable, onChange, onEvidence }) => (
+const ResultsTable = ({ report, entries, editable, onChange, onEvidence }) => {
+  const [search, setSearch] = useState('');
+  const [show, setShow] = useState('ALL');
+  const lines = report.lines.filter((line) => {
+    if (search.trim() && !line.kpi.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+    const status = line.direct?.reportingStatus;
+    const hasEvidence = line.evidence.length > 0;
+    switch (show) {
+      case 'REPORTED': return status === 'REPORTED';
+      case 'NOT_REPORTED': return status === 'NOT_REPORTED';
+      case 'NO_RESULT': return !status;
+      case 'FROM_BELOW': return line.offices.length > 0;
+      case 'NO_EVIDENCE': return line.isDirectEntry && !line.fromStaff && !hasEvidence;
+      case 'REJECTED': return line.evidence.some((item) => item.verificationStatus === 'REJECTED');
+      default: return true;
+    }
+  });
+  const filtered = search.trim() !== '' || show !== 'ALL';
+
+  return (
+  <div className="space-y-3">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="w-full max-w-xs">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search KPI by name..." />
+      </div>
+      <div className="w-56">
+        <CustomSelect compact options={SHOW_OPTIONS} value={show} onChange={setShow} />
+      </div>
+      {filtered && <p className="text-xs text-muted-foreground">Showing {lines.length} of {report.lines.length} KPIs</p>}
+    </div>
   <div className="overflow-x-auto rounded-lg border border-border bg-card">
     <Table>
       <TableHeader>
@@ -78,12 +120,12 @@ const ResultsTable = ({ report, entries, editable, onChange, onEvidence }) => (
         </TableRow>
       </TableHeader>
       <TableBody>
-        {report.lines.length === 0 && (
+        {lines.length === 0 && (
           <TableRow>
-            <TableCell colSpan={8}>No KPIs are reported in this period.</TableCell>
+            <TableCell colSpan={8}>{report.lines.length === 0 ? 'No KPIs are reported in this period.' : 'No KPI matches this filter.'}</TableCell>
           </TableRow>
         )}
-        {report.lines.map((line) => {
+        {lines.map((line) => {
           const fromBelow = line.offices.length > 0;
           const rejected = line.evidence.filter((item) => item.verificationStatus === 'REJECTED').length;
           return (
@@ -130,6 +172,8 @@ const ResultsTable = ({ report, entries, editable, onChange, onEvidence }) => (
       </TableBody>
     </Table>
   </div>
-);
+  </div>
+  );
+};
 
 export default ResultsTable;

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import CustomSelect from '../../../shared/components/ui/CustomSelect';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { useCan } from '../../03-access-control/hooks/useCan';
-import { useFiscalYears, usePeriods } from '../../06-reporting-periods/hooks/usePlanning';
+import { useLiveFiscalYears, usePeriods } from '../../06-reporting-periods/hooks/usePlanning';
 import { defaultYear } from '../../06-reporting-periods/lib/fiscalYear';
 import { usePerformanceOffices } from '../../07-performance/hooks/useReports';
 import { optionLabel } from '../../10-system/lib/settingValues';
@@ -30,7 +30,7 @@ const pickYear = defaultYear;
 const DashboardHome = () => {
   const can = useCan();
   const [params, setParams] = useSearchParams();
-  const { data: years = [], isLoading: yearsLoading } = useFiscalYears();
+  const { data: years = [], isLoading: yearsLoading } = useLiveFiscalYears();
   const year = pickYear(years, params.get('year'));
   const periodId = params.get('period') || '';
   const { data: periods = [] } = usePeriods(year?.id);

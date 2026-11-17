@@ -61,6 +61,53 @@ export const limitFailedAttempts = (scope, accountOf) => async (req, res, next) 
   next();
 };
 
+// The account part of a key: `${scope}|${ip}|${account}`
+const accountOfKey = (key) => key.split('|').slice(2).join('|').toLowerCase();
+const namesOf = (identifiers) => new Set(identifiers.filter(Boolean).map((name) => String(name).trim().toLowerCase()));
+
+/**
+ * Whether a person is locked out right now, under any of the names the attempts are counted by: the username or email
+ * typed at sign-in, or the account id used for the code and password steps. lockedUntil is when the last block ends.
+ */
+export const lockStatusFor = async (identifiers, maxAttemptsKnown) => {
+  const names = namesOf(identifiers);
+  const maxAttempts = maxAttemptsKnown ?? (await getSetting('security', 'max_failed_attempts'));
+  const now = Date.now();
+  let until = 0;
+  const steps = new Set();
+  for (const [key, entry] of attempts) {
+    if (entry.resetAt > now && entry.count >= maxAttempts && names.has(accountOfKey(key))) {
+      until = Math.max(until, entry.resetAt);
+      steps.add(key.split('|')[0]);
+    }
+  }
+  return until ? { isLocked: true, lockedUntil: new Date(until).toISOString(), steps: [...steps] } : { isLocked: false, lockedUntil: null, steps: [] };
+};
+
+/**
+ * lockStatusFor for a whole list of people at once, in the same order. Each item is the list of names to look under.
+ */
+export const lockStatusesFor = async (listOfIdentifiers) => {
+  const maxAttempts = await getSetting('security', 'max_failed_attempts');
+  return Promise.all(listOfIdentifiers.map((identifiers) => lockStatusFor(identifiers, maxAttempts)));
+};
+
+/**
+ * Forget every failed attempt counted against a person, from any address, so they can try again at once.
+ * Returns how many counters were cleared.
+ */
+export const clearAttemptsFor = (identifiers) => {
+  const names = namesOf(identifiers);
+  let cleared = 0;
+  for (const key of [...attempts.keys()]) {
+    if (names.has(accountOfKey(key))) {
+      attempts.delete(key);
+      cleared += 1;
+    }
+  }
+  return cleared;
+};
+
 /**
  * Counts every request from an address, for public forms where a success is what is being limited.
  */
@@ -76,4 +123,4 @@ export const limitRequestsPerHour = (scope, settingKey) => async (req, res, next
   next();
 };
 
-export default { limitFailedAttempts, limitRequestsPerHour };
+export default { limitFailedAttempts, limitRequestsPerHour, lockStatusFor, lockStatusesFor, clearAttemptsFor };

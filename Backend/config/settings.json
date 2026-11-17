@@ -19,8 +19,7 @@
       "settings": [
         { "key": "profile_picture_max_mb", "label": "Largest profile picture", "type": "number", "default": 5, "min": 1, "max": 20, "integer": true, "public": false, "description": "Largest profile picture a person can upload, in MB" },
         { "key": "contact_email", "label": "Support contact email", "type": "email", "default": null, "public": true, "description": "Shown to users who need help (e.g. on the login page)" },
-        { "key": "timezone", "label": "Time zone", "type": "enum", "default": "Africa/Addis_Ababa", "options": ["Africa/Addis_Ababa", "UTC"], "public": false, "description": "Time zone used for deadlines and reminders" },
-        { "key": "fiscal_year_start_month", "label": "Fiscal year start month", "type": "number", "default": 7, "min": 1, "max": 12, "integer": true, "public": false, "description": "Gregorian month in which a new fiscal year normally starts (7 = July, as Hamle 1 falls on 8 July)" }
+        { "key": "timezone", "label": "Time zone", "type": "enum", "default": "Africa/Addis_Ababa", "options": ["Africa/Addis_Ababa", "UTC"], "public": false, "description": "Time zone used for deadlines and reminders" }
       ]
     },
     {
@@ -33,7 +32,6 @@
         { "key": "max_score_percent", "label": "Maximum score", "type": "number", "default": 100, "min": 100, "max": 200, "integer": true, "public": false, "description": "Highest official achievement score when overachievement is capped" },
         { "key": "contract_total_weight", "label": "Contract total weight", "type": "number", "default": 100, "min": 1, "max": 100, "public": false, "description": "Default total the KPI weights of a new performance contract must reach" },
         { "key": "missing_result_policy", "label": "Missing results", "type": "enum", "options": ["PENDING", "AUTO_FILL_ZERO"], "default": "PENDING", "public": false, "description": "PENDING leaves a missing result unscored and the total provisional. AUTO_FILL_ZERO records 0 and marks the row as auto-filled" },
-        { "key": "require_baseline_verification", "label": "Verify baselines before approval", "type": "boolean", "default": true, "public": false, "description": "A known baseline must be verified before its assignment can be approved" },
         { "key": "require_separate_approver", "label": "Separate approver", "type": "boolean", "default": false, "public": false, "description": "The person who prepared an assignment or change request cannot also approve it" },
         { "key": "default_max_over_allocation_percent", "label": "Default over-allocation cap", "type": "number", "default": 10, "min": 0, "max": 100, "public": false, "description": "Default over-allocation cap for new KPI assignments when cascading" }
       ]
@@ -43,12 +41,12 @@
       "label": "Reporting & Deadlines",
       "description": "Rules for submitting KPI reports in reporting periods.",
       "settings": [
-        { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a reporting period ends until the report is due (used when a period has no explicit deadline)" },
+        { "key": "submission_window_days", "label": "Submission window", "type": "number", "default": 15, "min": 1, "max": 90, "integer": true, "public": false, "description": "Days after a reporting period ends until the report is due. Saving a new value sets the deadline of every open period to its end date plus these days" },
         { "key": "low_performance_alert_percent", "label": "Low performance alert", "type": "number", "default": 60, "min": 0, "max": 100, "public": false, "description": "When an approved result is below this achievement, the office above is alerted. 0 turns the alert off" },
         { "key": "reminder_days_before_deadline", "label": "Deadline reminders", "type": "json", "validator": "dayList", "default": [7, 3, 1], "public": false, "description": "Days before the deadline on which offices with unsubmitted reports are reminded" },
         { "key": "allow_late_submission", "label": "Allow late submission", "type": "boolean", "default": true, "public": false, "description": "Whether offices may still submit after the deadline (within the grace period)" },
         { "key": "late_submission_grace_days", "label": "Late submission grace period", "type": "number", "default": 5, "min": 0, "max": 60, "integer": true, "public": false, "description": "Days after the deadline during which late submissions are accepted and flagged as late" },
-        { "key": "auto_lock_after_deadline", "label": "Lock reports after deadline", "type": "boolean", "default": true, "public": false, "description": "Automatically lock unsubmitted reports once the deadline (plus grace period) has passed" }
+        { "key": "auto_lock_after_deadline", "label": "Lock reports after deadline", "type": "boolean", "default": true, "public": false, "description": "Lock reports once the deadline has passed (at the deadline if late submissions are not allowed, otherwise after the grace period). Turn off and nothing is locked, a late report is only flagged late" }
       ]
     },
     {

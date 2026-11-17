@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import Button from '../../../shared/components/ui/Button';
 import { apiErrorMessage } from '../../../shared/lib/apiError';
@@ -22,6 +22,7 @@ const DECIDED = { APPROVED: 'Report approved.', REVISION_REQUIRED: 'Sent back fo
  */
 const ReportPage = () => {
   const { reportId } = useParams();
+  const [searchParams] = useSearchParams();
   const { notify } = useNotification();
   const { data: report, isLoading, error } = useReport(reportId);
   const save = useSaveResults();
@@ -80,9 +81,11 @@ const ReportPage = () => {
 
   // Back to where it was sent from: the person's own contract, the office's performance, or the approvals
   const yearId = report.reportingPeriod.fiscalYear.id;
+  // The approvals list says where it sent us from, so the way back covers the top office's own report too
+  const fromApprovals = report.side === 'BELOW' || searchParams.get('from') === 'approvals';
   const backLink =
-    report.side === 'BELOW'
-      ? { to: `/approvals?year=${yearId}`, label: 'Back to Approve KPI' }
+    fromApprovals
+      ? { to: `/approvals?year=${yearId}&tab=${searchParams.get('tab') === 'reviewed' ? 'reviewed' : 'pending'}`, label: 'Back to Approve KPI' }
       : isStaffContract(report.contract)
         ? { to: `/my-contract?year=${yearId}`, label: 'Back to My Contract' }
         : { to: `/performance?year=${yearId}&office=${report.contract.officeId}`, label: 'Back to Performance' };

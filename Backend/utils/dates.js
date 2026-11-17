@@ -2,9 +2,16 @@
  * Date helpers for @db.Date columns (stored as UTC calendar dates).
  */
 
+// The calendar day starts and ends in the university's time zone (setting general.timezone), not in UTC
+let timeZone = 'Africa/Addis_Ababa';
+
+export const setTimeZone = (zone) => {
+  if (zone) timeZone = zone;
+};
+
 export const startOfTodayUtc = () => {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return new Date(`${day}T00:00:00Z`);
 };
 
 /**

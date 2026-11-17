@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit3 } from 'lucide-react';
+import { Edit3, Trash2 } from 'lucide-react';
 
 import { Badge } from '../../../shared/components/ui/Badge';
 import Button from '../../../shared/components/ui/Button';
@@ -7,6 +7,7 @@ import { apiErrorMessage } from '../../../shared/lib/apiError';
 import { formatDate, todayIso } from '../../02-offices/lib/officeTree';
 import { useCan } from '../../03-access-control/hooks/useCan';
 import { useNotification } from '../../09-notifications/context/NotificationContext';
+import DeleteRecordDialog from '../components/DeleteRecordDialog';
 import RecordDialog from '../components/RecordDialog';
 import RecordTable, { IconAction } from '../components/RecordTable';
 import { useCurrencies, useExchangeRates, useSaveRecord } from '../hooks/useCatalog';
@@ -37,6 +38,7 @@ const CurrenciesPanel = () => {
   const saveRate = useSaveRecord('exchange-rates');
   const [currencyDialog, setCurrencyDialog] = useState(null);
   const [addingRate, setAddingRate] = useState(false);
+  const [deleting, setDeleting] = useState(null);
   const canManage = can('kpi:manage');
 
   const makeReporting = (currency) =>
@@ -60,6 +62,13 @@ const CurrenciesPanel = () => {
             render: (row) => (
               <div className="flex items-center gap-2">
                 <IconAction icon={Edit3} label={`Edit ${row.code}`} onClick={() => setCurrencyDialog({ record: row })} />
+                {row.isReportingCurrency ? (
+                  <button type="button" disabled aria-label={`Delete ${row.code}`} title="This is the reporting currency. Make another currency the reporting currency first" className="cursor-not-allowed rounded p-1 text-destructive opacity-40">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <IconAction icon={Trash2} danger label={`Delete ${row.code}`} onClick={() => setDeleting(row)} />
+                )}
                 {!row.isReportingCurrency && (
                   <Button type="button" size="sm" variant="outline" onClick={() => makeReporting(row)}>
                     Make Reporting
@@ -85,6 +94,7 @@ const CurrenciesPanel = () => {
       <RecordTable title="Currencies" description="For money KPIs. Results are converted to the reporting currency." addLabel="Add Currency" onAdd={canManage ? () => setCurrencyDialog({}) : null} columns={currencyColumns} rows={currencies} isLoading={isLoading} error={error} />
       <RecordTable title="Exchange Rates" description="Rates cannot be edited, because reported values point at the rate they used. Add a new one instead." addLabel="Add Rate" onAdd={canManage && currencies.length >= 2 ? () => setAddingRate(true) : null} columns={rateColumns} rows={rates} isLoading={ratesLoading} error={ratesError} emptyText="No rates yet. Add two currencies first." />
 
+      {deleting && <DeleteRecordDialog path="currencies" id={deleting.id} title="Delete Currency" name={`${deleting.code} - ${deleting.name}`} details="Its exchange rates go with it. A currency that a KPI or a result uses cannot be deleted." onClose={() => setDeleting(null)} />}
       {currencyDialog && <RecordDialog title={currencyDialog.record ? 'Edit Currency' : 'Add Currency'} description="A currency money KPIs can report in." fields={CURRENCY_FIELDS} record={currencyDialog.record} mutation={saveCurrency} onClose={() => setCurrencyDialog(null)} />}
       {addingRate && <RecordDialog title="Add Exchange Rate" description={`The rate on a given day, such as ${todayIso()}.`} fields={rateFields(currencies)} mutation={saveRate} onClose={() => setAddingRate(false)} />}
     </div>

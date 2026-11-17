@@ -51,3 +51,30 @@ export const openFile = async (fileId) => {
   window.open(url, '_blank', 'noopener');
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
+
+// The name the server sent the file under, or the name to fall back on
+const fileNameFrom = (response, fallback) => {
+  const header = response.headers?.['content-disposition'] ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  const plain = /filename="?([^";]+)"?/i.exec(header)?.[1];
+  try {
+    return (encoded && decodeURIComponent(encoded)) || plain || fallback;
+  } catch {
+    return plain || fallback;
+  }
+};
+
+/**
+ * Save a file to the computer, under its own name, instead of showing it in a tab.
+ */
+export const downloadFile = async (fileId, fallbackName = 'file') => {
+  const response = await api.get(`/files/${fileId}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileNameFrom(response, fallbackName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};

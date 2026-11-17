@@ -1,3 +1,4 @@
+import { ratioText } from '../../../shared/lib/ratio';
 /**
  * How dashboard figures are read and worded. Only approved results count; a missing, waiting or returned result is
  * named as such and never shown as 0%.
@@ -27,6 +28,15 @@ export const TILE_KEYS = [
   ['rejected', 'REJECTED'],
   ['notReported', 'NOT_REPORTED'],
 ];
+
+// One colour rule for scores: below 30 red, 30 to 60 orange, 60 to 85 yellow, 85 and above green
+export const scoreColor = (percent) => {
+  if (percent === null || percent === undefined) return '#3b82f6';
+  if (percent < 30) return '#ef4444';
+  if (percent < 60) return '#f97316';
+  if (percent < 85) return '#eab308';
+  return '#10b981';
+};
 
 const round1 = (value) => Math.round(value * 10) / 10;
 
@@ -72,7 +82,8 @@ export const measureText = (kpi, row) => {
   if (kpi.measurementType === 'STAGE' || kpi.measurementType === 'CATEGORY') return null;
   const hasParts = row.numerator !== null && row.numerator !== undefined && row.denominator;
   if (kpi.measurementType === 'PERCENTAGE') return `${round1(hasParts ? (row.numerator / row.denominator) * 100 : row.value)}%`;
-  if (kpi.measurementType === 'RATIO') return number(hasParts ? row.numerator / row.denominator : row.value);
+  // A ratio reads with 1 on the left: 1:25, and 10:326 is 1:32.6
+  if (kpi.measurementType === 'RATIO') return hasParts ? ratioText(row.numerator, row.denominator) : number(row.value);
   const value = number(row.value);
   if (kpi.measurementType === 'MONEY') return value === null ? null : `${value} ${kpi.currency?.code ?? ''}`.trim();
   // A plain count needs no symbol; hours, people and the like say what they are

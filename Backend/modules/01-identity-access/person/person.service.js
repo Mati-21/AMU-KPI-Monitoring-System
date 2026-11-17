@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { assertPasswordStrength, findAccountByAnyId } from '../auth/auth.service.js';
 import { REVOKE_REASONS, listSessions, revokeAllSessions } from '../auth/session.service.js';
 import { auditAction } from '../../../utils/auditLogger.js';
+import { clearAttemptsFor, lockStatusFor, lockStatusesFor } from '../../../middleware/attemptLimiter.js';
 import { activeOn, isActiveToday, startOfTodayUtc } from '../../../utils/dates.js';
 import { getActiveGrants, isSuperAdmin } from '../../03-access-control/access.service.js';
 import { badRequest, conflict, forbidden, notFound } from '../../../utils/httpError.js';
@@ -142,8 +143,13 @@ export const listPersons = async ({ search = '', isActive, officeId, roleId, has
     }),
   ]);
 
+  // Who is locked out by failed sign-in attempts, so the list can show it
+  const locks = await lockStatusesFor(persons.map((person) => (person.userAccount ? [person.userAccount.id, person.userAccount.username, person.email] : [])));
   return {
-    data: persons.map(formatPerson),
+    data: persons.map((person, index) => {
+      const formatted = formatPerson(person);
+      return person.userAccount ? { ...formatted, account: { ...formatted.account, lock: locks[index] } } : formatted;
+    }),
     pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
   };
 };
@@ -151,7 +157,10 @@ export const listPersons = async ({ search = '', isActive, officeId, roleId, has
 export const getPersonById = async (id) => {
   const person = await prisma.person.findUnique({ where: { id }, include: PERSON_INCLUDE });
   if (!person) throw notFound('Person not found');
-  return formatPerson(person);
+  const formatted = formatPerson(person);
+  // Whether too many failed sign-in attempts have locked them out, so an administrator can unlock them
+  if (person.userAccount) formatted.account = { ...formatted.account, lock: await lockStatusFor([person.userAccount.id, person.userAccount.username, person.email]) };
+  return formatted;
 };
 
 /**
@@ -334,6 +343,20 @@ export const setAccountActive = async (accountId, isActive, actor) => {
 };
 
 /**
+ * Let someone back in who was locked out by too many failed attempts. Their counters are cleared, so they can sign in
+ * at once. Their password and sessions are not touched.
+ */
+export const unlockAccount = async (accountId, actor) => {
+  const account = await getLiveAccountOrThrow(accountId);
+  await assertCanChangePerson(account.personId, actor);
+  const person = await getPersonOrThrow(account.personId);
+
+  const attemptsCleared = clearAttemptsFor([account.id, account.username, person.email]);
+  await auditAction(actor, { action: 'ACCOUNT_UNLOCKED', entityType: 'user_account', entityId: account.id, newValues: { username: account.username, attemptsCleared } });
+  return { id: account.id, username: account.username, unlocked: true, attemptsCleared };
+};
+
+/**
  * Administrator password reset: sets a temporary password that must be changed on next login
  * and ends every active session of the account.
  */
@@ -379,6 +402,7 @@ export default {
   archivePerson,
   upsertAccount,
   setAccountActive,
+  unlockAccount,
   resetPassword,
   listAccountSessions,
   revokeAccountSessions,

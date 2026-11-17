@@ -3,8 +3,8 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { parseEnum, parseNumber } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
-import { APPROVED_STATUSES, OPEN_CONTRACT_STATUSES, assertAuthorityOnOffice, canSeeAssignment, contractHomeOffices, getAssignmentOrThrow, requireComment } from './contract.shared.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
+import { APPROVED_STATUSES, OPEN_CONTRACT_STATUSES, PERSON_REF, assertAuthorityOnOffice, canSeeAssignment, contractHomeOffices, getAssignmentOrThrow, requireComment } from './contract.shared.js';
 import { numericValue, requiredImprovement, toNumber } from './measurement.js';
 
 /**
@@ -59,7 +59,7 @@ const officeLine = (office, row, child) => ({
   locked: Boolean(child) && !OPEN_CONTRACT_STATUSES.includes(child.status),
 });
 
-const describeSharing = (assignment, rows, children, officesBelow) => {
+const describeSharing = (assignment, rows, children, officesBelow, heldBy = []) => {
   const parentAmount = parentAmountOf(assignment);
   const divisible = isDivisible(assignment.kpi);
   const sent = children.some((child) => SENT_STATUSES.includes(child.status));
@@ -72,6 +72,7 @@ const describeSharing = (assignment, rows, children, officesBelow) => {
     divisible,
     parentAmount,
     officesBelow,
+    heldBy,
     equalAmounts: method === 'EQUAL' && divisible && parentAmount > 0 ? Object.fromEntries(equalSplit(parentAmount, officesBelow)) : null,
   };
   // Only a divided KPI is tracked against its improvement. Shared fully, every office gets all of it.
@@ -103,13 +104,18 @@ const describeSharing = (assignment, rows, children, officesBelow) => {
 export const loadSharing = async (assignments) => {
   const ids = assignments.map((assignment) => assignment.id);
   const officeIds = [...new Set(assignments.map((assignment) => assignment.contract.officeId))];
-  const [rows, children, below] = await Promise.all([
+  const [rows, children, below, staffParts] = await Promise.all([
     prisma.responsibilityAllocation.findMany({ where: { parentAssignmentId: { in: ids } }, include: { childOffice: OFFICE_REF } }),
     prisma.kpiAssignment.findMany({
       where: { parentAssignmentId: { in: ids }, status: { not: 'CANCELLED' } },
       include: { kpi: { include: { scale: { include: { levels: true } } } }, baselines: current, targets: current, contract: { select: { office: OFFICE_REF } } },
     }),
     prisma.office.findMany({ where: { parentOfficeId: { in: officeIds }, isActive: true }, select: { id: true, name: true, parentOfficeId: true }, orderBy: { name: 'asc' } }),
+    // The people who hold a part of the KPI on their own staff contracts
+    prisma.kpiAssignment.findMany({
+      where: { sourceAssignmentId: { in: ids }, status: { not: 'CANCELLED' }, contract: { personId: { not: null } } },
+      select: { id: true, sourceAssignmentId: true, status: true, contract: { select: { id: true, status: true, person: PERSON_REF } } },
+    }),
   ]);
   return new Map(
     assignments.map((assignment) => [
@@ -118,7 +124,10 @@ export const loadSharing = async (assignments) => {
         assignment,
         rows.filter((row) => row.parentAssignmentId === assignment.id),
         children.filter((child) => child.parentAssignmentId === assignment.id),
-        below.filter((office) => office.parentOfficeId === assignment.contract.officeId).map(({ id, name }) => ({ id, name }))
+        below.filter((office) => office.parentOfficeId === assignment.contract.officeId).map(({ id, name }) => ({ id, name })),
+        staffParts
+          .filter((part) => part.sourceAssignmentId === assignment.id)
+          .map((part) => ({ assignmentId: part.id, contractId: part.contract.id, contractStatus: part.contract.status, person: { id: part.contract.person.id, name: [part.contract.person.firstName, part.contract.person.middleName, part.contract.person.lastName].filter(Boolean).join(' ') } }))
       ),
     ])
   );
@@ -145,7 +154,7 @@ export const getAllocations = async (id, actor) => {
  */
 export const saveKept = async (id, data = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
-  await assertFiscalYearOpen(assignment.contract.fiscalYearId);
+  await assertFiscalYearActive(assignment.contract.fiscalYearId);
   if (assignment.contract.personId) throw conflict('A staff contract is one person\'s work, so nothing on it is kept or shared');
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract.officeId);
   // The office that received the KPI decides what it does itself, not the office above it
@@ -299,7 +308,7 @@ export const releaseChildShare = async (parentAssignmentId, officeId) => {
  */
 export const justifyReconciliation = async (id, { note } = {}, actor) => {
   const assignment = await getAssignmentOrThrow(id);
-  await assertFiscalYearOpen(assignment.contract.fiscalYearId);
+  await assertFiscalYearActive(assignment.contract.fiscalYearId);
   await assertAuthorityOnOffice(actor, PERMISSIONS.CONTRACT_MANAGE, assignment.contract.officeId);
   if (!['UNDER_ALLOCATED', 'OVER_ALLOCATED'].includes(assignment.reconciliationStatus)) throw conflict('Only an unbalanced split can be justified');
   const reason = requireComment(note);

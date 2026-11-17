@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Archive, Eye, Pencil, UserPlus } from 'lucide-react';
+import { Archive, Eye, LockOpen, Pencil, UserPlus } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import Button from '../../../../shared/components/ui/Button';
@@ -14,7 +14,7 @@ import { useRolesQuery } from '../../../03-access-control/hooks/useRoles';
 import { roleNames } from '../../../03-access-control/lib/roleAssignments';
 import { useNotification } from '../../../09-notifications/context/NotificationContext';
 import PersonAvatar from '../../components/PersonAvatar';
-import { useArchivePerson, usePersons } from '../../hooks/useUsers';
+import { useArchivePerson, usePersons, useUnlockAccount } from '../../hooks/useUsers';
 
 const PAGE_SIZE = 10;
 const SEARCH_DELAY_MS = 300;
@@ -22,6 +22,14 @@ const COLUMN_COUNT = 6;
 
 const AccountBadge = ({ account }) => {
   if (!account) return <Badge variant="outline">No login</Badge>;
+  if (account.lock?.isLocked) {
+    const until = new Date(account.lock.lockedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return (
+      <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30" title={`Locked out after too many failed sign-in attempts. It lifts by itself at ${until}.`}>
+        Locked
+      </Badge>
+    );
+  }
   return account.isActive ? (
     <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
       Active
@@ -64,6 +72,7 @@ function UserList({ onAdd }) {
   const [page, setPage] = useState(1);
   const [archiving, setArchiving] = useState(null);
   const archivePerson = useArchivePerson();
+  const unlock = useUnlockAccount();
   const [searchParams, setSearchParams] = useSearchParams();
   // Listing roles takes one of these permissions, so without them there is nothing to filter by
   const canFilterByRole = can('role:read', 'role:assign');
@@ -163,6 +172,17 @@ function UserList({ onAdd }) {
                       {can('user:update') && (
                         <button onClick={() => navigate(`/users/${person.id}?edit=1`)} className="rounded p-1 text-primary hover:bg-primary/10" title="Edit" aria-label={`Edit ${person.fullName}`}>
                           <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                      {can('user:manage') && person.account?.lock?.isLocked && (
+                        <button
+                          onClick={() => unlock.mutate(person.account.id, { onSuccess: () => notify(`${person.fullName} can sign in again.`, 'success'), onError: (failure) => notify(apiErrorMessage(failure, 'Could not unlock this account.'), 'error') })}
+                          disabled={unlock.isPending}
+                          className="rounded p-1 text-primary hover:bg-primary/10"
+                          title="Unlock account"
+                          aria-label={`Unlock ${person.fullName}`}
+                        >
+                          <LockOpen className="h-4 w-4" />
                         </button>
                       )}
                       {can('user:delete') && (

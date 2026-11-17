@@ -3,11 +3,12 @@ import { PERMISSIONS } from '../../config/permissions.js';
 import { auditAction } from '../../utils/auditLogger.js';
 import { badRequest, conflict, forbidden, notFound } from '../../utils/httpError.js';
 import { optionalString, parseBoolean, parseEnum, parseUuid } from '../../utils/validation.js';
-import { assertFiscalYearOpen } from '../04-kpi-catalog/fiscalYear.service.js';
+import { assertFiscalYearActive } from '../04-kpi-catalog/fiscalYear.service.js';
 import { assertSeparateApprover, assertWorksOnContract, worksOnContract } from '../05-contract-cascading/contract.shared.js';
 import { assertPeriodOpen } from '../06-reporting-periods/period.service.js';
 import { assertReviewsContract, reviewsContract } from '../07-performance-scoring/reports/report.access.js';
 import { dueAssignments, isDirectEntry } from '../07-performance-scoring/scoring/result.service.js';
+import { assertNotLockedByDeadline } from '../07-performance-scoring/reports/report.deadline.js';
 
 /**
  * Module 08 — Evidence behind reported results (SRS 10.3).
@@ -26,6 +27,8 @@ const REPORT_SELECT = {
   id: true,
   status: true,
   reportingPeriodId: true,
+  lateAllowedUntil: true,
+  reportingPeriod: { select: { submissionDeadline: true } },
   contract: { select: { id: true, officeId: true, assigningOfficeId: true, personId: true, fiscalYearId: true } },
 };
 
@@ -74,6 +77,7 @@ export const attachEvidence = async (performanceValueId, { documentId, comment }
   await assertWorksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, report.contract);
   await assertPeriodOpen(report.reportingPeriodId);
   if (!EDITABLE_REPORT_STATUSES.includes(report.status)) throw conflict(`Evidence cannot be added to a ${report.status} report`);
+  await assertNotLockedByDeadline(report.reportingPeriod, report);
 
   const document = await prisma.document.findUnique({ where: { id: parseUuid(documentId, 'documentId') }, select: { id: true, ownerOfficeId: true } });
   if (!document) throw badRequest('Document not found');
@@ -124,6 +128,7 @@ export const removeEvidence = async (id, actor) => {
   await assertWorksOnContract(actor, PERMISSIONS.EVIDENCE_LINK, report.contract);
   await assertPeriodOpen(report.reportingPeriodId);
   if (!EDITABLE_REPORT_STATUSES.includes(report.status)) throw conflict(`Evidence cannot be removed from a ${report.status} report`);
+  await assertNotLockedByDeadline(report.reportingPeriod, report);
   if (evidence._count.forwardedCopies > 0) throw conflict('This evidence is used in the report of the office above. It has to take it out of its report first');
 
   await prisma.performanceEvidence.delete({ where: { id: evidence.id } });
@@ -136,7 +141,7 @@ export const removeEvidence = async (id, actor) => {
 export const verifyEvidence = async (id, { status, comment, forward } = {}, actor) => {
   const evidence = await getEvidenceOrThrow(id);
   const { report } = evidence.performanceValue;
-  await assertFiscalYearOpen(report.contract.fiscalYearId);
+  await assertFiscalYearActive(report.contract.fiscalYearId);
   await assertReviewsContract(actor, PERMISSIONS.EVIDENCE_VERIFY, report.contract);
   await assertSeparateApprover(actor, evidence.document.createdByPersonId);
   if (!REVIEWABLE_REPORT_STATUSES.includes(report.status)) throw conflict(`Evidence is verified while a report is under review; this one is ${report.status}`);
@@ -191,7 +196,7 @@ export const setForward = async (id, { forward } = {}, actor) => {
   });
   if (!source) throw notFound('Evidence not found');
   const { report, assignment } = source.performanceValue;
-  await assertFiscalYearOpen(report.contract.fiscalYearId);
+  await assertFiscalYearActive(report.contract.fiscalYearId);
   await assertReviewsContract(actor, PERMISSIONS.EVIDENCE_VERIFY, report.contract);
   if (report.contract.personId) throw badRequest("Evidence of a staff contract is not passed up. The office's figure is made up from its people's approved results");
   if (!FORWARDABLE_REPORT_STATUSES.includes(report.status)) throw conflict(`Evidence is passed up once the report is submitted; this one is ${report.status}`);
